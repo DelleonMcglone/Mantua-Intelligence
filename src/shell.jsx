@@ -99,10 +99,11 @@ const PortfolioCard = ({ openDetail }) => {
 
 // ── Assets list ─────────────────────────────────────────────────
 const ASSETS = [
-  { sym:'ETH', name:'Ethereum', price:'$3,630.12', pct: -0.75, qty:'7.01', val:'$25,385.54', color:'#627eea' },
-  { sym:'SOL', name:'Solana',   price:'$241.320', pct:  6.01, qty:'76.16', val:'$18,372.30', color:'#9945ff' },
-  { sym:'BTC', name:'Bitcoin',  price:'$67,224.32', pct: 0.31, qty:'0.22', val:'$14,234.40', color:'#f7931a' },
-  { sym:'USDC',name:'USDC',     price:'$1.00', pct: 0.00, qty:'7,292.36', val:'$7,292.38', color:'#2775ca' },
+  { sym:'ETH',   name:'Ethereum',            price:'$3,630.12',  pct: -0.75, qty:'7.01',     val:'$25,385.54', color:'#627eea' },
+  { sym:'cbBTC', name:'Coinbase Wrapped BTC',price:'$67,224.32', pct:  0.31, qty:'0.22',     val:'$14,234.40', color:'#0052ff' },
+  { sym:'EURC',  name:'Euro Coin',           price:'$1.08',      pct:  0.12, qty:'6,400.00', val:'$6,912.00',  color:'#003399' },
+  { sym:'USDC',  name:'USD Coin',            price:'$1.00',      pct:  0.00, qty:'7,292.36', val:'$7,292.38',  color:'#2775ca' },
+  { sym:'LINK',  name:'Chainlink',           price:'$14.82',     pct:  2.14, qty:'420.00',   val:'$6,224.40',  color:'#375bd2' },
 ];
 
 const TOKEN_SVGS = {
@@ -156,6 +157,12 @@ const TOKEN_SVGS = {
     <svg width={s} height={s} viewBox="0 0 32 32">
       <circle cx="16" cy="16" r="16" fill="#0052ff"/>
       <path d="M21 14.3c.3-1.9-1.2-2.9-3.2-3.6l.7-2.6-1.6-.4-.7 2.5c-.4-.1-.8-.2-1.3-.3l.7-2.6-1.6-.4-.7 2.6c-.4-.1-.7-.2-1-.2L10 9l-.4 1.7s1.2.3 1.1.3c.6.2.7.6.7.9l-.8 3c0 .1.1.1.2.1l-.2-.1-1.1 4.2c-.1.2-.3.5-.8.4.1.1-1.1-.3-1.1-.3L7 20.8l2.1.5c.4.1.8.2 1.1.3l-.7 2.6 1.6.4.7-2.6 1.3.3-.7 2.6 1.6.4.7-2.6c2.8.5 4.8.3 5.7-2.2.7-2-.1-3.1-1.5-3.8 1-.3 1.8-1 2.1-2.4zm-3.7 5.1c-.5 2-3.9.9-5 .6l.9-3.5c1.1.3 4.6.8 4.1 2.9zm.5-5.1c-.5 1.8-3.3.9-4.2.6l.8-3.2c1 .2 3.9.7 3.4 2.6z" fill="#fff"/>
+    </svg>
+  ),
+  LINK: (s) => (
+    <svg width={s} height={s} viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="16" fill="#375bd2"/>
+      <path d="M16 7l-1.7 1 -5.3 3.1v9.8l5.3 3.1 1.7 1 1.7-1 5.3-3.1v-9.8l-5.3-3.1L16 7zm-5 12.8v-7.6l5-2.9 5 2.9v7.6l-5 2.9-5-2.9z" fill="#fff"/>
     </svg>
   ),
 };
