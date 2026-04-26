@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
 import { base } from "viem/chains";
-import type { PublicClient, WalletClient } from "viem";
 
 const BASE_CHAIN_ID = 8453;
 const BASE_RPC_FALLBACK = "https://mainnet.base.org";
@@ -11,8 +10,13 @@ const BASE_RPC_FALLBACK = "https://mainnet.base.org";
  * Public viem client for read-only chain calls. Uses the public Base RPC by
  * default; swap to a private RPC (Alchemy, QuickNode) by setting
  * VITE_BASE_RPC_URL in client/.env.local.
+ *
+ * Bug fix: explicit `PublicClient` / `WalletClient` type annotations clash
+ * with Privy's bundled (porto-vendored) viem under
+ * `exactOptionalPropertyTypes: true`. Annotations removed; types are
+ * inferred. Runtime behavior unchanged.
  */
-export const publicClient: PublicClient = createPublicClient({
+export const publicClient = createPublicClient({
   chain: base,
   transport: http(import.meta.env.VITE_BASE_RPC_URL ?? BASE_RPC_FALLBACK),
 });
@@ -25,7 +29,7 @@ export const publicClient: PublicClient = createPublicClient({
  * Chain assertion: throws if the active wallet is on anything other than
  * Base Mainnet (8453). The provider attempts an automatic switch first.
  */
-export function useBaseWalletClient(): () => Promise<WalletClient | null> {
+export function useBaseWalletClient() {
   const { wallets } = useWallets();
 
   return useCallback(async () => {
