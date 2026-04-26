@@ -18,9 +18,15 @@ const BASESCAN_TX = "https://basescan.org/tx/";
 
 interface Props {
   onBack: () => void;
+  onAddLiquidity: (ctx: {
+    tokenA: TokenSymbol;
+    tokenB: TokenSymbol;
+    fee: FeeTier;
+    sqrtPriceX96: string;
+  }) => void;
 }
 
-export function PoolCreateForm({ onBack }: Props) {
+export function PoolCreateForm({ onBack, onAddLiquidity }: Props) {
   const [tokenA, setTokenA] = useState<TokenSymbol>("ETH");
   const [tokenB, setTokenB] = useState<TokenSymbol>("USDC");
   const [fee, setFee] = useState<FeeTier>(() =>
@@ -117,6 +123,22 @@ export function PoolCreateForm({ onBack }: Props) {
           >
             View on BaseScan <ExternalLink className="h-3 w-3" />
           </a>
+        )}
+        {create.state.status === "success" && create.state.poolKey && (
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              onAddLiquidity({
+                tokenA,
+                tokenB,
+                fee,
+                sqrtPriceX96: create.state.poolKey?.sqrtPriceX96 ?? "0",
+              });
+            }}
+          >
+            Add liquidity to this pool →
+          </Button>
         )}
         {create.state.status === "error" && create.state.error && (
           <p className="text-xs text-red text-center">{create.state.error.message}</p>

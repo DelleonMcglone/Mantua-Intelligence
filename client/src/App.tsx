@@ -4,20 +4,22 @@ import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
+import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
+import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
 import { PoolCreateForm } from "./features/liquidity/PoolCreateForm.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 
 /**
- * Phase 4a adds the Liquidity surface (list + detail). Routing is local
- * state for now — a real router (e.g. react-router) lands when there
- * are 4+ pages worth of state to manage.
+ * Phase 4 adds the Liquidity surface (list, detail, create, add). Routing
+ * is local state — a real router lands when the page count justifies it.
  */
 type Route =
   | { kind: "swap" }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
-  | { kind: "pool-create" };
+  | { kind: "pool-create" }
+  | { kind: "add-liquidity"; ctx: PoolKeyContext };
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -88,6 +90,17 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
           onBack={() => {
             setRoute({ kind: "pools" });
           }}
+          onAddLiquidity={(ctx) => {
+            setRoute({ kind: "add-liquidity", ctx });
+          }}
+        />
+      )}
+      {route.kind === "add-liquidity" && (
+        <AddLiquidityForm
+          ctx={route.ctx}
+          onBack={() => {
+            setRoute({ kind: "pools" });
+          }}
         />
       )}
     </div>
@@ -100,7 +113,11 @@ function Tabs({ route, setRoute }: { route: Route; setRoute: (r: Route) => void 
     { id: "pools" as const, label: "Liquidity" },
   ];
   const active =
-    route.kind === "pool" || route.kind === "pool-create" ? "pools" : route.kind;
+    route.kind === "pool" ||
+    route.kind === "pool-create" ||
+    route.kind === "add-liquidity"
+      ? "pools"
+      : route.kind;
   return (
     <div className="inline-flex bg-bg-elev rounded-full p-0.5 border border-border-soft self-start">
       {tabs.map((t) => (
