@@ -3,11 +3,14 @@ import pinoHttp from "pino-http";
 import { env } from "./env.ts";
 import { logger } from "./lib/logger.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
+import { ipRateLimiter } from "./middleware/rate-limit.ts";
 import { healthRouter } from "./routes/health.ts";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(pinoHttp({ logger }));
 app.use(express.json());
+app.use(ipRateLimiter);
 app.use(killSwitch);
 
 app.use(healthRouter);
