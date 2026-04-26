@@ -5,6 +5,7 @@ import { Card } from "./components/shell/Card.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
+import { PoolCreateForm } from "./features/liquidity/PoolCreateForm.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 
 /**
@@ -15,7 +16,8 @@ import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 type Route =
   | { kind: "swap" }
   | { kind: "pools" }
-  | { kind: "pool"; id: string };
+  | { kind: "pool"; id: string }
+  | { kind: "pool-create" };
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -68,11 +70,21 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
           onSelectPool={(id) => {
             setRoute({ kind: "pool", id });
           }}
+          onCreate={() => {
+            setRoute({ kind: "pool-create" });
+          }}
         />
       )}
       {route.kind === "pool" && (
         <PoolDetailPage
           poolId={route.id}
+          onBack={() => {
+            setRoute({ kind: "pools" });
+          }}
+        />
+      )}
+      {route.kind === "pool-create" && (
+        <PoolCreateForm
           onBack={() => {
             setRoute({ kind: "pools" });
           }}
@@ -87,7 +99,8 @@ function Tabs({ route, setRoute }: { route: Route; setRoute: (r: Route) => void 
     { id: "swap" as const, label: "Swap" },
     { id: "pools" as const, label: "Liquidity" },
   ];
-  const active = route.kind === "pool" ? "pools" : route.kind;
+  const active =
+    route.kind === "pool" || route.kind === "pool-create" ? "pools" : route.kind;
   return (
     <div className="inline-flex bg-bg-elev rounded-full p-0.5 border border-border-soft self-start">
       {tabs.map((t) => (

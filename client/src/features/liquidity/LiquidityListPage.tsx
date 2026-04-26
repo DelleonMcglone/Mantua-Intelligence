@@ -1,21 +1,28 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import { usePools } from "./use-pools.ts";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { PoolSummary } from "./types.ts";
 
 interface Props {
   onSelectPool: (poolId: string) => void;
+  onCreate: () => void;
 }
 
-export function LiquidityListPage({ onSelectPool }: Props) {
+export function LiquidityListPage({ onSelectPool, onCreate }: Props) {
   const { data, error, loading } = usePools();
 
   return (
     <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Liquidity Pools</h2>
-        <span className="text-xs text-text-mute">Base · Uniswap</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-text-mute">Base · Uniswap</span>
+          <Button variant="ghost" size="sm" onClick={onCreate}>
+            <Plus className="h-3 w-3" /> New pool
+          </Button>
+        </div>
       </div>
 
       {loading && <p className="px-5 py-8 text-xs text-text-dim text-center">Loading pools…</p>}
