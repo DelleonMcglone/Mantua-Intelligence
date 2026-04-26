@@ -2,6 +2,7 @@ import express from "express";
 import pinoHttp from "pino-http";
 import { env } from "./env.ts";
 import { logger } from "./lib/logger.ts";
+import { attachAuth } from "./middleware/auth.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
 import { healthRouter } from "./routes/health.ts";
@@ -12,6 +13,7 @@ app.use(pinoHttp({ logger }));
 app.use(express.json());
 app.use(ipRateLimiter);
 app.use(killSwitch);
+app.use(attachAuth);
 
 app.use(healthRouter);
 

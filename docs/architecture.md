@@ -39,9 +39,26 @@ The v1 prototype (`Mantua Prototype.html` + `src/` + `assets/` + `landing/`) cur
 
 ## Open architectural notes
 
-- **Chain lock:** Base Mainnet only (chain ID 8453). Privy `supportedChains` and viem clients are configured with Base only; any other chain ID is rejected at the boundary.
-- **Two-process dev:** `npm run dev` at the root spawns client (Vite) and server (Express) in parallel. Each has its own port. Frontend talks to backend via a base URL from env.
+- **Chain lock:** Base Mainnet only (chain ID 8453). Privy `supportedChains` and viem clients are configured with Base only; any other chain ID is rejected at the boundary. The `useBaseWalletClient` hook (`client/src/lib/privy/wallet-client.ts`) attempts an automatic chain switch and throws if the wallet remains off-Base.
+- **Two-process dev:** `npm run dev` at the root spawns client (Vite, HTTPS via self-signed cert) and server (Express) in parallel. Each has its own port. Frontend talks to backend via a base URL from env.
+- **HTTPS in dev:** Privy's Web Crypto API key sharding silently fails over plain HTTP outside `localhost`. The Vite dev server runs HTTPS by default via `@vitejs/plugin-basic-ssl`. The browser will warn about the self-signed cert on first load — that's expected; click through. Staging/prod use real TLS (Vercel handles this for the frontend).
 - **Single shared logic:** Critical Phase 3 / Phase 4 modules (swap, liquidity) are written once on the server and exposed via API endpoints; the agent (Phase 6) calls the same endpoints. No client-side duplication of swap-construction logic.
+
+## Auth flow (Phase 2)
+
+1. Client renders `<MantuaPrivyProvider>` at the root with `loginMethods` per D-005, `embeddedWallets.createOnLogin: 'users-without-wallets'` per D-006, and `walletConnectCloudProjectId` per D-007.
+2. User logs in via `usePrivy().login()`. Privy provisions an embedded wallet for email/Google/Apple/passkey logins, or uses the connected external wallet.
+3. Client obtains an identity token via `getAccessToken()` and sends it as `Authorization: Bearer <token>` on API calls.
+4. Server `attachAuth` middleware (`server/src/middleware/auth.ts`) verifies the token via `@privy-io/server-auth`, then populates `req.privyUserId` and `req.walletAddress` for downstream handlers.
+5. Routes that must reject anonymous traffic chain `requireAuth` after `attachAuth`.
+
+`req.walletAddress` is what `walletRateLimiter` (P1-007) keys on once auth is wired into write paths.
+
+## CDP agent wallet (Phase 6)
+
+The chosen implementation path for P6-003 (Create & Manage Agent Wallet) is the [`create-onchain-agent`](https://www.npmjs.com/package/create-onchain-agent) scaffolder, which bootstraps an AgentKit-based wallet with the wallet-secret and policy-management plumbing already wired. The bare `@coinbase/cdp-sdk` direct path is **not** used for v2 — the AgentKit scaffold gives us spending policies, EIP-7702 delegation, and a coherent end-user-management story for free.
+
+Phase 2 only stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_SECRET`). Wallet provisioning happens in Phase 6.
 
 ## Mainnet safety rails (Phase 1)
 
