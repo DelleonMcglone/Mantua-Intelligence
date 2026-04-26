@@ -1,40 +1,45 @@
-import { usePrivy } from "@privy-io/react-auth";
+import { Button } from "@/components/ui/button.tsx";
+import { Logo } from "@/components/shell/Logo.tsx";
+
+interface LoginScreenProps {
+  onLogin: () => void;
+  loading?: boolean;
+}
 
 /**
- * P2-012 — minimal login screen. Visual styling is a placeholder until
- * Phase D (PD-006) extracts design tokens from the prototype.
+ * PD-006 — login screen. Visual style matches the prototype's welcome
+ * modal: centered logo box (gradient backdrop), title + tagline, single
+ * primary CTA, fine print listing supported login methods.
+ *
+ * Login methods come from D-005: email + Google + Apple + passkey + wallet.
+ * The handler comes from `usePrivy().login` once App resolves auth state.
  */
-export function LoginScreen() {
-  const { login, ready, authenticated } = usePrivy();
-
-  if (!ready) {
+export function LoginScreen({ onLogin, loading }: LoginScreenProps) {
+  if (loading) {
     return (
-      <main className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center">
-        <div className="text-sm text-neutral-400">Loading…</div>
+      <main className="min-h-screen bg-bg text-text flex items-center justify-center">
+        <p className="text-sm text-text-dim">Loading…</p>
       </main>
     );
   }
 
-  if (authenticated) return null;
-
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center">
-      <div className="w-full max-w-sm text-center space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Mantua.AI</h1>
-          <p className="text-sm text-neutral-400 mt-2">
-            A liquidity copilot that researches, routes, and executes with you — on Base.
+    <main className="min-h-screen bg-bg text-text flex items-center justify-center p-6">
+      <div className="w-full max-w-sm text-center space-y-7">
+        <div className="mx-auto h-24 w-24 rounded-md flex items-center justify-center border border-border-soft bg-gradient-to-br from-accent-2/20 via-amber/5 to-transparent">
+          <Logo size={56} />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome to Mantua.AI</h1>
+          <p className="text-sm text-text-dim leading-relaxed">
+            A liquidity copilot that researches, routes, and executes with you — or on its
+            own — on Base.
           </p>
         </div>
-        <button
-          onClick={() => {
-            login();
-          }}
-          className="w-full rounded-lg bg-[#8b6cf0] hover:bg-[#7a5be0] text-white font-medium py-3 px-4 transition-colors"
-        >
+        <Button variant="primary" size="lg" className="w-full" onClick={onLogin}>
           Continue
-        </button>
-        <p className="text-xs text-neutral-500">
+        </Button>
+        <p className="text-xs text-text-mute">
           Email · Google · Apple · Passkey · External wallet
         </p>
       </div>
