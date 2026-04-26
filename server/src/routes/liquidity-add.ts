@@ -119,6 +119,7 @@ liquidityAddRouter.post(
         await db.insert(positions).values({
           userId: user.id,
           poolId: pool.id,
+          ...(v.tokenId ? { tokenId: v.tokenId } : {}),
           tickLower: v.tickLower,
           tickUpper: v.tickUpper,
           liquidity: v.liquidity,

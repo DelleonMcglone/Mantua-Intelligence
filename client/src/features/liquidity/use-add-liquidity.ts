@@ -6,6 +6,7 @@ import { ApiError, api } from "@/lib/api.ts";
 import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { ensureAllowance } from "./erc20-allowance.ts";
+import { extractMintedTokenId } from "./extract-token-id.ts";
 
 const BASE_CHAIN_ID = 8453;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -105,6 +106,11 @@ export function useAddLiquidity() {
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const outcome = receipt.status === "success" ? "success" : "failure";
 
+      // Extract the minted PositionManager NFT tokenId from receipt logs
+      // so the remove-liquidity flow can reference this position later.
+      const tokenId =
+        outcome === "success" ? extractMintedTokenId(receipt, owner) : null;
+
       void api.post("/api/liquidity/add/record", {
         txHash,
         tokenA: args.tokenA,
@@ -116,6 +122,8 @@ export function useAddLiquidity() {
         tickLower: calldata.tickLower,
         tickUpper: calldata.tickUpper,
         poolKeyHash: calldata.poolKeyHash,
+        sqrtPriceX96: args.sqrtPriceX96,
+        ...(tokenId ? { tokenId } : {}),
         outcome,
       });
 

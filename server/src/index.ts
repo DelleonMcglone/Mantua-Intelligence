@@ -7,8 +7,10 @@ import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
 import { healthRouter } from "./routes/health.ts";
 import { liquidityAddRouter } from "./routes/liquidity-add.ts";
+import { liquidityRemoveRouter } from "./routes/liquidity-remove.ts";
 import { poolCreateRouter } from "./routes/pool-create.ts";
 import { poolsRouter } from "./routes/pools.ts";
+import { positionsRouter } from "./routes/positions.ts";
 import { quoteRouter } from "./routes/quote.ts";
 import { swapRouter } from "./routes/swap.ts";
 
@@ -24,6 +26,8 @@ app.use(healthRouter);
 app.use(poolsRouter);
 app.use(poolCreateRouter);
 app.use(liquidityAddRouter);
+app.use(liquidityRemoveRouter);
+app.use(positionsRouter);
 app.use(quoteRouter);
 app.use(swapRouter);
 

@@ -9,17 +9,20 @@ import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
 import { PoolCreateForm } from "./features/liquidity/PoolCreateForm.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
+import { PositionsList } from "./features/liquidity/PositionsList.tsx";
 
 /**
- * Phase 4 adds the Liquidity surface (list, detail, create, add). Routing
- * is local state — a real router lands when the page count justifies it.
+ * Phase 4 adds Liquidity surface (list, detail, create, add, positions
+ * with remove). Routing is local state — a real router lands when the
+ * page count justifies it.
  */
 type Route =
   | { kind: "swap" }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
   | { kind: "pool-create" }
-  | { kind: "add-liquidity"; ctx: PoolKeyContext };
+  | { kind: "add-liquidity"; ctx: PoolKeyContext }
+  | { kind: "positions" };
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -99,10 +102,11 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
         <AddLiquidityForm
           ctx={route.ctx}
           onBack={() => {
-            setRoute({ kind: "pools" });
+            setRoute({ kind: "positions" });
           }}
         />
       )}
+      {route.kind === "positions" && <PositionsList />}
     </div>
   );
 }
@@ -111,11 +115,10 @@ function Tabs({ route, setRoute }: { route: Route; setRoute: (r: Route) => void 
   const tabs = [
     { id: "swap" as const, label: "Swap" },
     { id: "pools" as const, label: "Liquidity" },
+    { id: "positions" as const, label: "Positions" },
   ];
   const active =
-    route.kind === "pool" ||
-    route.kind === "pool-create" ||
-    route.kind === "add-liquidity"
+    route.kind === "pool" || route.kind === "pool-create" || route.kind === "add-liquidity"
       ? "pools"
       : route.kind;
   return (

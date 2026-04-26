@@ -24,5 +24,11 @@ export const recordSchema = z.object({
   tickLower: z.number().int(),
   tickUpper: z.number().int(),
   poolKeyHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+  /** PositionManager NFT token id minted on success — extracted from
+   *  Transfer event in the receipt. Null when outcome=failure. */
+  tokenId: z.string().regex(/^\d+$/).nullable().optional(),
+  /** Snapshot of the pool's sqrtPriceX96 at mint — used as the price
+   *  reference for the remove preview until subgraph indexing lands. */
+  sqrtPriceX96: z.string().regex(/^\d+$/).optional(),
   outcome: z.enum(["success", "failure"]),
 });
