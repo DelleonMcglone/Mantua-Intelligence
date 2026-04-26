@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Design tokens published in PD-002 will replace these defaults. */
+:root {
+  color-scheme: dark;
+}
