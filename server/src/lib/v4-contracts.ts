@@ -60,3 +60,45 @@ export const POOL_MANAGER_INITIALIZE_ABI = [
     outputs: [{ type: "int24", name: "tick" }],
   },
 ] as const;
+
+/**
+ * v4 PositionManager.modifyLiquidities ABI fragment. The full PM has more
+ * (multicall, permit, etc.); this is the entrypoint we need for mint/
+ * increase/decrease via the action encoding.
+ */
+export const POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI = [
+  {
+    type: "function",
+    name: "modifyLiquidities",
+    stateMutability: "payable",
+    inputs: [
+      { type: "bytes", name: "unlockData" },
+      { type: "uint256", name: "deadline" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+/** ERC-20 ABI fragments we need for the approval flow. */
+export const ERC20_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { type: "address", name: "owner" },
+      { type: "address", name: "spender" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "spender" },
+      { type: "uint256", name: "amount" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
