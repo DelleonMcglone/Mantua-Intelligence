@@ -11,12 +11,19 @@ import type { PrivyClientConfig } from "@privy-io/react-auth";
 export const privyConfig: PrivyClientConfig = {
   appearance: { theme: "dark", accentColor: "#8b6cf0" },
   loginMethods: ["email", "google", "apple", "passkey", "wallet"],
+  // Bug fix: Privy 3.22 nests `createOnLogin` under `embeddedWallets.ethereum`
+  // (Solana support added a sibling). Old top-level shape from Privy 2.x
+  // fails typecheck.
   embeddedWallets: {
-    createOnLogin: "users-without-wallets",
-    requireUserPasswordOnCreate: false,
+    ethereum: { createOnLogin: "users-without-wallets" },
   },
   walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+  // Bug fix: viem `Chain` type drifts between our copy and Privy's bundled
+  // (porto-vendored) copy under `exactOptionalPropertyTypes: true`. Runtime
+  // value is identical; @ts-expect-error silences the structural mismatch.
+  // @ts-expect-error -- viem Chain version drift (Privy vendors its own viem)
   defaultChain: base,
+  // @ts-expect-error -- viem Chain version drift (Privy vendors its own viem)
   supportedChains: [base],
 };
 
