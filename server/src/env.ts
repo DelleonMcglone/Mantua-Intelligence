@@ -13,6 +13,7 @@ const schema = z.object({
   CDP_PROJECT_ID: z.string().min(1).optional(),
   CDP_API_KEY_NAME: z.string().min(1).optional(),
   CDP_API_KEY_PRIVATE_KEY: z.string().min(1).optional(),
+  CDP_WALLET_SECRET: z.string().min(1).optional(),
 
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),

@@ -8,6 +8,10 @@
 # Claude Code
 .claude/settings.local.json
 
+# Skills (reinstalled from skills-lock.json via `npx skills experimental_install`)
+.claude/skills/
+.agents/skills/
+
 # Node
 node_modules/
 npm-debug.log*
