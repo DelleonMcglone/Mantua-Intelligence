@@ -6,6 +6,7 @@ import { attachAuth } from "./middleware/auth.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
 import { healthRouter } from "./routes/health.ts";
+import { poolsRouter } from "./routes/pools.ts";
 import { quoteRouter } from "./routes/quote.ts";
 import { swapRouter } from "./routes/swap.ts";
 
@@ -18,6 +19,7 @@ app.use(killSwitch);
 app.use(attachAuth);
 
 app.use(healthRouter);
+app.use(poolsRouter);
 app.use(quoteRouter);
 app.use(swapRouter);
 

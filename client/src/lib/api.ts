@@ -1,6 +1,7 @@
 import { getAccessToken } from "@privy-io/react-auth";
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const BASE: string =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3001";
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -42,6 +43,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  get<T>(path: string): Promise<T> {
+    return request<T>(path, { method: "GET" });
+  },
   post<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, { method: "POST", body: JSON.stringify(body) });
   },
