@@ -86,6 +86,9 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
           onBack={() => {
             setRoute({ kind: "pools" });
           }}
+          onAddLiquidity={(ctx) => {
+            setRoute({ kind: "add-liquidity", ctx });
+          }}
         />
       )}
       {route.kind === "pool-create" && (

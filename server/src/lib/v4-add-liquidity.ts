@@ -43,6 +43,10 @@ export interface BuildAddLiquidityResult {
   tickLower: number;
   tickUpper: number;
   poolKeyHash: `0x${string}`;
+  /** Sorted tokens — used by the route to compute Permit2 needs. The
+   *  zero address (native ETH) is filtered out by the caller. */
+  currency0: `0x${string}`;
+  currency1: `0x${string}`;
 }
 
 /**
@@ -120,5 +124,7 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
     tickLower,
     tickUpper,
     poolKeyHash,
+    currency0: key.currency0,
+    currency1: key.currency1,
   };
 }

@@ -10,9 +10,12 @@
 import { parseAbi } from "viem";
 import { base } from "viem/chains";
 
-const POSITION_MANAGER = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
+const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const MAX_UINT = (1n << 256n) - 1n;
+/** "Effectively max" — the heuristic Uniswap's UI uses to detect a
+ *  user who previously approved max and may have spent some balance. */
+const FRESH_APPROVAL_THRESHOLD = 1n << 255n;
 
 const erc20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -20,30 +23,33 @@ const erc20 = parseAbi([
 ]);
 
 /**
- * If the user has not approved enough allowance to PositionManager for
- * `tokenAddr`, send a max-approval tx and wait for the receipt. Returns
- * the approval tx hash if one was sent, else null. No-op for native ETH.
+ * Ensure the user has approved Permit2 to spend `tokenAddr` (one-time
+ * per token, ever — Permit2 is shared infrastructure across the entire
+ * Uniswap stack). v4 PositionManager pulls funds via
+ * `permit2.transferFrom`, so without this approval the modifyLiquidities
+ * settle step reverts. No-op for native ETH (paid via msg.value).
+ *
+ * Returns the approval tx hash if one was sent, else null.
  */
-export async function ensureAllowance(
+export async function ensurePermit2Approval(
   walletClient: any,
   publicClient: any,
   tokenAddr: `0x${string}`,
   owner: `0x${string}`,
-  needed: bigint,
 ): Promise<`0x${string}` | null> {
   if (tokenAddr === ZERO) return null;
   const current = (await publicClient.readContract({
     address: tokenAddr,
     abi: erc20,
     functionName: "allowance",
-    args: [owner, POSITION_MANAGER],
+    args: [owner, PERMIT2],
   })) as bigint;
-  if (current >= needed) return null;
+  if (current >= FRESH_APPROVAL_THRESHOLD) return null;
   const txHash: `0x${string}` = await walletClient.writeContract({
     address: tokenAddr,
     abi: erc20,
     functionName: "approve",
-    args: [POSITION_MANAGER, MAX_UINT],
+    args: [PERMIT2, MAX_UINT],
     account: owner,
     chain: base,
   });

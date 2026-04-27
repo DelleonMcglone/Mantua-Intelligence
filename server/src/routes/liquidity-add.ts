@@ -6,14 +6,46 @@ import { users } from "../db/schema/users.ts";
 import { logAudit } from "../lib/audit.ts";
 import { BASE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
+import { buildPermit2BatchTypedData } from "../lib/permit2.ts";
 import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { tokenAmountUsd } from "../lib/usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "../lib/v4-add-liquidity.ts";
 import { readSlot0 } from "../lib/v4-state-view.ts";
+import { PERMIT2 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { calldataSchema, recordSchema } from "./liquidity-add-schemas.ts";
+
+import type { PermitBatchInput, PermitBatchTypedData } from "../lib/permit2.ts";
+
+interface PermitBatchWire {
+  details: { token: `0x${string}`; amount: string; expiration: number; nonce: number }[];
+  spender: `0x${string}`;
+  sigDeadline: string;
+}
+
+function serializePermitBatch(p: PermitBatchInput): PermitBatchWire {
+  return {
+    details: p.details.map((d) => ({
+      token: d.token,
+      amount: d.amount.toString(),
+      expiration: d.expiration,
+      nonce: d.nonce,
+    })),
+    spender: p.spender,
+    sigDeadline: p.sigDeadline.toString(),
+  };
+}
+
+function serializeTypedData(t: PermitBatchTypedData) {
+  return {
+    domain: t.domain,
+    types: t.types,
+    primaryType: t.primaryType,
+    message: serializePermitBatch(t.message),
+  };
+}
 
 export const liquidityAddRouter = Router();
 
@@ -67,7 +99,29 @@ liquidityAddRouter.post(
         owner: ctx.walletAddress as `0x${string}`,
         deadlineSeconds: parsed.data.deadlineSeconds,
       });
-      res.json({ ...result, sqrtPriceX96: sqrtPriceX96.toString() });
+
+      const owner = ctx.walletAddress as `0x${string}`;
+      const permit2Build = await buildPermit2BatchTypedData({
+        owner,
+        chainId: BASE_CHAIN_ID,
+        tokens: [
+          { address: result.currency0, amountNeeded: BigInt(result.amount0Max) },
+          { address: result.currency1, amountNeeded: BigInt(result.amount1Max) },
+        ],
+        nowSeconds: Math.floor(Date.now() / 1000),
+      });
+
+      res.json({
+        ...result,
+        sqrtPriceX96: sqrtPriceX96.toString(),
+        permit2: permit2Build
+          ? {
+              permit2Address: PERMIT2,
+              typedData: serializeTypedData(permit2Build.typedData),
+              permitBatch: serializePermitBatch(permit2Build.permitBatch),
+            }
+          : null,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "calldata failed";
       logger.warn({ err }, "POST /api/liquidity/add/calldata failed");
