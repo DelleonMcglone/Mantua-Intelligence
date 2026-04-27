@@ -5,8 +5,13 @@ import { base } from "viem/chains";
 import { ApiError, api } from "@/lib/api.ts";
 import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
-import { ensureAllowance } from "./erc20-allowance.ts";
+import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
+import {
+  buildSignTypedDataArgs,
+  wrapInMulticall,
+  type Permit2Bundle,
+} from "./permit2-helpers.ts";
 
 const BASE_CHAIN_ID = 8453;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -40,6 +45,10 @@ interface CalldataRes {
   /** Always populated by the server — either echoed from the request
    *  or freshly resolved via StateView.getSlot0. */
   sqrtPriceX96: string;
+  /** Non-null when the user's Permit2 → PositionManager allowance for
+   *  one or both ERC-20 sides is missing or stale. Client signs the
+   *  typed data and wraps the permitBatch into a multicall. */
+  permit2: Permit2Bundle | null;
 }
 
 interface AddState {
@@ -76,24 +85,44 @@ export function useAddLiquidity() {
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1200,
       });
 
-      setState({ status: "approving", message: "Checking token approvals…" });
-      const totalNeeded = BigInt(calldata.amount0Max) + BigInt(calldata.amount1Max);
+      setState({ status: "approving", message: "Checking Permit2 approvals…" });
       const tA = TOKENS[args.tokenA];
       const tB = TOKENS[args.tokenB];
-      const approvalA = await ensureAllowance(
+      const approvalA = await ensurePermit2Approval(
         walletClient,
         publicClient,
         tA.native ? ZERO : tA.address,
         owner,
-        totalNeeded,
       );
-      const approvalB = await ensureAllowance(
+      const approvalB = await ensurePermit2Approval(
         walletClient,
         publicClient,
         tB.native ? ZERO : tB.address,
         owner,
-        totalNeeded,
       );
+
+      let to = calldata.to;
+      let data = calldata.data;
+      if (calldata.permit2) {
+        setState({
+          status: "signing",
+          message: "Sign Permit2 batch in your wallet…",
+          ...(approvalA ? { approvalTx: approvalA } : approvalB ? { approvalTx: approvalB } : {}),
+        });
+        const signTypedDataArgs = buildSignTypedDataArgs(calldata.permit2.typedData);
+        const signature = await walletClient.signTypedData({
+          account: owner,
+          ...signTypedDataArgs,
+        });
+        const wrapped = wrapInMulticall(
+          owner,
+          calldata.permit2.permitBatch,
+          signature,
+          calldata.data,
+        );
+        to = wrapped.to;
+        data = wrapped.data;
+      }
 
       setState({
         status: "signing",
@@ -102,8 +131,8 @@ export function useAddLiquidity() {
       const txHash = await walletClient.sendTransaction({
         account: owner,
         chain: base,
-        to: calldata.to,
-        data: calldata.data,
+        to,
+        data,
         value: BigInt(calldata.value),
       });
       setState({ status: "pending", txHash });
