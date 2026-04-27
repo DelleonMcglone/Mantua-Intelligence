@@ -33,7 +33,7 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
   if (!position) return null;
   const isFull = percentage === 100;
   const sym = `${tokenLabelByAddress(position.token0)}/${tokenLabelByAddress(position.token1)}`;
-  const ready = position.tokenId !== null && position.latestSqrtPriceX96 !== null;
+  const ready = position.tokenId !== null;
 
   async function onSubmit() {
     if (!position || !ready) return;
@@ -48,7 +48,6 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
     await remove.execute({
       positionId: position.id,
       percentage,
-      sqrtPriceX96: position.latestSqrtPriceX96 ?? "0",
       slippageBps,
     });
     if (remove.state.status === "success") onSuccess();
@@ -96,9 +95,7 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
 
           {!ready && (
             <p className="text-xs text-amber">
-              {position.tokenId === null
-                ? "This position was created before tokenId capture — remove not available."
-                : "No price reference for this pool — add liquidity once via Mantua to enable remove."}
+              This position was created before tokenId capture — remove not available.
             </p>
           )}
 

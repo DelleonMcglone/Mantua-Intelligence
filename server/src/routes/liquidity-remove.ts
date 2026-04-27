@@ -6,8 +6,10 @@ import { users } from "../db/schema/users.ts";
 import { logAudit } from "../lib/audit.ts";
 import { BASE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
+import { ZERO_ADDRESS } from "../lib/tokens.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { buildRemoveLiquidityCalldata } from "../lib/v4-remove-liquidity.ts";
+import { readSlot0 } from "../lib/v4-state-view.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { calldataSchema, recordSchema } from "./liquidity-remove-schemas.ts";
@@ -48,6 +50,9 @@ liquidityRemoveRouter.post(
           status: positions.status,
           token0: pools.token0,
           token1: pools.token1,
+          fee: pools.fee,
+          tickSpacing: pools.tickSpacing,
+          hookAddress: pools.hookAddress,
         })
         .from(positions)
         .innerJoin(pools, eq(positions.poolId, pools.id))
@@ -65,6 +70,21 @@ liquidityRemoveRouter.post(
         return;
       }
 
+      const slot0 = await readSlot0({
+        currency0: pos.token0 as `0x${string}`,
+        currency1: pos.token1 as `0x${string}`,
+        fee: pos.fee,
+        tickSpacing: pos.tickSpacing,
+        hooks: (pos.hookAddress ?? ZERO_ADDRESS) as `0x${string}`,
+      });
+      if (!slot0) {
+        res.status(400).json({
+          error: "Pool not initialized on-chain",
+          code: "POOL_NOT_INITIALIZED",
+        });
+        return;
+      }
+
       const totalLiquidity = BigInt(pos.liquidity);
       const liquidityToRemove = (totalLiquidity * BigInt(parsed.data.percentage)) / 100n;
 
@@ -74,7 +94,7 @@ liquidityRemoveRouter.post(
         positionLiquidity: totalLiquidity,
         tickLower: pos.tickLower,
         tickUpper: pos.tickUpper,
-        sqrtPriceX96: BigInt(parsed.data.sqrtPriceX96),
+        sqrtPriceX96: slot0.sqrtPriceX96,
         currency0: pos.token0 as `0x${string}`,
         currency1: pos.token1 as `0x${string}`,
         slippageBps: parsed.data.slippageBps,

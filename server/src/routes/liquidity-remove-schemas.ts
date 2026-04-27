@@ -4,8 +4,6 @@ export const calldataSchema = z.object({
   positionId: z.string().uuid(),
   /** Percentage 1..100 (whole numbers). */
   percentage: z.number().int().min(1).max(100),
-  /** Caller-supplied snapshot of the pool's current sqrtPrice. */
-  sqrtPriceX96: z.string().regex(/^\d+$/),
   slippageBps: z.number().int().min(0).max(500).default(50),
   deadlineSeconds: z.number().int().positive(),
 });

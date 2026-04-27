@@ -8,7 +8,10 @@ export const calldataSchema = z.object({
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
   amountARaw: z.string().regex(/^\d+$/),
   amountBRaw: z.string().regex(/^\d+$/),
-  sqrtPriceX96: z.string().regex(/^\d+$/),
+  /** Optional. When omitted, the server reads slot0 via StateView. The
+   *  pool-create flow passes the freshly-initialized price here to
+   *  avoid a redundant RPC round-trip. */
+  sqrtPriceX96: z.string().regex(/^\d+$/).optional(),
   slippageBps: z.number().int().min(0).max(500).default(50),
   deadlineSeconds: z.number().int().positive(),
 });

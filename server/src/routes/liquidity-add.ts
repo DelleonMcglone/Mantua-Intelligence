@@ -6,9 +6,11 @@ import { users } from "../db/schema/users.ts";
 import { logAudit } from "../lib/audit.ts";
 import { BASE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
+import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { tokenAmountUsd } from "../lib/usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "../lib/v4-add-liquidity.ts";
+import { readSlot0 } from "../lib/v4-state-view.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { calldataSchema, recordSchema } from "./liquidity-add-schemas.ts";
@@ -19,7 +21,7 @@ liquidityAddRouter.post(
   "/api/liquidity/add/calldata",
   writeRateLimiter,
   requireAuth,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const parsed = calldataSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -39,18 +41,33 @@ liquidityAddRouter.post(
       return;
     }
     try {
+      let sqrtPriceX96: bigint;
+      if (parsed.data.sqrtPriceX96) {
+        sqrtPriceX96 = BigInt(parsed.data.sqrtPriceX96);
+      } else {
+        const { key } = buildPoolKey(parsed.data.tokenA, parsed.data.tokenB, parsed.data.fee);
+        const slot0 = await readSlot0(key);
+        if (!slot0) {
+          res.status(400).json({
+            error: "Pool not initialized — create it first",
+            code: "POOL_NOT_INITIALIZED",
+          });
+          return;
+        }
+        sqrtPriceX96 = slot0.sqrtPriceX96;
+      }
       const result = buildAddLiquidityCalldata({
         tokenA: parsed.data.tokenA,
         tokenB: parsed.data.tokenB,
         fee: parsed.data.fee,
         amountARaw: BigInt(parsed.data.amountARaw),
         amountBRaw: BigInt(parsed.data.amountBRaw),
-        sqrtPriceX96: BigInt(parsed.data.sqrtPriceX96),
+        sqrtPriceX96,
         slippageBps: parsed.data.slippageBps,
         owner: ctx.walletAddress as `0x${string}`,
         deadlineSeconds: parsed.data.deadlineSeconds,
       });
-      res.json(result);
+      res.json({ ...result, sqrtPriceX96: sqrtPriceX96.toString() });
     } catch (err) {
       const message = err instanceof Error ? err.message : "calldata failed";
       logger.warn({ err }, "POST /api/liquidity/add/calldata failed");

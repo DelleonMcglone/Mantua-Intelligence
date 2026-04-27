@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
+import { pools, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -14,11 +14,9 @@ export const positionsRouter = Router();
  * existing on-chain positions (created outside Mantua) require subgraph
  * indexing — tracked as a follow-up.
  *
- * Each row also includes the most recent known sqrtPriceX96 for the pool
- * (read from `portfolio_transactions.params->>'sqrtPriceX96'` on the
- * latest add_liquidity for that user+pool). Used by the remove flow to
- * compute slippage bounds; Phase 4e adds StateView.getSlot0 fetching for
- * a real-time replacement.
+ * The remove flow no longer needs a price reference in this response;
+ * Phase 4e moved live slot0 reads server-side into the remove calldata
+ * route via StateView.
  */
 positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Response) => {
   if (!req.privyUserId) {
@@ -52,18 +50,6 @@ positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Res
         fee: pools.fee,
         tickSpacing: pools.tickSpacing,
         hookAddress: pools.hookAddress,
-        // Latest known sqrtPriceX96 from the most recent add_liquidity
-        // tx params blob for this user+pool. Approximation only.
-        latestSqrtPriceX96: sql<string | null>`(
-          SELECT params->>'sqrtPriceX96'
-          FROM ${portfolioTransactions}
-          WHERE user_id = ${user.id}
-            AND action = 'add_liquidity'
-            AND outcome = 'success'
-            AND params->>'poolKeyHash' = ${pools.poolKeyHash}
-          ORDER BY created_at DESC
-          LIMIT 1
-        )`,
       })
       .from(positions)
       .innerJoin(pools, eq(positions.poolId, pools.id))

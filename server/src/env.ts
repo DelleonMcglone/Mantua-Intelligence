@@ -10,6 +10,11 @@ const schema = z.object({
 
   UNISWAP_TRADING_API_KEY: z.string().min(1).optional(),
 
+  /** Base mainnet RPC URL — used by server-side viem readContract calls
+   *  (StateView.getSlot0, etc.). Defaults to the public endpoint; supply
+   *  Alchemy/QuickNode in production for headroom. */
+  BASE_RPC_URL: z.url().default("https://mainnet.base.org"),
+
   CDP_PROJECT_ID: z.string().min(1).optional(),
   CDP_API_KEY_NAME: z.string().min(1).optional(),
   CDP_API_KEY_PRIVATE_KEY: z.string().min(1).optional(),

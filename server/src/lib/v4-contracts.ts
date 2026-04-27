@@ -4,6 +4,7 @@
  */
 export const V4_POOL_MANAGER = "0x498581ff718922c3f8e6a244956af099b2652b2b" as const;
 export const V4_POSITION_MANAGER = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
+export const V4_STATE_VIEW = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
 
 /** Standard v4 fee tiers (fee in pips: 1 pip = 0.01 bps = 0.0001%). */
 export const FEE_TIERS = {
@@ -76,6 +77,30 @@ export const POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI = [
       { type: "uint256", name: "deadline" },
     ],
     outputs: [],
+  },
+] as const;
+
+/**
+ * v4 StateView ABI fragments. StateView is a stateless lens contract that
+ * reads PoolManager extsload slots without unlocking. We only need
+ * getSlot0 for the live sqrtPriceX96/tick.
+ *
+ * Note: getSlot0 takes the canonical v4 PoolId (`bytes32` =
+ * keccak256(abi.encode(PoolKey))), NOT Mantua's internal pool_key_hash
+ * (which is a string-concatenated hash). See pool-id.ts for the encoder.
+ */
+export const STATE_VIEW_ABI = [
+  {
+    type: "function",
+    name: "getSlot0",
+    stateMutability: "view",
+    inputs: [{ type: "bytes32", name: "poolId" }],
+    outputs: [
+      { type: "uint160", name: "sqrtPriceX96" },
+      { type: "int24", name: "tick" },
+      { type: "uint24", name: "protocolFee" },
+      { type: "uint24", name: "lpFee" },
+    ],
   },
 ] as const;
 

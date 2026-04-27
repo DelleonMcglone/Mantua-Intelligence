@@ -14,5 +14,4 @@ export interface Position {
   fee: number;
   tickSpacing: number;
   hookAddress: string | null;
-  latestSqrtPriceX96: string | null;
 }

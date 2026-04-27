@@ -71,9 +71,9 @@ Expected: 4–6 rows including `create_pool/success`, `add_liquidity/success`, `
 
 ## What this plan deliberately does NOT cover
 
-- **Existing-pool add support** — the LiquidityListPage's "Add" button is disabled for DefiLlama-listed pools. Phase 4e adds StateView slot0 fetching to enable it.
-- **Permit2 batch approvals** — Phase 4c uses regular ERC-20 approvals (max approval, one extra tx per token). Phase 4e migrates to Permit2 for one-tx UX.
-- **Subgraph indexing** — `/api/positions` only lists positions opened via Mantua. Pre-existing on-chain positions require a v4 subgraph query. Phase 4e or later.
+- **Existing-pool add UI** — the server now accepts existing-pool adds (Phase 4e), but the LiquidityListPage's "Add" button is still gated until the DefiLlama → PoolKey translation lands (next follow-up).
+- **Permit2 batch approvals** — Phase 4c uses regular ERC-20 approvals (max approval, one extra tx per token). A later Phase 4e slice migrates to Permit2 for one-tx UX.
+- **Subgraph indexing** — `/api/positions` only lists positions opened via Mantua. Pre-existing on-chain positions require a v4 subgraph query.
 - **Concentrated price ranges** — Phase 4c/d hardcode full-range. Custom tick selection lands when there's a real product need.
-- **Real-time price for remove preview** — current implementation uses the price-at-mint as the slippage reference. Phase 4e reads StateView.getSlot0 for live prices.
+- **Real-time price for remove preview** — superseded by Phase 4e StateView; see `phase-4e-stateview.md`.
 - **Hooked pool creation** — Phase 5 adds hook selection in PoolCreateForm.

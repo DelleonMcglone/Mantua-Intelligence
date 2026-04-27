@@ -12,7 +12,6 @@ const publicClient = createPublicClient({ chain: base, transport: http(baseRpcUr
 export interface RemoveArgs {
   positionId: string;
   percentage: number;
-  sqrtPriceX96: string;
   slippageBps: number;
 }
 
