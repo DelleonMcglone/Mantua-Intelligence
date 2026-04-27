@@ -128,6 +128,40 @@ export const POSITION_MANAGER_MULTICALL_ABI = [
 ] as const;
 
 /**
+ * v4 PositionManager view ABI for enriching subgraph-discovered positions.
+ * `info` is a packed uint256 — see decodePositionInfo in v4-position-info.ts.
+ */
+export const POSITION_MANAGER_VIEW_ABI = [
+  {
+    type: "function",
+    name: "getPoolAndPositionInfo",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "tokenId" }],
+    outputs: [
+      {
+        type: "tuple",
+        name: "poolKey",
+        components: [
+          { type: "address", name: "currency0" },
+          { type: "address", name: "currency1" },
+          { type: "uint24", name: "fee" },
+          { type: "int24", name: "tickSpacing" },
+          { type: "address", name: "hooks" },
+        ],
+      },
+      { type: "uint256", name: "info" },
+    ],
+  },
+  {
+    type: "function",
+    name: "getPositionLiquidity",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "tokenId" }],
+    outputs: [{ type: "uint128", name: "liquidity" }],
+  },
+] as const;
+
+/**
  * Permit2 ABI fragments. The `allowance(owner, token, spender)` mapping
  * is a struct view (uint160 amount, uint48 expiration, uint48 nonce).
  * Returned as a tuple by viem's readContract.

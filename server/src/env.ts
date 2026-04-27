@@ -15,6 +15,15 @@ const schema = z.object({
    *  Alchemy/QuickNode in production for headroom. */
   BASE_RPC_URL: z.url().default("https://mainnet.base.org"),
 
+  /** The Graph decentralized-network API key. Required for /api/positions
+   *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
+   *  Mantua-opened positions are returned). */
+  THE_GRAPH_API_KEY: z.string().min(1).optional(),
+  UNISWAP_V4_BASE_SUBGRAPH_ID: z
+    .string()
+    .min(1)
+    .default("HNCFA9TyBqpo5qpe6QreQABAA1kV8g46mhkCcicu6v2R"),
+
   CDP_PROJECT_ID: z.string().min(1).optional(),
   CDP_API_KEY_NAME: z.string().min(1).optional(),
   CDP_API_KEY_PRIVATE_KEY: z.string().min(1).optional(),

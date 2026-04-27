@@ -4,19 +4,16 @@ import { db } from "../db/client.ts";
 import { pools, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { logger } from "../lib/logger.ts";
+import { loadExternalPositions } from "../lib/external-positions.ts";
 import { requireAuth } from "../middleware/auth.ts";
 
 export const positionsRouter = Router();
 
 /**
- * P4-009 — list the user's open positions. Sourced from the positions
- * table populated by /api/liquidity/add/record + /remove/record. Pre-
- * existing on-chain positions (created outside Mantua) require subgraph
- * indexing — tracked as a follow-up.
- *
- * The remove flow no longer needs a price reference in this response;
- * Phase 4e moved live slot0 reads server-side into the remove calldata
- * route via StateView.
+ * P4-009 — list the user's open positions. Mantua-opened rows come from
+ * the positions table; pre-Mantua v4 positions are discovered via the
+ * v4 subgraph (P4e-003) and enriched with PositionManager view calls.
+ * Subgraph and RPC failures degrade to "Mantua-only" rather than 500.
  */
 positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Response) => {
   if (!req.privyUserId) {
@@ -33,7 +30,7 @@ positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Res
       res.json({ positions: [] });
       return;
     }
-    const rows = await db
+    const dbRows = await db
       .select({
         id: positions.id,
         tokenId: positions.tokenId,
@@ -56,7 +53,18 @@ positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Res
       .where(and(eq(positions.userId, user.id), eq(positions.status, "open")))
       .orderBy(desc(positions.createdAt));
 
-    res.json({ positions: rows });
+    const externalRows = req.walletAddress
+      ? await loadExternalPositions(req.walletAddress, {
+          excludeTokenIds: new Set(
+            dbRows.map((r) => r.tokenId).filter((id): id is string => id !== null),
+          ),
+        })
+      : [];
+
+    const merged = [...dbRows, ...externalRows].sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt)),
+    );
+    res.json({ positions: merged });
   } catch (err) {
     logger.error({ err }, "GET /api/positions failed");
     res.status(500).json({ error: "Failed to load positions", code: "INTERNAL" });
