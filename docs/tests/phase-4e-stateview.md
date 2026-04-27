@@ -54,10 +54,21 @@ After Phase 4d's "Add liquidity" step:
 - [ ] Same call against an uninitialized pool returns 400 with
       `POOL_NOT_INITIALIZED`.
 
+## Existing-pool add UI (PoolDetailPage)
+
+Built on top of the StateView server slice — `client/src/features/liquidity/defillama-translator.ts` maps a DefiLlama row to `{ tokenA, tokenB, fee }` and `use-pool-state.ts` probes `/api/pool-state` to confirm the v4 pool exists before enabling the button.
+
+- [ ] Open **Liquidity** → click any DefiLlama-listed pool with both tokens in Mantua's supported set (e.g. `WETH-USDC` 0.05%). Detail page renders; Add button briefly shows "Checking pool…" then becomes enabled.
+- [ ] Click **Add liquidity** → AddLiquidityForm opens with the correct tokens + fee tier. No `sqrtPriceX96` is sent to `/api/liquidity/add/calldata`; the server resolves it and echoes `sqrtPriceX96` in the response (verify via DevTools → Network).
+- [ ] Approve & add → on success, navigate to **Positions** and confirm the new row.
+- [ ] DB: `portfolio_transactions.params.sqrtPriceX96` is the server-resolved live price (matches the slot0 from `/api/pool-state` queried in step 1).
+- [ ] Open a pool whose pair isn't in Mantua's supported tokens (e.g. an exotic pair). Add button stays disabled with hint "Pair not in Mantua's supported token set yet."
+- [ ] Open a pool with a missing/odd `feeTier` value (DefiLlama returns `null` for some v2 pools). Add button stays disabled (same hint).
+- [ ] Open a pool whose v4 equivalent isn't initialized — Add button disabled with hint "No v4 pool at this fee tier — create one from the Liquidity tab."
+- [ ] Pool-create flow still works end-to-end: PoolCreateForm → AddLiquidityForm passes `sqrtPriceX96` from the create result, the server echoes it back, and no extra RPC round-trip is incurred (server log shows zero `eth_call` for the calldata route in that path).
+
 ## What this slice deliberately does NOT cover
 
-- DefiLlama → PoolKey translation + enabling the **PoolDetailPage** Add
-  button. The server is now ready; the UI plumbing comes in the next
-  follow-up.
-- Permit2 batch approvals — still pending.
+- Permit2 batch approvals — still pending (next 4e slice).
 - Subgraph indexing for pre-Mantua positions — still pending.
+- "Create pool" CTA from the disabled-because-uninitialized state. Today the user has to navigate to **New pool** themselves; a one-click hand-off is a reasonable polish item but not load-bearing.

@@ -17,8 +17,9 @@ export interface PoolKeyContext {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
-  /** From the just-created pool's create-flow result. */
-  sqrtPriceX96: string;
+  /** Set by the pool-create flow with the just-initialized price.
+   *  Omitted when entering from PoolDetailPage — server reads slot0. */
+  sqrtPriceX96?: string;
 }
 
 interface Props {
@@ -27,9 +28,9 @@ interface Props {
 }
 
 /**
- * P4-004 + P4-005 — full-range add-liquidity form. Inherits the
- * just-created pool's PoolKey + sqrtPriceX96 from the create flow.
- * Existing-pool add support comes in 4d (needs StateView slot0 fetching).
+ * Full-range add-liquidity form. Inherits the PoolKey from either the
+ * pool-create flow (with a known sqrtPriceX96) or the PoolDetailPage
+ * (where the server reads slot0 via StateView at calldata time).
  */
 export function AddLiquidityForm({ ctx, onBack }: Props) {
   const [amountA, setAmountA] = useState("0.1");
@@ -58,7 +59,7 @@ export function AddLiquidityForm({ ctx, onBack }: Props) {
       fee: ctx.fee,
       amountARaw,
       amountBRaw,
-      sqrtPriceX96: ctx.sqrtPriceX96,
+      ...(ctx.sqrtPriceX96 ? { sqrtPriceX96: ctx.sqrtPriceX96 } : {}),
       slippageBps,
     });
   }

@@ -2,7 +2,10 @@ import { useState } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
+import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
+import { usePoolState } from "./use-pool-state.ts";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
@@ -13,12 +16,21 @@ const BASESCAN = "https://basescan.org";
 interface Props {
   poolId: string;
   onBack: () => void;
+  onAddLiquidity: (ctx: PoolKeyContext) => void;
 }
 
-export function PoolDetailPage({ poolId, onBack }: Props) {
+export function PoolDetailPage({ poolId, onBack, onAddLiquidity }: Props) {
   const [range, setRange] = useState<ChartRange>("30D");
   const [metric, setMetric] = useState<Metric>("tvl");
   const { data, error, loading } = usePool(poolId, range);
+
+  const derived = data ? tryDeriveAddCtx(data.pool) : null;
+  const poolState = usePoolState(
+    derived?.tokenA ?? null,
+    derived?.tokenB ?? null,
+    derived?.fee ?? null,
+  );
+  const addStatus = computeAddStatus(derived, poolState);
 
   return (
     <Card className="flex-1 flex flex-col p-0 overflow-hidden">
@@ -62,13 +74,21 @@ export function PoolDetailPage({ poolId, onBack }: Props) {
 
           <TvlChart points={data.chart} metric={metric} />
 
-          <div className="flex gap-2">
-            <Button variant="primary" size="md" disabled className="flex-1">
-              Add liquidity (Phase 4b)
+          <div className="space-y-1">
+            <Button
+              variant="primary"
+              size="md"
+              disabled={!addStatus.enabled}
+              onClick={() => {
+                if (addStatus.enabled && derived) onAddLiquidity(derived);
+              }}
+              className="w-full"
+            >
+              {addStatus.label}
             </Button>
-            <Button variant="ghost" size="md" disabled>
-              Remove (4c)
-            </Button>
+            {addStatus.hint && (
+              <p className="text-[11px] text-text-mute text-center">{addStatus.hint}</p>
+            )}
           </div>
 
           {data.pool.underlyingTokens.length > 0 && (
@@ -121,4 +141,35 @@ function StatCell({ label, value }: { label: string; value: string }) {
       <div className="text-base font-mono mt-1">{value}</div>
     </div>
   );
+}
+
+interface AddStatus {
+  enabled: boolean;
+  label: string;
+  hint: string | null;
+}
+
+function computeAddStatus(
+  derived: ReturnType<typeof tryDeriveAddCtx>,
+  poolState: ReturnType<typeof usePoolState>,
+): AddStatus {
+  if (!derived) {
+    return {
+      enabled: false,
+      label: "Add liquidity",
+      hint: "Pair not in Mantua's supported token set yet.",
+    };
+  }
+  if (poolState.loading) return { enabled: false, label: "Checking pool…", hint: null };
+  if (poolState.error) {
+    return { enabled: false, label: "Add liquidity", hint: "Couldn't check pool state." };
+  }
+  if (!poolState.data?.exists) {
+    return {
+      enabled: false,
+      label: "Add liquidity",
+      hint: "No v4 pool at this fee tier — create one from the Liquidity tab.",
+    };
+  }
+  return { enabled: true, label: "Add liquidity", hint: null };
 }

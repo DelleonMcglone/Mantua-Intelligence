@@ -21,7 +21,9 @@ export interface AddLiquidityArgs {
   fee: FeeTier;
   amountARaw: string;
   amountBRaw: string;
-  sqrtPriceX96: string;
+  /** Optional. Omit for existing-pool adds — the server reads slot0
+   *  via StateView and returns the resolved price in the response. */
+  sqrtPriceX96?: string;
   slippageBps: number;
 }
 
@@ -35,6 +37,9 @@ interface CalldataRes {
   tickLower: number;
   tickUpper: number;
   poolKeyHash: `0x${string}`;
+  /** Always populated by the server — either echoed from the request
+   *  or freshly resolved via StateView.getSlot0. */
+  sqrtPriceX96: string;
 }
 
 interface AddState {
@@ -122,7 +127,7 @@ export function useAddLiquidity() {
         tickLower: calldata.tickLower,
         tickUpper: calldata.tickUpper,
         poolKeyHash: calldata.poolKeyHash,
-        sqrtPriceX96: args.sqrtPriceX96,
+        sqrtPriceX96: calldata.sqrtPriceX96,
         ...(tokenId ? { tokenId } : {}),
         outcome,
       });
