@@ -6,6 +6,9 @@ export const V4_POOL_MANAGER = "0x498581ff718922c3f8e6a244956af099b2652b2b" as c
 export const V4_POSITION_MANAGER = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
 export const V4_STATE_VIEW = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
 
+/** Canonical Permit2 — same address on every chain (deterministic deploy). */
+export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
+
 /** Standard v4 fee tiers (fee in pips: 1 pip = 0.01 bps = 0.0001%). */
 export const FEE_TIERS = {
   STABLE: 100, // 0.01%
@@ -63,9 +66,10 @@ export const POOL_MANAGER_INITIALIZE_ABI = [
 ] as const;
 
 /**
- * v4 PositionManager.modifyLiquidities ABI fragment. The full PM has more
- * (multicall, permit, etc.); this is the entrypoint we need for mint/
- * increase/decrease via the action encoding.
+ * v4 PositionManager ABI fragments — modifyLiquidities is the unlocked
+ * action entrypoint; permitBatch wraps Permit2.permit so the batch can
+ * be applied atomically with modifyLiquidities via multicall (which uses
+ * delegatecall, so msg.sender stays the user).
  */
 export const POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI = [
   {
@@ -77,6 +81,72 @@ export const POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI = [
       { type: "uint256", name: "deadline" },
     ],
     outputs: [],
+  },
+] as const;
+
+const PERMIT_BATCH_TUPLE = {
+  type: "tuple",
+  name: "_permitBatch",
+  components: [
+    {
+      type: "tuple[]",
+      name: "details",
+      components: [
+        { type: "address", name: "token" },
+        { type: "uint160", name: "amount" },
+        { type: "uint48", name: "expiration" },
+        { type: "uint48", name: "nonce" },
+      ],
+    },
+    { type: "address", name: "spender" },
+    { type: "uint256", name: "sigDeadline" },
+  ],
+} as const;
+
+export const POSITION_MANAGER_PERMIT_BATCH_ABI = [
+  {
+    type: "function",
+    name: "permitBatch",
+    stateMutability: "payable",
+    inputs: [
+      { type: "address", name: "owner" },
+      PERMIT_BATCH_TUPLE,
+      { type: "bytes", name: "signature" },
+    ],
+    outputs: [{ type: "bytes", name: "err" }],
+  },
+] as const;
+
+export const POSITION_MANAGER_MULTICALL_ABI = [
+  {
+    type: "function",
+    name: "multicall",
+    stateMutability: "payable",
+    inputs: [{ type: "bytes[]", name: "data" }],
+    outputs: [{ type: "bytes[]", name: "results" }],
+  },
+] as const;
+
+/**
+ * Permit2 ABI fragments. The `allowance(owner, token, spender)` mapping
+ * is a struct view (uint160 amount, uint48 expiration, uint48 nonce).
+ * Returned as a tuple by viem's readContract.
+ */
+export const PERMIT2_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { type: "address", name: "owner" },
+      { type: "address", name: "token" },
+      { type: "address", name: "spender" },
+    ],
+    outputs: [
+      { type: "uint160", name: "amount" },
+      { type: "uint48", name: "expiration" },
+      { type: "uint48", name: "nonce" },
+    ],
   },
 ] as const;
 
