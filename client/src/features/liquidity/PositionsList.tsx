@@ -19,7 +19,12 @@ export function PositionsList() {
     <Card className="flex-1 flex flex-col p-0 overflow-hidden">
       <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Your positions</h2>
-        <span className="text-xs text-text-mute">From Mantua-tracked adds</span>
+        <span className="text-xs text-text-mute">
+          Showing positions opened in Mantua.{" "}
+          <a href="/docs/external-positions" className="border-b border-dotted">
+            External positions coming soon
+          </a>
+        </span>
       </div>
 
       {loading && (
