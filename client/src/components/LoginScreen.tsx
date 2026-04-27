@@ -12,6 +12,7 @@ interface LoginScreenProps {
  * primary CTA, fine print listing supported login methods.
  *
  * Login methods come from D-005: email + Google + Apple + passkey + wallet.
+ * The handler comes from `usePrivy().login` once App resolves auth state.
  */
 export function LoginScreen({ onLogin, loading }: LoginScreenProps) {
   if (loading) {

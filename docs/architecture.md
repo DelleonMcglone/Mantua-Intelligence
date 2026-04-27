@@ -39,9 +39,52 @@ The v1 prototype (`Mantua Prototype.html` + `src/` + `assets/` + `landing/`) cur
 
 ## Open architectural notes
 
-- **Chain lock:** Base Mainnet only (chain ID 8453). Privy `supportedChains` and viem clients are configured with Base only; any other chain ID is rejected at the boundary.
-- **Two-process dev:** `npm run dev` at the root spawns client (Vite) and server (Express) in parallel. Each has its own port. Frontend talks to backend via a base URL from env.
+- **Chain lock:** Base Mainnet only (chain ID 8453). Privy `supportedChains` and viem clients are configured with Base only; any other chain ID is rejected at the boundary. The `useBaseWalletClient` hook (`client/src/lib/privy/wallet-client.ts`) attempts an automatic chain switch and throws if the wallet remains off-Base.
+- **Two-process dev:** `npm run dev` at the root spawns client (Vite, HTTPS via self-signed cert) and server (Express) in parallel. Each has its own port. Frontend talks to backend via a base URL from env.
+- **HTTPS in dev:** Privy's Web Crypto API key sharding silently fails over plain HTTP outside `localhost`. The Vite dev server runs HTTPS by default via `@vitejs/plugin-basic-ssl`. The browser will warn about the self-signed cert on first load — that's expected; click through. Staging/prod use real TLS (Vercel handles this for the frontend).
 - **Single shared logic:** Critical Phase 3 / Phase 4 modules (swap, liquidity) are written once on the server and exposed via API endpoints; the agent (Phase 6) calls the same endpoints. No client-side duplication of swap-construction logic.
+
+## Auth flow (Phase 2)
+
+1. Client renders `<MantuaPrivyProvider>` at the root with `loginMethods` per D-005, `embeddedWallets.createOnLogin: 'users-without-wallets'` per D-006, and `walletConnectCloudProjectId` per D-007.
+2. User logs in via `usePrivy().login()`. Privy provisions an embedded wallet for email/Google/Apple/passkey logins, or uses the connected external wallet.
+3. Client obtains an identity token via `getAccessToken()` and sends it as `Authorization: Bearer <token>` on API calls.
+4. Server `attachAuth` middleware (`server/src/middleware/auth.ts`) verifies the token via `@privy-io/server-auth`, then populates `req.privyUserId` and `req.walletAddress` for downstream handlers.
+5. Routes that must reject anonymous traffic chain `requireAuth` after `attachAuth`.
+
+`req.walletAddress` is what `walletRateLimiter` (P1-007) keys on once auth is wired into write paths.
+
+## CDP agent wallet (Phase 6)
+
+The chosen implementation path for P6-003 (Create & Manage Agent Wallet) is the [`create-onchain-agent`](https://www.npmjs.com/package/create-onchain-agent) scaffolder, which bootstraps an AgentKit-based wallet with the wallet-secret and policy-management plumbing already wired. The bare `@coinbase/cdp-sdk` direct path is **not** used for v2 — the AgentKit scaffold gives us spending policies, EIP-7702 delegation, and a coherent end-user-management story for free.
+
+Phase 2 only stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_SECRET`). Wallet provisioning happens in Phase 6.
+
+## Mainnet safety rails (Phase 1)
+
+Server-side enforcement primitives. Every Phase 3+ write path goes through these BEFORE any Trading API or PoolManager call.
+
+| Rail | Module | Hard ceiling | Notes |
+| ---- | ------ | ------------ | ----- |
+| Spending cap (P1-001) | `server/src/lib/spending-cap.ts` | $50,000/day per wallet | Reads from `user_preferences.daily_cap_usd` (primary wallet) or `agent_wallets.daily_cap_usd`. Per-day tracking in `daily_wallet_spend`. Reset at 00:00 UTC. |
+| Wallet age (P1-002) | `server/src/lib/wallet-age.ts` | n/a | `recordFirstSeen` on first connection; `getWalletAge` returns `{ ageDays, tier, tierMaxCapUsd }`. Used by P1-003 cap-raise UI. |
+| Slippage (P1-004) | `server/src/lib/slippage.ts` | 500 bps (5%) | `classifySlippage(bps)` returns `ok` / `warn` / `double_confirm`. Above 500 bps throws `SafetyError`. |
+| Kill-switch (P1-006) | `server/src/middleware/kill-switch.ts` | n/a | Env `MANTUA_KILL_SWITCH=1` — all POST/PUT/PATCH/DELETE return 503. Reads + wallet connection unaffected. |
+| Rate limit (P1-007) | `server/src/middleware/rate-limit.ts` | 100 req / 15 min IP | Tighter `writeRateLimiter` and `walletRateLimiter` for chain-touching paths. Wallet keying activates after Phase 2 auth lands. |
+| Audit log (P1-008) | `server/src/lib/audit.ts` + `mantua_audit_log` table | n/a | Every write attempt logged with `(action, outcome, wallet, params, tx_hash, reason, ip, user_agent)`. Distinct from `portfolio_transactions` (which is success-only). |
+
+The hard ceilings live in `server/src/lib/constants.ts`. Lifting any of them requires a code change + redeploy — there is no admin path for them at runtime.
+
+`SafetyError` (`server/src/lib/errors.ts`) is the canonical thrown type for rail violations. The error code (`spending_cap_exceeded`, `slippage_too_high`, etc.) is what gets logged into `mantua_audit_log.outcome` so reviewers can grep on it.
+
+### Deferred UI tasks
+
+Two Phase 1 tasks are explicitly deferred to Phase D, where the UI primitives exist:
+
+- **P1-003 (tiered cap raise UI)** — needs a Shadcn confirmation modal (PD-005) and the cap-management screen layout (PD-004). The server-side primitives (`getWalletAge`, `getDailyCap`) are ready to back it; only the UI is missing.
+- **P1-005 (mandatory transaction confirmation modal)** — superseded by Phase D's `useConfirmedAction` hook (see below).
+
+Both deferrals are tracked in `docs/tasks/v2-roadmap.md` and revisited at the end of Phase D.
 
 ## Phase D — design system
 
