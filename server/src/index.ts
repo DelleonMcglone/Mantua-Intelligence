@@ -5,6 +5,7 @@ import { logger } from "./lib/logger.ts";
 import { attachAuth } from "./middleware/auth.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
+import { complianceAdminRouter } from "./routes/compliance-admin.ts";
 import { healthRouter } from "./routes/health.ts";
 import { liquidityAddRouter } from "./routes/liquidity-add.ts";
 import { liquidityRemoveRouter } from "./routes/liquidity-remove.ts";
@@ -32,6 +33,7 @@ app.use(liquidityRemoveRouter);
 app.use(positionsRouter);
 app.use(quoteRouter);
 app.use(swapRouter);
+app.use(complianceAdminRouter);
 
 app.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, "server listening");
