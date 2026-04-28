@@ -27,7 +27,7 @@ export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 
 /**
- * Phase 5 P5-002 — Mantua hook addresses, network-driven.
+ * Mantua hook addresses, network-driven.
  *
  * Mainnet entries are intentionally `null` for every hook: none of the
  * four Mantua hooks are deployed on Base Mainnet yet (launch-gating
@@ -35,19 +35,13 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  * Callers that resolve a hook address must handle `null` ("hook not
  * available on this network").
  *
- * Sepolia entries:
- *   - Three hooks (DynamicFee, RWAGate, AsyncLimitOrder) verified live
- *     on Base Sepolia by `npm run verify:hooks` (see
- *     `docs/security/hook-deployments.md`).
- *   - StableProtection's Sepolia address is the **pre-mined** CREATE2
- *     target from the Phase 5b-3.2 dry-run; broadcast lands in Phase
- *     5b-4. Until 5b-4 fires, this address has no bytecode on Base
- *     Sepolia — callers should `eth_getCode` before using it.
+ * Sepolia entries: all four hooks are verified live on Base Sepolia by
+ * `npm run verify:hooks` (see `docs/security/hook-deployments.md`).
  */
 
 const STABLE_PROTECTION_HOOK_MAINNET = null;
 const STABLE_PROTECTION_HOOK_SEPOLIA =
-  "0x2aCA401Edd335bcb4287E96f0E862f458B41A0C0" as const;
+  "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0" as const;
 const DYNAMIC_FEE_HOOK_MAINNET = null;
 const DYNAMIC_FEE_HOOK_SEPOLIA = "0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0" as const;
 const RWA_GATE_HOOK_MAINNET = null;
