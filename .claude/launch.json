@@ -9,14 +9,14 @@
     },
     {
       "name": "client",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:client"],
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "source ~/.nvm/nvm.sh && nvm use --silent && npm run dev:client"],
       "port": 5173
     },
     {
       "name": "server",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:server"],
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-lc", "source ~/.nvm/nvm.sh && nvm use --silent && npm run dev:server"],
       "port": 3001
     }
   ]
