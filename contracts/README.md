@@ -38,7 +38,7 @@ verification report at `docs/security/hook-deployments.md`.
 
 | Hook | Source | Deployment | Address | Permissions |
 | ---- | ------ | ---------- | ------- | ----------- |
-| Stable Protection | [`stableprotection-hook@1282b89`](https://github.com/DelleonMcglone/stableprotection-hook/commit/1282b899b6f68d27e28d65194dc75661f23476af) | Unichain Sepolia (1301) | `0x1510926ba6986cb3c93bfff25839c0ef740820c0` | beforeInitialize, beforeSwap, afterSwap |
+| Stable Protection | [`stableprotection-hook@1282b89`](https://github.com/DelleonMcglone/stableprotection-hook/commit/1282b899b6f68d27e28d65194dc75661f23476af) | Base Sepolia (84532) | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` | beforeInitialize, beforeSwap, afterSwap |
 | DynamicFee | [`dynamic-fee@854e939`](https://github.com/DelleonMcglone/dynamic-fee/commit/854e939b6f60fae9074c263f7391b04caccc23f9) | Base Sepolia (84532) | `0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0` | beforeSwap, afterSwap |
 | RWAGate | [`RWAgate@bb41ada`](https://github.com/DelleonMcglone/RWAgate/commit/bb41ada54c9c9fb5a2bea296728321f68cf2dcc1) | Base Sepolia (84532) | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` | beforeAddLiquidity, beforeRemoveLiquidity, beforeSwap |
 | AsyncLimitOrder | [`limit-orders@89d905f`](https://github.com/DelleonMcglone/limit-orders/commit/89d905f1d39abbc3795015fc4adfb8140560194b) | Base Sepolia (84532) | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | afterInitialize, beforeSwap, afterSwap, beforeSwapReturnsDelta |
