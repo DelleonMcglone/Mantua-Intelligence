@@ -93,3 +93,49 @@ Tracking: see `docs/tech-debt.md` TD-002.
   `solc` version (0.8.26) differs from the monorepo's foundry config
   (0.8.27); compile metadata won't match. Resolve by aligning solc
   versions or skipping `--verify` and verifying manually post-deploy.
+
+## Deploying Stable Protection to Base Sepolia
+
+A wrapper script `contracts/deploy-stable-protection.sh` automates the deploy
+with safety rails:
+
+1. Set required env vars in your shell (NOT in any committed file):
+   ```bash
+   export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+   export PRIVATE_KEY=<deployer hex private key, with or without 0x>
+   export BASESCAN_API_KEY=<your basescan key>
+   ```
+
+2. Get Sepolia ETH from the Coinbase faucet:
+   https://www.coinbase.com/faucets/base-ethereum-sepolia-faucet
+
+3. Run the wrapper from the repo root:
+   ```bash
+   ./contracts/deploy-stable-protection.sh
+   ```
+
+4. The script will:
+   - Verify clean git tree, env vars, and deployer balance
+   - Display deployment parameters
+   - Wait for explicit `yes` confirmation
+   - Broadcast the deploy via `forge script --broadcast --verify`
+   - Confirm bytecode landed at the expected address
+     (`0x2aCA401Edd335bcb4287E96f0E862f458B41A0C0`)
+   - Run `npm run verify:hooks` to record the deployment
+
+5. After successful deploy, follow the `docs/tech-debt.md` TD-002 closure
+   checklist to open Phase 5b-4 PR with documentation updates.
+
+### Why a wrapper instead of running `forge script` directly
+
+- Reduces typo risk on a long forge command
+- Adds explicit `yes` prompt before any broadcast
+- Verifies the deploy landed at the pre-mined expected address
+- Captures the next-steps checklist in the script's output
+
+### What the wrapper does NOT do
+
+- Store, request, or expose your private key (it stays in your shell env)
+- Retry on failure (operator decides what to do)
+- Run unattended (the `yes` prompt is mandatory)
+- Automate via CI/CD (deployment is a manual operation by design)
