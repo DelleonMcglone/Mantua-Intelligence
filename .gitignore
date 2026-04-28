@@ -53,3 +53,5 @@ drizzle/migrations/meta/_journal.json.bak
 # Logs
 logs/
 *.log
+docs/security/slither/*
+!docs/security/slither/.gitkeep
