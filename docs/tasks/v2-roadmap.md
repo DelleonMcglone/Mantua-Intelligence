@@ -412,7 +412,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 | ID | Task | Status |
 |----|------|--------|
 | P5-007 | Verify DynamicFee deployment on Base Sepolia (`0x25F9…C0C0`) via Basescan Sepolia | ✅ |
-| P5-008 | Volatility measurement source for DynamicFee — pool-history TWAP or equivalent non-Chainlink oracle (Chainlink dropped from v2 scope) | ⬜ |
+| P5-008 | Volatility measurement source for DynamicFee: **pool-history TWAP** (decision 2026-04-28; Chainlink dropped from v2 scope) | ⬜ |
 | P5-009 | UI: display current dynamic fee in swap modal before confirmation | ⬜ |
 | P5-010 | E2E: swap on a DynamicFee-hooked pool; verify fee adjusts under volatility scenarios | ⬜ |
 
@@ -420,7 +420,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-011 | Verify RWAGate deployment on Base Sepolia (`0xbba7…4a80`); define per-pool compliance gating mechanism (KYC list / institutional allowlist) | 🟡 |
+| P5-011 | Verify RWAGate deployment on Base Sepolia (`0xbba7…4a80`); compliance gating via **KYC list** (decision 2026-04-28) — admin-managed allowlist of compliant wallets in the deployed `ComplianceRegistry` (`0x11B261AE5AF867baA69506dfE6d62eeE9DB5D796`) | 🟡 |
 | P5-012 | UI: RWA pool access gated — show "Verification required" state for non-compliant wallets | ⬜ |
 | P5-013 | E2E: attempt RWA pool interaction with non-compliant wallet (rejected) and compliant wallet (accepted) | ⬜ |
 
