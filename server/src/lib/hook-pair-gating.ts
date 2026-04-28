@@ -17,8 +17,8 @@
  * registered in `tokens.ts`.
  */
 
-import { TOKENS, type TokenSymbol } from "./tokens.ts";
-import type { HookName } from "./v4-contracts.ts";
+import { TOKENS, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
+import { getHookAddress, type HookName } from "./v4-contracts.ts";
 
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
 
@@ -80,4 +80,24 @@ export function assertHookPairAllowed(
   if (!isHookPairAllowed(hook, token0Address, token1Address)) {
     throw new HookPairNotAllowedError(hook, token0Address, token1Address);
   }
+}
+
+/**
+ * Resolve a hook name to its on-chain address on the active network and
+ * gate the pair-against-hook combination. Returns `ZERO_ADDRESS` for a
+ * no-hook pool. Throws when the hook is unavailable on this network or
+ * the pair is disallowed for the hook.
+ */
+export function resolveHookForPool(
+  hook: HookName | null | undefined,
+  token0Address: string,
+  token1Address: string,
+): `0x${string}` {
+  if (!hook) return ZERO_ADDRESS;
+  const addr = getHookAddress(hook);
+  if (!addr) {
+    throw new Error(`Hook "${hook}" is not deployed on the active network`);
+  }
+  assertHookPairAllowed(hook, token0Address, token1Address);
+  return addr;
 }
