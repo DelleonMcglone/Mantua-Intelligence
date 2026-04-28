@@ -6,6 +6,20 @@ import { userPreferences } from "../db/schema/users.ts";
 import { users } from "../db/schema/users.ts";
 import { DEFAULT_DAILY_CAP_USD, HARD_DAILY_CAP_USD } from "./constants.ts";
 import { SafetyError } from "./errors.ts";
+import { logger } from "./logger.ts";
+
+/**
+ * Phase 5b-2: cap enforcement is derived from `MANTUA_NETWORK` (one env
+ * var, two effects — see Phase 5b-1). Dollar-denominated rails are
+ * meaningless on testnet (USD-equivalents are fake), so when
+ * MANTUA_NETWORK=testnet the hard pre-flight check is a no-op. Recording
+ * still runs so the ledger code path stays exercised. Mainnet behavior
+ * (full enforcement) is restored by setting MANTUA_NETWORK=mainnet.
+ *
+ * Read at import time, intentionally — flipping requires a server restart,
+ * matching the rest of the chain-config rollover.
+ */
+const SPENDING_CAP_ENFORCED = process.env.MANTUA_NETWORK === "mainnet";
 
 function utcDate(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
@@ -54,8 +68,17 @@ export async function getDailySpend(
  * P1-001 — assert that `usdAmount` would not push the wallet over its
  * configured cap or the hard absolute ceiling. Read-only; does NOT increment
  * the ledger. Call `recordSpending` after the on-chain receipt confirms.
+ *
+ * Skipped when MANTUA_NETWORK !== 'mainnet' (Phase 5b-2): testnet USD
+ * equivalents are fake, so a dollar-denominated cap has no meaningful
+ * semantics. Other Phase 1 rails (slippage, kill-switch, rate limit,
+ * audit log) stay enforced regardless of network.
  */
 export async function checkSpendingCap(address: string, usdAmount: number): Promise<void> {
+  if (!SPENDING_CAP_ENFORCED) {
+    logger.debug({ address, usdAmount }, "spending cap skipped (MANTUA_NETWORK != mainnet)");
+    return;
+  }
   if (usdAmount < 0) throw new Error("checkSpendingCap: usdAmount must be non-negative");
   if (usdAmount > HARD_DAILY_CAP_USD) {
     throw new SafetyError(
