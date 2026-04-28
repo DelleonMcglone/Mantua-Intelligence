@@ -1,10 +1,27 @@
 /**
- * Uniswap v4 contract addresses on Base Mainnet (chain 8453).
- * Verified bytecode-present 2026-04-26.
+ * Uniswap v4 contract addresses, network-driven by `MANTUA_NETWORK`.
+ * Mainnet addresses verified bytecode-present 2026-04-26; Sepolia
+ * addresses sourced from developers.uniswap.org/contracts/v4/deployments
+ * 2026-04-28.
  */
-export const V4_POOL_MANAGER = "0x498581ff718922c3f8e6a244956af099b2652b2b" as const;
-export const V4_POSITION_MANAGER = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
-export const V4_STATE_VIEW = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
+import { IS_MAINNET } from "./constants.ts";
+
+const V4_POOL_MANAGER_MAINNET = "0x498581ff718922c3f8e6a244956af099b2652b2b" as const;
+const V4_POOL_MANAGER_SEPOLIA = "0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408" as const;
+const V4_POSITION_MANAGER_MAINNET = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
+const V4_POSITION_MANAGER_SEPOLIA = "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80" as const;
+const V4_STATE_VIEW_MAINNET = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
+const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8defb9b4" as const;
+
+export const V4_POOL_MANAGER: `0x${string}` = IS_MAINNET
+  ? V4_POOL_MANAGER_MAINNET
+  : V4_POOL_MANAGER_SEPOLIA;
+export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
+  ? V4_POSITION_MANAGER_MAINNET
+  : V4_POSITION_MANAGER_SEPOLIA;
+export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
+  ? V4_STATE_VIEW_MAINNET
+  : V4_STATE_VIEW_SEPOLIA;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;

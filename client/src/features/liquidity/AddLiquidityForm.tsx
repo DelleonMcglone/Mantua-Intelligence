@@ -3,15 +3,13 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import type { TokenSymbol } from "@/lib/tokens.ts";
+import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { PairCell } from "./PairCell.tsx";
 import { SlippageRow } from "./SlippageRow.tsx";
 import { ratioLabel, safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
 import { useAddLiquidity } from "./use-add-liquidity.ts";
-
-const BASESCAN_TX = "https://basescan.org/tx/";
 
 export interface PoolKeyContext {
   tokenA: TokenSymbol;

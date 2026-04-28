@@ -10,10 +10,22 @@ const schema = z.object({
 
   UNISWAP_TRADING_API_KEY: z.string().min(1).optional(),
 
-  /** Base mainnet RPC URL — used by server-side viem readContract calls
-   *  (StateView.getSlot0, etc.). Defaults to the public endpoint; supply
-   *  Alchemy/QuickNode in production for headroom. */
-  BASE_RPC_URL: z.url().default("https://mainnet.base.org"),
+  /** Phase 5b: testnet beta gate. Default `testnet` targets Base Sepolia
+   *  (84532); set to `mainnet` to flip the entire app back to Base Mainnet
+   *  (8453). Drives chain ID, v4 contract addresses, token registry,
+   *  spending-cap default (PR #2), and explorer URLs. */
+  MANTUA_NETWORK: z.enum(["mainnet", "testnet"]).default("testnet"),
+
+  /** Base RPC URL — used by server-side viem readContract calls
+   *  (StateView.getSlot0, etc.). Default tracks MANTUA_NETWORK; override
+   *  with Alchemy/QuickNode in production for headroom. */
+  BASE_RPC_URL: z
+    .url()
+    .default(
+      process.env.MANTUA_NETWORK === "mainnet"
+        ? "https://mainnet.base.org"
+        : "https://sepolia.base.org",
+    ),
 
   /** The Graph decentralized-network API key. Required for /api/positions
    *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
