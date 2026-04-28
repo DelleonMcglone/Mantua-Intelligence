@@ -4,3 +4,5 @@ forge-std/=lib/forge-std/src/
 @uniswap/v4-periphery/=lib/v4-periphery/
 solmate/=lib/solmate/src/
 stable-protection/=hooks/stable-protection/src/
+hooks/stable-protection/:v4-periphery/=hooks/stable-protection/lib/v4-periphery/
+hooks/stable-protection/:@uniswap/v4-periphery/=hooks/stable-protection/lib/v4-periphery/

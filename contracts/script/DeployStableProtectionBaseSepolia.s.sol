@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.27;
+pragma solidity ^0.8.26;
 
 import {Script, console2} from "forge-std/Script.sol";
 
@@ -7,8 +7,8 @@ import {Script, console2} from "forge-std/Script.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 
-// ─── v4-periphery ────────────────────────────────────────────────────────────
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+// ─── HookMiner — vendored from v4-periphery@eeb3eff (see src/lib/HookMiner.sol) ──
+import {HookMiner} from "../src/lib/HookMiner.sol";
 
 // ─── vendored hook (submodule, see contracts/hooks/stable-protection) ────────
 import {StableProtectionHook} from "stable-protection/StableProtectionHook.sol";
