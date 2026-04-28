@@ -67,15 +67,6 @@ const TOKENS_MAINNET = {
     native: false,
     chainId: BASE_CHAIN_ID,
   },
-  LINK: {
-    symbol: "LINK",
-    name: "Chainlink",
-    address: "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
-    decimals: 18,
-    coingeckoId: "chainlink",
-    native: false,
-    chainId: BASE_CHAIN_ID,
-  },
 } as const satisfies Record<string, Token>;
 
 const TOKENS_SEPOLIA = {
