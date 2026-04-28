@@ -7,10 +7,10 @@ shows **✅ on every column**.
 
 | Hook | Pinned commit | Bytecode verified | Static analysis (P5-017) | Fuzz harness (P5-024) | Fork tests (P5-025) | External audit (P5-026) | Decision |
 |---|---|---|---|---|---|---|---|
-| StableProtectionHook | [`1282b89`](https://github.com/DelleonMcglone/stableprotection-hook/commit/1282b899b6f68d27e28d65194dc75661f23476af) | ✅ (testnet only — see hook-deployments.md) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
-| DynamicFee | [`854e939`](https://github.com/DelleonMcglone/dynamic-fee/commit/854e939b6f60fae9074c263f7391b04caccc23f9) | ✅ (testnet only) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
-| RWAGate | [`bb41ada`](https://github.com/DelleonMcglone/RWAgate/commit/bb41ada54c9c9fb5a2bea296728321f68cf2dcc1) | ✅ (testnet only) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
-| AsyncLimitOrder | [`89d905f`](https://github.com/DelleonMcglone/limit-orders/commit/89d905f1d39abbc3795015fc4adfb8140560194b) | ✅ (testnet only) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
+| StableProtectionHook | [`1282b89`](https://github.com/DelleonMcglone/stableprotection-hook/commit/1282b899b6f68d27e28d65194dc75661f23476af) | ✅ (testnet only — see hook-deployments.md) | ⚠️ run, 7 own-M open ([findings](findings.md)) | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
+| DynamicFee | [`854e939`](https://github.com/DelleonMcglone/dynamic-fee/commit/854e939b6f60fae9074c263f7391b04caccc23f9) | ✅ (testnet only) | ⚠️ run, 7 own-M open ([findings](findings.md)) | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
+| RWAGate | [`bb41ada`](https://github.com/DelleonMcglone/RWAgate/commit/bb41ada54c9c9fb5a2bea296728321f68cf2dcc1) | ✅ (testnet only) | ⚠️ run, 0 own-M open ([findings](findings.md)) | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
+| AsyncLimitOrder | [`89d905f`](https://github.com/DelleonMcglone/limit-orders/commit/89d905f1d39abbc3795015fc4adfb8140560194b) | ✅ (testnet only) | ❌ compile failed ([SF-015](findings.md)) | ⬜ | ⬜ | ⬜ | ⬜ Not ready |
 
 ## Gating rules
 
