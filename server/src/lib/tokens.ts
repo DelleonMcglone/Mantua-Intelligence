@@ -1,16 +1,20 @@
 /**
- * Phase 3 / P3-002 — Base Mainnet supported token registry.
+ * Phase 3 / P3-002 — supported token registry, network-driven.
  *
  * Source of truth. Mirrored by client/src/lib/tokens.ts. Keep both in
- * sync; if either drifts, the typecheck will catch it (TS structural
- * compatibility on the imported `Token` type) but the tokens themselves
- * are duplicated values.
+ * sync; if either drifts, the typecheck will catch it but the tokens
+ * themselves are duplicated values.
  *
- * Addresses verified against issuer docs per P1-002. Pinned canonical
- * Base Mainnet (chain ID 8453).
+ * Active set switches on `MANTUA_NETWORK` (see constants.ts):
+ *   - mainnet → TOKENS_MAINNET (ETH, cbBTC, USDC, EURC, LINK)
+ *     Addresses verified against issuer docs per P1-002.
+ *   - testnet → TOKENS_SEPOLIA (ETH, WETH, cbBTC, USDC, EURC)
+ *     Addresses verified 2026-04-28 (cbBTC checked via decimals/symbol
+ *     RPC probe; USDC/EURC are Circle's official testnet tokens; WETH
+ *     is the canonical OP-stack address).
  */
 
-import { BASE_CHAIN_ID } from "./constants.ts";
+import { BASE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -25,7 +29,7 @@ export interface Token {
   chainId: number;
 }
 
-export const TOKENS = {
+const TOKENS_MAINNET = {
   ETH: {
     symbol: "ETH",
     name: "Ethereum",
@@ -73,13 +77,68 @@ export const TOKENS = {
   },
 } as const satisfies Record<string, Token>;
 
-export type TokenSymbol = keyof typeof TOKENS;
+const TOKENS_SEPOLIA = {
+  ETH: {
+    symbol: "ETH",
+    name: "Ethereum",
+    address: ZERO_ADDRESS,
+    decimals: 18,
+    coingeckoId: "ethereum",
+    native: true,
+    chainId: BASE_CHAIN_ID,
+  },
+  WETH: {
+    symbol: "WETH",
+    name: "Wrapped Ether",
+    address: "0x4200000000000000000000000000000000000006",
+    decimals: 18,
+    coingeckoId: "weth",
+    native: false,
+    chainId: BASE_CHAIN_ID,
+  },
+  cbBTC: {
+    symbol: "cbBTC",
+    name: "Coinbase Wrapped BTC",
+    address: "0xcbB7C0006F23900c38EB856149F799620fcb8A4a",
+    decimals: 8,
+    coingeckoId: "coinbase-wrapped-btc",
+    native: false,
+    chainId: BASE_CHAIN_ID,
+  },
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    decimals: 6,
+    coingeckoId: "usd-coin",
+    native: false,
+    chainId: BASE_CHAIN_ID,
+  },
+  EURC: {
+    symbol: "EURC",
+    name: "Euro Coin",
+    address: "0x808456652fdb597867f38412077A9182bf77359F",
+    decimals: 6,
+    coingeckoId: "euro-coin",
+    native: false,
+    chainId: BASE_CHAIN_ID,
+  },
+} as const satisfies Record<string, Token>;
+
+export const TOKENS: Record<string, Token> = IS_MAINNET ? TOKENS_MAINNET : TOKENS_SEPOLIA;
+
+/**
+ * Union of every token symbol across networks. The active `TOKENS` map
+ * only contains the subset for the current network — `getToken()` throws
+ * for symbols that exist on the other network but not this one.
+ */
+export type TokenSymbol = keyof typeof TOKENS_MAINNET | keyof typeof TOKENS_SEPOLIA;
 
 export const TOKEN_SYMBOLS = Object.keys(TOKENS) as TokenSymbol[];
 
 export function getToken(symbol: string): Token {
   if (!isTokenSymbol(symbol)) {
-    throw new Error(`Unknown token symbol: ${symbol}`);
+    throw new Error(`Unknown token symbol on this network: ${symbol}`);
   }
   return TOKENS[symbol];
 }

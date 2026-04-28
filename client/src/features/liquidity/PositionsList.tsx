@@ -2,14 +2,13 @@ import { useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { BASESCAN_TX } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "./fee-tiers.ts";
 import { isFeeTier } from "./fee-tiers-helpers.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { tokenLabelByAddress } from "./token-labels.ts";
 import { usePositions } from "./use-positions.ts";
 import type { Position } from "./positions-types.ts";
-
-const BASESCAN_TX = "https://basescan.org/tx/";
 
 export function PositionsList() {
   const { data, error, loading, reload } = usePositions();

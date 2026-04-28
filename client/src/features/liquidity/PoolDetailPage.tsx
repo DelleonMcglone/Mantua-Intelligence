@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { BASESCAN_URL } from "@/lib/tokens.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
@@ -11,7 +12,7 @@ import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { ChartRange } from "./types.ts";
 
-const BASESCAN = "https://basescan.org";
+const BASESCAN = BASESCAN_URL;
 
 interface Props {
   poolId: string;

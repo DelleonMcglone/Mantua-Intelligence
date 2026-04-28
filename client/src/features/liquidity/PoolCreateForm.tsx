@@ -3,7 +3,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Card } from "@/components/shell/Card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import type { TokenSymbol } from "@/lib/tokens.ts";
+import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
 import {
   DEFAULT_FEE_TIER_FOR_PAIR,
   FEE_TIER_LABELS,
@@ -13,8 +13,6 @@ import { FeeTierPicker } from "./FeeTierPicker.tsx";
 import { PairCell } from "./PairCell.tsx";
 import { ctaLabel, isStable, ratioLabel, safeParse } from "./create-helpers.ts";
 import { useCreatePool } from "./use-create-pool.ts";
-
-const BASESCAN_TX = "https://basescan.org/tx/";
 
 interface Props {
   onBack: () => void;
