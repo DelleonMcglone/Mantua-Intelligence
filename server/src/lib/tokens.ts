@@ -6,7 +6,7 @@
  * themselves are duplicated values.
  *
  * Active set switches on `MANTUA_NETWORK` (see constants.ts):
- *   - mainnet → TOKENS_MAINNET (ETH, cbBTC, USDC, EURC, LINK)
+ *   - mainnet → TOKENS_MAINNET (ETH, cbBTC, USDC, EURC)
  *     Addresses verified against issuer docs per P1-002.
  *   - testnet → TOKENS_SEPOLIA (ETH, WETH, cbBTC, USDC, EURC)
  *     Addresses verified 2026-04-28 (cbBTC checked via decimals/symbol
@@ -63,15 +63,6 @@ const TOKENS_MAINNET = {
     address: "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
     decimals: 6,
     coingeckoId: "euro-coin",
-    native: false,
-    chainId: BASE_CHAIN_ID,
-  },
-  LINK: {
-    symbol: "LINK",
-    name: "Chainlink",
-    address: "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
-    decimals: 18,
-    coingeckoId: "chainlink",
     native: false,
     chainId: BASE_CHAIN_ID,
   },

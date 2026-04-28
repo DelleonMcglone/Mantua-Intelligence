@@ -32,9 +32,8 @@ Rebuild Mantua AI from scratch as a production-grade, AI-powered DeFi platform o
 | Coinbase Wrapped BTC | cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` | 8 | coinbase-wrapped-btc |
 | USD Coin | USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | 6 | usd-coin |
 | Euro Coin | EURC | `0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42` | 6 | euro-coin |
-| Chainlink | LINK | `0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196` | 18 | chainlink |
 
-> ⚠️ Token addresses above are Base Mainnet canonical addresses — verify each against the issuer's official docs before hardcoding (P1-002). LINK sourced from Chainlink's [LINK Token Contracts](https://docs.chain.link/resources/link-token-contracts#base-mainnet) page.
+> ⚠️ Token addresses above are Base Mainnet canonical addresses — verify each against the issuer's official docs before hardcoding (P1-002). Base Sepolia uses different addresses (Circle testnet USDC/EURC, OP-stack WETH, Coinbase test cbBTC); the registry switches on `MANTUA_NETWORK` — see `server/src/lib/tokens.ts` for both sets.
 
 ---
 
@@ -119,7 +118,7 @@ Completed:   0
 | Feature | Reason |
 |---------|--------|
 | Voice Commands (Whisper) | Dropped — text NLP only |
-| Base Sepolia / Unichain Sepolia | Mainnet only |
+| Unichain Sepolia | Out of scope — Base only |
 | Mock Tokens (mUSDC, mETH, etc.) | Real tokens only |
 | Prediction Markets | Not in v2 scope |
 | Vaults | Not in v2 scope |
@@ -356,7 +355,7 @@ Privy's key sharding uses the Web Crypto API, which only works in secure context
 | P3-005 | Execute swap: user signs Permit2 + submits calldata via viem → wait for receipt | ⬜ |
 | P3-006 | On success: show BaseScan link, insert row into `portfolio_transactions` | ⬜ |
 | P3-007 | Error handling: insufficient balance, quote expired, spending cap exceeded, kill-switch, user reject | ⬜ |
-| P3-008 | E2E test: 10 token-pair combinations (ETH↔USDC, ETH↔cbBTC, ETH↔EURC, ETH↔LINK, USDC↔cbBTC, USDC↔EURC, USDC↔LINK, cbBTC↔EURC, cbBTC↔LINK, EURC↔LINK) | ⬜ |
+| P3-008 | E2E test: 6 token-pair combinations (ETH↔USDC, ETH↔cbBTC, ETH↔EURC, USDC↔cbBTC, USDC↔EURC, cbBTC↔EURC) | ⬜ |
 
 ### P3-004 Details: Permit2 Flow
 Use Uniswap Trading API response — it returns permit data when needed. Sign with `signTypedData`, pass signature back on `/v1/swap` call. Single user interaction for approval + swap.
@@ -384,23 +383,25 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 ## 🪝 PHASE 5: Hook Integration (4 Hooks)
 
-> Mantua deploys all four hooks to Base Mainnet. Stable Protection is already deployed; DynamicFee, RWAGate, and ALO must be deployed (or redeployed for mainnet) using Foundry. Each hook is paired with an AI-assisted security analysis pass before being wired into pool creation.
+> All four hooks are deployed on **Base Sepolia** for v2. Each hook is paired with an AI-assisted security analysis pass before being wired into pool creation. Mainnet redeploy is a separate launch-gating step (see Phase 9).
 
 ### Hook Address Registry
 
 | Hook | Network | Address | Status |
 |------|---------|---------|--------|
-| Stable Protection | Base Mainnet | `0x8739547f74E097020af6d6e306eDB6bD64C3A0C0` | ✅ Deployed |
-| DynamicFee | Base Sepolia | `0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0` | 🔧 Redeploy to mainnet |
-| RWAGate | Base Sepolia | `0xD97eA18385159A56c41D5a85d0Ff7531697dCA80` | 🔧 Redeploy to mainnet |
-| ALO | Base Sepolia | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | 🔧 Redeploy to mainnet |
+| Stable Protection | Base Sepolia | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` | ✅ Deployed |
+| DynamicFee | Base Sepolia | `0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0` | ✅ Deployed |
+| RWAGate | Base Sepolia | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` | ✅ Deployed |
+| ALO | Base Sepolia | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | ✅ Deployed |
 
-### Stable Protection Hook (Already Deployed)
+> Bytecode and permission flags verified against on-chain state by `npm run verify:hooks` — see `docs/security/hook-deployments.md` for the latest report.
+
+### Stable Protection Hook
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-001 | Verify Stable Protection deployment on Base Mainnet (`0x8739...A0C0`) via BaseScan | ⬜ |
-| P5-002 | Valid pair gating: USDC/EURC, USDC/USDT (add USDT if supported), EURC/USDT | ⬜ |
+| P5-001 | Verify Stable Protection deployment on Base Sepolia (`0xe5e6…20C0`) via Basescan Sepolia | ✅ |
+| P5-002 | Valid pair gating: USDC/EURC on Sepolia (USDT pairs deferred until USDT is added to the supported token registry) | ✅ |
 | P5-003 | UI: 5-zone peg status indicator (🟢 HEALTHY / 🟡 MINOR / 🟠 MODERATE / 🔴 SEVERE / ⛔ CRITICAL) | ⬜ |
 | P5-004 | Warn user when zone ≥ MODERATE; block swap when zone = CRITICAL with clear message | ⬜ |
 | P5-005 | Create pool with Stable Protection: USDC/EURC pool via `@uniswap/v4-sdk` + PositionManager | ⬜ |
@@ -410,8 +411,8 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-007 | Deploy DynamicFee to Base Mainnet via Foundry; verify on BaseScan | ⬜ |
-| P5-008 | Wire Chainlink price feed (LINK/USD or per-pair feed) for volatility measurement on Base Mainnet | ⬜ |
+| P5-007 | Verify DynamicFee deployment on Base Sepolia (`0x25F9…C0C0`) via Basescan Sepolia | ✅ |
+| P5-008 | Volatility measurement source for DynamicFee — pool-history TWAP or equivalent non-Chainlink oracle (Chainlink dropped from v2 scope) | ⬜ |
 | P5-009 | UI: display current dynamic fee in swap modal before confirmation | ⬜ |
 | P5-010 | E2E: swap on a DynamicFee-hooked pool; verify fee adjusts under volatility scenarios | ⬜ |
 
@@ -419,7 +420,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-011 | Deploy RWAGate to Base Mainnet via Foundry; define per-pool compliance gating mechanism (KYC list / institutional allowlist) | ⬜ |
+| P5-011 | Verify RWAGate deployment on Base Sepolia (`0xbba7…4a80`); define per-pool compliance gating mechanism (KYC list / institutional allowlist) | 🟡 |
 | P5-012 | UI: RWA pool access gated — show "Verification required" state for non-compliant wallets | ⬜ |
 | P5-013 | E2E: attempt RWA pool interaction with non-compliant wallet (rejected) and compliant wallet (accepted) | ⬜ |
 
@@ -427,7 +428,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-014 | Deploy ALO to Base Mainnet via Foundry; verify on BaseScan | ⬜ |
+| P5-014 | Verify ALO deployment on Base Sepolia (`0xb9e2…d0c8`) via Basescan Sepolia | ✅ |
 | P5-015 | UI: limit order entry form (price, amount, expiry) + pending orders list | ⬜ |
 | P5-016 | E2E: place limit order, verify async execution at target price, verify expiry handling | ⬜ |
 
@@ -519,7 +520,7 @@ const quote = await fetch('https://trade-api.gateway.uniswap.org/v1/quote', {
 | P6-001 | Agent mode selection screen: Chat vs Autonomous | ⬜ |
 | P6-002 | Chat mode: 6 action cards UI (Create Wallet, Send, Swap, Liquidity, Query, Portfolio) | ⬜ |
 | P6-003 | Action: Create & Manage Agent Wallet — provision a separate CDP wallet on Base Mainnet via `agentic-wallet-skills`; add explicit "Fund agent" UI for user to deposit a budget into the agent wallet | ⬜ |
-| P6-004 | Action: Send Tokens (ETH, cbBTC, USDC, EURC, LINK) with BaseScan confirmation | ⬜ |
+| P6-004 | Action: Send Tokens (ETH, cbBTC, USDC, EURC) with BaseScan confirmation | ⬜ |
 | P6-005 | Action: Swap Tokens — reuse `src/lib/swap.ts` module from Phase 3 | ⬜ |
 | P6-006 | Action: Add/Remove Liquidity — reuse `src/lib/liquidity.ts` module from Phase 4 | ⬜ |
 | P6-007 | Action: Query On-Chain Data — route to DefiLlama MCP | ⬜ |
@@ -565,7 +566,7 @@ const quote = await fetch('https://trade-api.gateway.uniswap.org/v1/quote', {
 |----|------|--------|
 | P8-001 | Portfolio landing: layout per `Mantua Prototype.html` portfolio screen (do not replicate v1 3-column Hyperliquid layout) | ⬜ |
 | P8-002 | USD valuation via DefiLlama or CoinGecko (mainnet prices — NOT hardcoded) | ⬜ |
-| P8-003 | Tab: Balances (ETH, cbBTC, USDC, EURC, LINK) with USD value and swap shortcut | ⬜ |
+| P8-003 | Tab: Balances (ETH, cbBTC, USDC, EURC) with USD value and swap shortcut | ⬜ |
 | P8-004 | Tab: LP Positions with hook badges (Stable Protection, DynamicFee, etc.) | ⬜ |
 | P8-005 | Tab: Swap History, Pool History, Deposits — all with BaseScan links | ⬜ |
 | P8-006 | "Hide Small Balances" toggle (< $1 USD equivalent) | ⬜ |
@@ -580,7 +581,7 @@ const quote = await fetch('https://trade-api.gateway.uniswap.org/v1/quote', {
 > **Example inputs:**
 > - "Add liquidity to a USDC/EURC pool with stable protection"
 > - "Swap 0.05 ETH for USDC"
-> - "Create a new ETH/LINK pool with 0.30% fee tier"
+> - "Create a new ETH/cbBTC pool with 0.30% fee tier"
 > - "Remove 50% of my liquidity from the cbBTC/USDC pool"
 > - "What's the TVL on Uniswap Base?"
 > - "Send 10 USDC to vitalik.eth"
@@ -665,8 +666,8 @@ Output: {
 
 ## ⚠️ Critical Implementation Rules
 
-1. **Mainnet only** — no Sepolia / Unichain Sepolia / Anvil in production code paths
-2. **Chain ID 8453 is fixed** — read from `useChainId()` but reject anything else
+1. **Base only** — supported chain IDs are 8453 (mainnet) and 84532 (sepolia), selected at runtime via `MANTUA_NETWORK`. No Unichain Sepolia, no Anvil in production code paths. Phase 5 dev/test runs on Base Sepolia; mainnet redeploy is a launch-gating step (Phase 9).
+2. **Chain ID matches `MANTUA_NETWORK`** — read from `useChainId()` and reject mismatches
 3. **NEVER hardcode token prices** — Dune's hardcoded testnet prices (ETH=$2000 etc.) were a v1 expedient; v2 pulls live prices
 4. **NEVER duplicate swap/liquidity logic** — single shared module, used by UI and agent
 5. **ALWAYS confirm transactions on-chain** — wait for receipt before UI "success"

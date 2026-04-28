@@ -13,7 +13,6 @@ const SYMBOL_ALIASES: Record<string, TokenSymbol> = {
   CBBTC: "cbBTC",
   USDC: "USDC",
   EURC: "EURC",
-  LINK: "LINK",
 };
 
 const FEE_TIER_BY_LABEL: Record<string, FeeTier> = {
