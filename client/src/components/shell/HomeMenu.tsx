@@ -10,8 +10,8 @@ interface Props {
 }
 
 const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
-  { id: "pool", title: "Create / Add Liquidity", icon: Droplet },
-  { id: "swap", title: "Swap Tokens", icon: ArrowUpDown },
+  { id: "pool", title: "Create / Add Liquidity with Stable protection", icon: Droplet },
+  { id: "swap", title: "Swap Stablecoins", icon: ArrowUpDown },
   { id: "analyze", title: "Analyze and research your favorite token or protocol", icon: BarChart3 },
   { id: "agent", title: "Create / Manage Agent", icon: Bot },
 ];
