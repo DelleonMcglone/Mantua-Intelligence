@@ -20,7 +20,9 @@ number_underscore = "thousands"
 
 [rpc_endpoints]
 base = "${BASE_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 base_fork = "http://127.0.0.1:8545"
 
 [etherscan]
 base = { key = "${BASESCAN_API_KEY}", chain = 8453, url = "https://api.basescan.org/api" }
+base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532, url = "https://api-sepolia.basescan.org/api" }

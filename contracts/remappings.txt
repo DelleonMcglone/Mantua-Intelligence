@@ -3,3 +3,8 @@ forge-std/=lib/forge-std/src/
 @uniswap/v4-core/=lib/v4-core/
 @uniswap/v4-periphery/=lib/v4-periphery/
 solmate/=lib/solmate/src/
+
+# Phase 5b-3 — vendored hook submodule. Imported by
+# script/DeployStableProtectionBaseSepolia.s.sol. Requires the submodule
+# to be initialized: `git submodule update --init --recursive`.
+stable-protection/=hooks/stable-protection/src/
