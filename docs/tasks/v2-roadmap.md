@@ -412,7 +412,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 | ID | Task | Status |
 |----|------|--------|
 | P5-007 | Verify DynamicFee deployment on Base Sepolia (`0x25F9…C0C0`) via Basescan Sepolia | ✅ |
-| P5-008 | Volatility measurement source for DynamicFee: **pool-history TWAP** (decision 2026-04-28; Chainlink dropped from v2 scope) | ⬜ |
+| P5-008 | Volatility measurement source for DynamicFee: **pool-history TWAP** (decision 2026-04-28; Chainlink dropped from v2 scope). Scaffold landed in [`dynamic-fee#1`](https://github.com/DelleonMcglone/dynamic-fee/pull/1) (`TwapOracle` library + 7 tests). Integration into `DynamicFee.sol` + redeploy is the remaining work. | 🟡 |
 | P5-009 | UI: display current dynamic fee in swap modal before confirmation | ⬜ |
 | P5-010 | E2E: swap on a DynamicFee-hooked pool; verify fee adjusts under volatility scenarios | ⬜ |
 
