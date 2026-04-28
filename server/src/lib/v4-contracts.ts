@@ -26,6 +26,92 @@ export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 
+/**
+ * Phase 5 P5-002 — Mantua hook addresses, network-driven.
+ *
+ * Mainnet entries are intentionally `null` for every hook: none of the
+ * four Mantua hooks are deployed on Base Mainnet yet (launch-gating
+ * step, after the security suite P5-017 → P5-026 signs them off).
+ * Callers that resolve a hook address must handle `null` ("hook not
+ * available on this network").
+ *
+ * Sepolia entries:
+ *   - Three hooks (DynamicFee, RWAGate, AsyncLimitOrder) verified live
+ *     on Base Sepolia by `npm run verify:hooks` (see
+ *     `docs/security/hook-deployments.md`).
+ *   - StableProtection's Sepolia address is the **pre-mined** CREATE2
+ *     target from the Phase 5b-3.2 dry-run; broadcast lands in Phase
+ *     5b-4. Until 5b-4 fires, this address has no bytecode on Base
+ *     Sepolia — callers should `eth_getCode` before using it.
+ */
+
+const STABLE_PROTECTION_HOOK_MAINNET = null;
+const STABLE_PROTECTION_HOOK_SEPOLIA =
+  "0x2aCA401Edd335bcb4287E96f0E862f458B41A0C0" as const;
+const DYNAMIC_FEE_HOOK_MAINNET = null;
+const DYNAMIC_FEE_HOOK_SEPOLIA = "0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0" as const;
+const RWA_GATE_HOOK_MAINNET = null;
+const RWA_GATE_HOOK_SEPOLIA = "0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80" as const;
+const ASYNC_LIMIT_ORDER_HOOK_MAINNET = null;
+const ASYNC_LIMIT_ORDER_HOOK_SEPOLIA = "0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8" as const;
+
+export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
+  ? STABLE_PROTECTION_HOOK_MAINNET
+  : STABLE_PROTECTION_HOOK_SEPOLIA;
+export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
+  ? DYNAMIC_FEE_HOOK_MAINNET
+  : DYNAMIC_FEE_HOOK_SEPOLIA;
+export const RWA_GATE_HOOK: `0x${string}` | null = IS_MAINNET
+  ? RWA_GATE_HOOK_MAINNET
+  : RWA_GATE_HOOK_SEPOLIA;
+export const ASYNC_LIMIT_ORDER_HOOK: `0x${string}` | null = IS_MAINNET
+  ? ASYNC_LIMIT_ORDER_HOOK_MAINNET
+  : ASYNC_LIMIT_ORDER_HOOK_SEPOLIA;
+
+export const HOOK_NAMES = [
+  "stable-protection",
+  "dynamic-fee",
+  "rwa-gate",
+  "async-limit-order",
+] as const;
+export type HookName = (typeof HOOK_NAMES)[number];
+
+const HOOK_ADDRESSES: Record<HookName, `0x${string}` | null> = {
+  "stable-protection": STABLE_PROTECTION_HOOK,
+  "dynamic-fee": DYNAMIC_FEE_HOOK,
+  "rwa-gate": RWA_GATE_HOOK,
+  "async-limit-order": ASYNC_LIMIT_ORDER_HOOK,
+};
+
+/**
+ * Resolve a hook address by name on the active network. Returns `null`
+ * when the hook isn't deployed on this network — callers should treat
+ * that as "hook unavailable" and refuse pool creation that depends on it
+ * (rather than falling back to a no-hook pool, which would silently
+ * change pool semantics).
+ */
+export function getHookAddress(name: HookName): `0x${string}` | null {
+  return HOOK_ADDRESSES[name];
+}
+
+/**
+ * v4 PoolKey hook permission flags encoded in the lower 14 bits of each
+ * hook's address (see Hooks.sol). Useful for sanity-checking that a
+ * resolved hook address actually implements the lifecycle callbacks the
+ * caller expects. Values match `npm run verify:hooks` output.
+ */
+export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
+  "stable-protection": ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
+  "dynamic-fee": ["BEFORE_SWAP", "AFTER_SWAP"],
+  "rwa-gate": ["BEFORE_ADD_LIQUIDITY", "BEFORE_REMOVE_LIQUIDITY", "BEFORE_SWAP"],
+  "async-limit-order": [
+    "AFTER_INITIALIZE",
+    "BEFORE_SWAP",
+    "AFTER_SWAP",
+    "BEFORE_SWAP_RETURNS_DELTA",
+  ],
+} as const;
+
 /** Standard v4 fee tiers (fee in pips: 1 pip = 0.01 bps = 0.0001%). */
 export const FEE_TIERS = {
   STABLE: 100, // 0.01%
