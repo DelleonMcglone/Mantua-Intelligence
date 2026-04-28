@@ -1,10 +1,10 @@
 # Hook deployment verification (P5-001)
 
-Last run: 2026-04-28T00:54:59.161Z
+Last run: 2026-04-28T19:14:31.465Z
 
 | Hook | Chain | Address | Deployed | Bytecode size | Bytecode hash | Permissions | Match |
 |---|---|---|---|---:|---|---|---|
-| `StableProtectionHook` | Unichain Sepolia (1301) | `0x1510926ba6986cb3c93bfff25839c0ef740820c0` | ✅ | 6954 B | `0x199ede5b971211d8…` | BEFORE_INITIALIZE, BEFORE_SWAP, AFTER_SWAP | ✅ |
+| `StableProtectionHook` | Base Sepolia (84532) | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` | ✅ | 6954 B | `0x4cbabbd4a6808468…` | BEFORE_INITIALIZE, BEFORE_SWAP, AFTER_SWAP | ✅ |
 | `DynamicFee` | Base Sepolia (84532) | `0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0` | ✅ | 8511 B | `0x705a6b7f39129f4d…` | BEFORE_SWAP, AFTER_SWAP | ✅ |
 | `RWAGate` | Base Sepolia (84532) | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` | ✅ | 4635 B | `0x3e212104923979f5…` | BEFORE_ADD_LIQUIDITY, BEFORE_REMOVE_LIQUIDITY, BEFORE_SWAP | ✅ |
 | `AsyncLimitOrder` | Base Sepolia (84532) | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | ✅ | 12485 B | `0xcd8786561810412f…` | AFTER_INITIALIZE, BEFORE_SWAP, AFTER_SWAP, BEFORE_SWAP_RETURNS_DELTA | ✅ |
