@@ -17,7 +17,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 interface IDynamicFee {
     function configurePool(
         bytes32 poolId,
-        address oracle,
+        uint64 twapWindow,
         uint24 maxFee,
         uint24 fallbackFee,
         int8 decimalDiff,
@@ -26,34 +26,20 @@ interface IDynamicFee {
     function owner() external view returns (address);
 }
 
-/// @notice Minimal Chainlink-compatible mock used to satisfy the live
-///         hook's oracle dependency. Returns a stable 1.0 price (8 decimals).
-contract MinimalChainlinkMock {
-    uint8 public constant decimals = 8;
-    int256 public answer = 1e8;
-
-    function latestRoundData()
-        external
-        view
-        returns (uint80 roundId, int256 a, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
-    {
-        return (1, answer, block.timestamp, block.timestamp, 1);
-    }
-}
-
 /**
  * P5-010 — DynamicFee end-to-end swap test.
  *
  * Forks Base Sepolia, deploys mock 18-decimal tokens, registers a fresh
- * pool against the live DynamicFee hook (`0x25F9…C0C0`), pranks the hook's
- * `owner()` to call `configurePool` with a deterministic mock Chainlink
- * feed, then runs swaps to confirm the fee lifecycle fires without
+ * pool against the live TWAP-based DynamicFee hook (0x9788...40c0,
+ * redeployed 2026-04-29 from dynamic-fee at commit 62710d6), pranks
+ * the hook's owner() to call configurePool with a 5-minute TWAP
+ * window, then runs swaps to confirm the fee lifecycle fires without
  * reverting.
  *
- * Note: the deployed DynamicFee on Base Sepolia still uses the
- * Chainlink-based interface. The TWAP refactor (`dynamic-fee#1`) will
- * land at a new CREATE2 address; this test will need a parallel update
- * after the redeploy bumps the registry. See `P5-008` for context.
+ * On a fresh pool the TwapOracle buffer is still warming up, so the
+ * hook is expected to emit `TwapWarmup` and charge `fallbackFee`.
+ * Tighter per-zone fee assertions require a controlled history of
+ * observations and are deferred to the follow-up test below.
  */
 contract DynamicFeeE2E is BaseSepoliaFork {
     using PoolIdLibrary for PoolKey;
@@ -64,7 +50,6 @@ contract DynamicFeeE2E is BaseSepoliaFork {
     PoolModifyLiquidityTest liqRouter;
     MockERC20 token0;
     MockERC20 token1;
-    MinimalChainlinkMock oracle;
     PoolKey poolKey;
 
     function setUp() public override {
@@ -72,7 +57,6 @@ contract DynamicFeeE2E is BaseSepoliaFork {
         IPoolManager manager = IPoolManager(V4_POOL_MANAGER_BASE_SEPOLIA);
         swapRouter = new PoolSwapTest(manager);
         liqRouter = new PoolModifyLiquidityTest(manager);
-        oracle = new MinimalChainlinkMock();
 
         MockERC20 a = new MockERC20("Token0", "T0", 18);
         MockERC20 b = new MockERC20("Token1", "T1", 18);
@@ -93,14 +77,12 @@ contract DynamicFeeE2E is BaseSepoliaFork {
             hooks: IHooks(DYNAMIC_FEE_HOOK)
         });
 
-        // Configure the hook for our pool. Owner is the deployer recorded
-        // on-chain; prank to call the onlyOwner function.
         IDynamicFee df = IDynamicFee(DYNAMIC_FEE_HOOK);
         address dfOwner = df.owner();
         uint256[4] memory thresholds = [uint256(100), 300, 500, 1000];
         vm.prank(dfOwner);
         df.configurePool(
-            PoolId.unwrap(poolKey.toId()), address(oracle), 20_000, 3000, int8(0), thresholds
+            PoolId.unwrap(poolKey.toId()), uint64(300), 20_000, 3000, int8(0), thresholds
         );
 
         manager.initialize(poolKey, SQRT_PRICE_1_1);
@@ -111,15 +93,13 @@ contract DynamicFeeE2E is BaseSepoliaFork {
         );
     }
 
-    function test_volatilityBand_lowToHigh_feeIncreases() public {
-        // Small swap at peg parity → expect fallback or low-tier fee, not a revert.
+    function test_swapsExecute_duringTwapWarmup() public {
         swapRouter.swap(
             poolKey,
             SwapParams({zeroForOne: true, amountSpecified: -1e16, sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1}),
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
             new bytes(0)
         );
-        // Larger swap pushes spot price away from oracle → expect fee tier escalation.
         swapRouter.swap(
             poolKey,
             SwapParams({zeroForOne: true, amountSpecified: -10e18, sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1}),
@@ -129,9 +109,9 @@ contract DynamicFeeE2E is BaseSepoliaFork {
         assertGt(token1.balanceOf(address(this)), 0, "Should have received output tokens");
     }
 
-    /// @dev Tighter assertions on the per-zone fee values require event
-    /// decoding + a controlled volatility curve. Tracked under P5-010
-    /// follow-up; will land alongside the TWAP refactor's redeploy.
+    /// @dev Per-zone fee assertions require event decoding plus a
+    /// populated TWAP buffer (window crossed, multiple observations).
+    /// Tracked as P5-010 follow-up.
     function test_volatilityBand_returnsToBaseline() public {
         vm.skip(true);
     }

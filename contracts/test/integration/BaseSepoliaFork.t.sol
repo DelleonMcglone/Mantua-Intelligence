@@ -24,7 +24,7 @@ abstract contract BaseSepoliaFork is Test {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84532;
 
     address internal constant STABLE_PROTECTION_HOOK = 0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0;
-    address internal constant DYNAMIC_FEE_HOOK = 0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0;
+    address internal constant DYNAMIC_FEE_HOOK = 0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0;
     address internal constant RWA_GATE_HOOK = 0xbba7Cf860B47E16b9b83d8185878Ec0FAD0d4a80;
     address internal constant ASYNC_LIMIT_ORDER_HOOK = 0xb9E29F39bbf01c9D0FF6F1c72859F0eF550fD0c8;
 
