@@ -58,8 +58,22 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>;
 
+/**
+ * Treat blank `.env` values (`KEY=`) as unset. Zod's `.optional()`
+ * accepts `undefined` but not `""`, so a stray empty line failed
+ * validation for fields like `MANTUA_FEE_RECIPIENT` and crashed the
+ * server on boot.
+ */
+function blankEnvToUndefined(env: NodeJS.ProcessEnv): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(env)) {
+    out[key] = typeof value === "string" && value.trim() === "" ? undefined : value;
+  }
+  return out;
+}
+
 export function loadEnv(): Env {
-  const parsed = schema.safeParse(process.env);
+  const parsed = schema.safeParse(blankEnvToUndefined(process.env));
   if (!parsed.success) {
     console.error("Invalid environment configuration:");
     console.error(z.treeifyError(parsed.error));

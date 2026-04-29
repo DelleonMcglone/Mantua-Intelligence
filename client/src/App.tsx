@@ -4,6 +4,8 @@ import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
 import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
 import { InputBar } from "./components/shell/InputBar.tsx";
+import { AgentPanel } from "./features/agent/AgentPanel.tsx";
+import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
@@ -21,7 +23,9 @@ type Route =
   | { kind: "pool"; id: string }
   | { kind: "pool-create" }
   | { kind: "add-liquidity"; ctx: PoolKeyContext }
-  | { kind: "positions" };
+  | { kind: "positions" }
+  | { kind: "analyze" }
+  | { kind: "agent" };
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -150,6 +154,22 @@ function RouteContent({
       );
     case "positions":
       return <PositionsList />;
+    case "analyze":
+      return (
+        <AnalyzePanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "agent":
+      return (
+        <AgentPanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
   }
 }
 
@@ -160,8 +180,9 @@ function promptToRoute(id: HomePromptId): Route {
     case "swap":
       return { kind: "swap" };
     case "analyze":
+      return { kind: "analyze" };
     case "agent":
-      return { kind: "home" };
+      return { kind: "agent" };
   }
 }
 

@@ -1,7 +1,11 @@
 import { getAccessToken } from "@privy-io/react-auth";
 
-const BASE: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3001";
+/**
+ * Empty default → use the Vite dev proxy in development (see
+ * `client/vite.config.ts`'s `server.proxy["/api"]`). In production
+ * `VITE_API_BASE_URL` should be set explicitly to the API host.
+ */
+const BASE: string = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
 export class ApiError extends Error {
   public readonly status: number;
