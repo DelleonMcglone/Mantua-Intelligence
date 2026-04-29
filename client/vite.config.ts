@@ -16,5 +16,23 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
-  server: { port: 5173, strictPort: true, https: {} },
+  server: {
+    port: 5173,
+    strictPort: true,
+    https: {},
+    /**
+     * Forward `/api` requests to the Express server so the browser
+     * stays on `https://localhost:5173` and avoids mixed-content
+     * blocks (https → http on `:3001`). The server stays plain HTTP
+     * locally; production goes via Vercel + a dedicated API host
+     * with real TLS.
+     */
+    proxy: {
+      "/api": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });
