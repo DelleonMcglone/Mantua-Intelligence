@@ -40,10 +40,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
     },
   },
   {
@@ -55,6 +52,18 @@ export default tseslint.config(
         project: ["./server/tsconfig.json"],
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+  // Files outside the client/server tsconfig projects (one-off Node
+  // scripts and root-level config files). Keep syntactic rules but
+  // disable type-aware ones so we don't have to maintain a dedicated
+  // tsconfig project for them.
+  {
+    files: ["contracts/script/**/*.ts", "eslint.config.js", "*.config.{js,cjs,mjs,ts}"],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ecmaVersion: 2023,
+      globals: globals.node,
     },
   },
 );

@@ -390,7 +390,7 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 | Hook | Network | Address | Status |
 |------|---------|---------|--------|
 | Stable Protection | Base Sepolia | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` | ✅ Deployed |
-| DynamicFee | Base Sepolia | `0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0` | ✅ Deployed |
+| DynamicFee | Base Sepolia | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` | ✅ Deployed (TWAP build) |
 | RWAGate | Base Sepolia | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` | ✅ Deployed |
 | ALO | Base Sepolia | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | ✅ Deployed |
 
@@ -411,8 +411,8 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 | ID | Task | Status |
 |----|------|--------|
-| P5-007 | Verify DynamicFee deployment on Base Sepolia (`0x25F9…C0C0`) via Basescan Sepolia | ✅ |
-| P5-008 | Volatility measurement source for DynamicFee: **pool-history TWAP** (decision 2026-04-28; Chainlink dropped from v2 scope). Scaffold landed in [`dynamic-fee#1`](https://github.com/DelleonMcglone/dynamic-fee/pull/1) (`TwapOracle` library + 7 tests). Integration into `DynamicFee.sol` + redeploy is the remaining work. | 🟡 |
+| P5-007 | Verify DynamicFee deployment on Base Sepolia (`0x9788…40c0`) via Basescan Sepolia | ✅ |
+| P5-008 | Volatility measurement source for DynamicFee: **pool-history TWAP** (decision 2026-04-28; Chainlink dropped from v2 scope). TWAP build ([`62710d6`](https://github.com/DelleonMcglone/dynamic-fee/commit/62710d6d9b403557b073a702b5546bc10e75c0c6)) redeployed to Base Sepolia at [`0x9788…40c0`](https://sepolia.basescan.org/address/0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0) (2026-04-29 — tx [`0x73dbaf21…058e24`](https://sepolia.basescan.org/tx/0x73dbaf21058e24)); on-chain selector probe confirms the new `configurePool(bytes32,uint64,uint24,uint24,int8,uint256[4])` signature is present and the legacy Chainlink selectors are gone. | ✅ |
 | P5-009 | UI: display current dynamic fee in swap modal before confirmation | ⬜ |
 | P5-010 | E2E: swap on a DynamicFee-hooked pool; verify fee adjusts under volatility scenarios | ⬜ |
 

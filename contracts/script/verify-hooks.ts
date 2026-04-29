@@ -41,8 +41,8 @@ const HOOKS: HookConfig[] = [
   {
     name: "DynamicFee",
     repo: "DelleonMcglone/dynamic-fee",
-    pinnedCommit: "854e939b6f60fae9074c263f7391b04caccc23f9",
-    address: "0x25F98678a92Af6aCC54cE3cE687762aCA316C0C0",
+    pinnedCommit: "62710d6d9b403557b073a702b5546bc10e75c0c6",
+    address: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
     chainId: 84532,
     chainName: "Base Sepolia",
     rpcUrl: "https://sepolia.base.org",

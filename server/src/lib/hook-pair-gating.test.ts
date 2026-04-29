@@ -104,7 +104,7 @@ describe("resolveHookForPool", () => {
 
   it("resolves dynamic-fee for any pair (no allowlist)", () => {
     const addr = resolveHookForPool("dynamic-fee", USDC, ETH);
-    assert.equal(addr.toLowerCase(), "0x25f98678a92af6acc54ce3ce687762aca316c0c0");
+    assert.equal(addr.toLowerCase(), "0x9788b8495ebcec1c1d1436681b0f56c6fc0140c0");
   });
 
   it("resolves rwa-gate for any pair", () => {
