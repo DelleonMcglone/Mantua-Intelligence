@@ -118,39 +118,59 @@ starts driving the same paths from natural-language input.
 
 ---
 
-## TD-004 — "Fund agent" UI does not exist in the design source
+## TD-004 — "Fund agent" + cap-management UIs do not exist in the design source
 
-**Slice:** P6-003 (Create & Manage Agent Wallet — UI side).
+**Slice:** P6-003 (Create & Manage Agent Wallet — UI side) and P6-011
+(Agent-level spending cap — UI side).
 
-**Gap:** The P6-003 ticket text calls for an explicit "Fund agent" UI
-where a user transfers a budget from their Privy wallet into the agent's
-CDP wallet. The Mantua design source
-(`~/Downloads/mantua-ai/project/src/chat.jsx`) has the
-`Fund Agent Wallet` action card in the chat-mode grid (line 22) but no
-sub-flow for what happens when it's clicked — the cards just call a
-host stub `window.__mantuaChatAction(a)`. The codebase rule that "UI is
-design-driven; feature tickets never motivate UI edits" (memory
-feedback) means the engineering side cannot invent that flow.
+**Gap:** Two related agent-management UIs are missing from the Mantua
+design source (`~/Downloads/mantua-ai/project/src/chat.jsx`):
 
-**Why accepted:** Surfaced when scoping P6-003. User signed off on
-splitting P6-003: server-side provisioning lands now (this PR) and
-the Fund UI waits for the design source to add it. The Chat-mode wallet
-card is wired to the server `POST /api/agent/wallet` endpoint and shows
-the resulting address inline, but the Fund Agent Wallet card stays
-inert.
+1. **Fund Agent Wallet flow** — the P6-003 ticket calls for an explicit
+   UI where a user transfers a budget from their Privy wallet into the
+   agent's CDP wallet. The design has the `Fund Agent Wallet` action
+   card in the chat-mode grid (line 22) but no sub-flow for what
+   happens when it's clicked — the cards just call a host stub
+   `window.__mantuaChatAction(a)`.
+2. **Cap-management form** — P6-011 ships a server endpoint
+   (`PATCH /api/agent/wallet/cap`) so a user can set their agent
+   wallet's daily USD cap, but the design has no form for collecting
+   that input. The current `AgentPanel.tsx` chat-mode wallet card
+   sub-step _displays_ the cap (after `POST /api/agent/wallet`) but
+   has no way to change it.
+
+The codebase rule that "UI is design-driven; feature tickets never
+motivate UI edits" (memory feedback) means the engineering side cannot
+invent either flow.
+
+**Why accepted:** Surfaced when scoping P6-003 (Fund) and again when
+scoping P6-011 (cap form). The user signed off on splitting both
+tickets: server-side ships now, UI waits for the design source. The
+chat-mode wallet card is wired to `POST /api/agent/wallet` and shows
+the resulting address + cap inline, but the Fund Agent Wallet card
+stays inert and the cap stays at whatever value was set via API
+(default $100, or whatever a manual `PATCH` set it to).
 
 **Closure condition:**
 
-1. Mantua design source adds a Fund-flow modal/sub-step (input amount,
-   chosen token, source-wallet preview, confirmation, success).
-2. Port the design into `client/src/features/agent/` following the
+1. Mantua design source adds:
+   - A Fund-flow modal/sub-step (input amount, chosen token,
+     source-wallet preview, confirmation, success).
+   - A cap-edit field or modal (number input, validate against
+     `HARD_DAILY_CAP_USD = $50k`, optimistic UI, error toast on 400).
+2. Port the designs into `client/src/features/agent/` following the
    existing `chat.jsx` → `AgentPanel.tsx` port style.
-3. The transfer itself is a normal Privy-signed ERC-20 / ETH send to
-   the agent wallet's address (no new server endpoint needed —
+3. The Fund transfer itself is a normal Privy-signed ERC-20 / ETH send
+   to the agent wallet's address (no new server endpoint needed —
    `GET /api/agent/wallet` returns the address). Wire it through the
-   existing `useConfirmedAction` seam (P1-005).
-4. Flip P6-003 from 🟡 → ✅ in `docs/tasks/v2-roadmap.md`.
+   existing `useConfirmedAction` seam (P1-005). The cap-edit posts to
+   `PATCH /api/agent/wallet/cap`.
+4. Flip P6-003 from 🟡 → ✅ in `docs/tasks/v2-roadmap.md`. P6-011 stays
+   ✅ — its server-side deliverable is complete already; the UI half
+   is bundled into TD-004's closure for review continuity.
 
 **Owner:** Phase 6 / Design owner (TBD). Blocks: P6-003 cannot be marked
 fully shipped; agent users have no in-app way to fund their wallet
-(they can still send tokens to the address manually).
+or change the agent's cap from the schema default (they can still
+fund the address manually and call the cap endpoint via cURL with
+their Privy access token).
