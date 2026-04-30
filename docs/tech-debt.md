@@ -121,7 +121,8 @@ starts driving the same paths from natural-language input.
 ## TD-004 — Agent action-card sub-flows missing from the design source
 
 **Slice:** P6-003 (Create & Manage Agent Wallet — UI side), P6-011
-(Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side).
+(Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side),
+P6-005 (Swap Tokens — UI side).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -144,10 +145,18 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    Needed: recipient input, token picker, amount input, confirmation
    step (via `useConfirmedAction`), tx-success state showing the
    BaseScan link.
+4. **Swap Tokens flow** — P6-005 ships `POST /api/agent/swap`
+   (lookup → cap → quote → Permit2 sign → calldata → CDP-signed send
+   → record). Single server-side request with no client round-trips,
+   so the UI just needs an input form + result state, not the
+   2-call orchestration the user-side swap uses. Needed: tokenIn /
+   tokenOut pickers, amount input, optional slippage override,
+   confirmation, tx-success showing input/output amounts +
+   BaseScan link.
 
-P6-005 (Swap) and P6-006 (Liquidity) will hit the same wall when their
-server-side ships — append them to this list rather than spinning up
-TD-005/006 for the same shape.
+P6-006 (Liquidity) will hit the same wall when its server-side ships —
+append it to this list rather than spinning up TD-006 for the same
+shape.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot

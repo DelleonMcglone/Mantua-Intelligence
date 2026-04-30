@@ -6,6 +6,7 @@ import { attachAuth } from "./middleware/auth.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
 import { agentSendRouter } from "./routes/agent-send.ts";
+import { agentSwapRouter } from "./routes/agent-swap.ts";
 import { agentWalletsRouter } from "./routes/agent-wallets.ts";
 import { complianceAdminRouter } from "./routes/compliance-admin.ts";
 import { healthRouter } from "./routes/health.ts";
@@ -38,6 +39,7 @@ app.use(swapRouter);
 app.use(complianceAdminRouter);
 app.use(agentWalletsRouter);
 app.use(agentSendRouter);
+app.use(agentSwapRouter);
 
 app.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, "server listening");
