@@ -122,7 +122,8 @@ starts driving the same paths from natural-language input.
 
 **Slice:** P6-003 (Create & Manage Agent Wallet — UI side), P6-011
 (Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side),
-P6-005 (Swap Tokens — UI side).
+P6-005 (Swap Tokens — UI side), P6-006 (Add/Remove Liquidity — UI
+side).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -153,10 +154,15 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    tokenOut pickers, amount input, optional slippage override,
    confirmation, tx-success showing input/output amounts +
    BaseScan link.
-
-P6-006 (Liquidity) will hit the same wall when its server-side ships —
-append it to this list rather than spinning up TD-006 for the same
-shape.
+5. **Add/Remove Liquidity flow** — P6-006 ships
+   `POST /api/agent/liquidity/{add,remove}`. Add does the full
+   Permit2-approve-once + sign-batch + multicall(permitBatch +
+   modifyLiquidities) sequence server-side, returning `tokenId` on
+   success. Remove takes a `positionId` + `percentage` and reuses
+   the Phase 4 remove-liquidity calldata builder. Needed: pool
+   picker, amount inputs (paired or single-side), slippage override,
+   confirmation, tx-success state. The Remove flow needs a position
+   list pulled from `/api/positions` filtered to the agent address.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
