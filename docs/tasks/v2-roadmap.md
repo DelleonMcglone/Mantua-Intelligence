@@ -95,21 +95,21 @@ Completed:   0
 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
 ```
 
-| Phase                                                | Tasks | Done | Progress        |
-| ---------------------------------------------------- | ----- | ---- | --------------- |
-| 🧱 Phase 0: Project Bootstrap                        | 8     | 0    | `░░░░░░░░░░` 0% |
-| 🎨 Phase D: Design System & UI Shell                 | 8     | 0    | `░░░░░░░░░░` 0% |
-| 🛡️ Phase 1: Mainnet Safety                           | 8     | 0    | `░░░░░░░░░░` 0% |
-| 🔌 Phase 2: Skill, MCP & Wallet Provider Integration | 16    | 0    | `░░░░░░░░░░` 0% |
-| 💱 Phase 3: Swap (Core)                              | 8     | 0    | `░░░░░░░░░░` 0% |
-| 💧 Phase 4: Liquidity (Add & Remove)                 | 10    | 0    | `░░░░░░░░░░` 0% |
-| 🪝 Phase 5: Hook Integration + AI Security Analysis  | 26    | 0    | `░░░░░░░░░░` 0% |
-| 🤖 Phase 6: Agent (Chat + Autonomous)                | 13    | 0    | `░░░░░░░░░░` 0% |
-| 📊 Phase 7: DefiLlama Analytics                      | 6     | 0    | `░░░░░░░░░░` 0% |
-| 💼 Phase 8: Portfolio Page                           | 7     | 0    | `░░░░░░░░░░` 0% |
-| 💰 Phase F: LP & Mantua Fee                          | 10    | 0    | `░░░░░░░░░░` 0% |
-| 🗣️ Phase N: Natural Language Command Bar             | 11    | 0    | `░░░░░░░░░░` 0% |
-| ✅ Phase 9: E2E Testing & Launch                     | 12    | 0    | `░░░░░░░░░░` 0% |
+| Phase                                                | Tasks | Done | Progress                                           |
+| ---------------------------------------------------- | ----- | ---- | -------------------------------------------------- |
+| 🧱 Phase 0: Project Bootstrap                        | 8     | 0    | `░░░░░░░░░░` 0%                                    |
+| 🎨 Phase D: Design System & UI Shell                 | 8     | 0    | `░░░░░░░░░░` 0%                                    |
+| 🛡️ Phase 1: Mainnet Safety                           | 8     | 0    | `░░░░░░░░░░` 0%                                    |
+| 🔌 Phase 2: Skill, MCP & Wallet Provider Integration | 16    | 0    | `░░░░░░░░░░` 0%                                    |
+| 💱 Phase 3: Swap (Core)                              | 8     | 0    | `░░░░░░░░░░` 0%                                    |
+| 💧 Phase 4: Liquidity (Add & Remove)                 | 10    | 0    | `░░░░░░░░░░` 0%                                    |
+| 🪝 Phase 5: Hook Integration + AI Security Analysis  | 26    | 0    | `░░░░░░░░░░` 0%                                    |
+| 🤖 Phase 6: Agent (Chat + Autonomous)                | 13    | 0    | `░░░░░░░░░░` 0%                                    |
+| 📊 Phase 7: DefiLlama Analytics                      | 6     | 0    | `░░░░░░░░░░` 0%                                    |
+| 💼 Phase 8: Portfolio Page                           | 7     | 0    | `░░░░░░░░░░` 0%                                    |
+| 💰 Phase F: LP & Mantua Fee                          | 10    | 3    | `███░░░░░░░` 30% (+1 🟡, +6 ⬜ deferred per D-015) |
+| 🗣️ Phase N: Natural Language Command Bar             | 11    | 0    | `░░░░░░░░░░` 0%                                    |
+| ✅ Phase 9: E2E Testing & Launch                     | 12    | 0    | `░░░░░░░░░░` 0%                                    |
 
 ---
 
@@ -140,6 +140,25 @@ Completed:   0
 | D-010 | Mantua fee: 10 bps default; `MAX_FEE_BPS` capped at 25                           | Phase F | ✅ ACCEPTED |
 | D-013 | LLM provider: Anthropic primary, OpenAI fallback                                 | Phase N | ✅ ACCEPTED |
 | D-014 | Intent confidence: ≥0.85 execute / 0.65–0.85 clarify / <0.65 reject              | Phase N | ✅ ACCEPTED |
+| D-015 | Mantua v2 testnet beta has zero fee/legal/spending-cap scope                     | Phase F | ✅ ACCEPTED |
+
+### D-015 Detail (added 2026-04-30)
+
+Mantua v2 testnet beta launches on Base Sepolia with:
+
+- Zero fee collection (no `portionBips` integration, no fee recipient designated, no fee-rate admin endpoint)
+- Zero $USD-denominated rails active (no spending-cap UI, no fee-breakdown UI)
+- Zero legal / compliance posture beyond standard testnet hygiene
+
+This decision consolidates the existing Risk 1 (EOA fee recipient) and Risk 2 (no pre-launch legal review) framings under a single project-level umbrella, and explicitly tags PF-005 → PF-010 as deferred to a Phase F-mainnet sub-track.
+
+**Why this is project-level, not per-ticket:** PF-005 through PF-010 each ship infrastructure that has no purpose without a real revenue stream and a real user base — they're feature-flag-shaped deferrals at the _behavior_ level, not architectural deletions. The code paths can be reactivated by implementing the Trading API `portionBips` integration (PF-007) and designating an EOA recipient (PF-005); the rest follows. No code is deleted by this decision.
+
+**Re-engagement:** PF-005 through PF-010 ship as a coordinated Phase F-mainnet PR set when v2 graduates to Base Mainnet, gated on:
+
+- Crypto-counsel review per Risk 2
+- Hardware-wallet hygiene + multisig migration plan per Risk 1
+- Phase 9 mainnet launch gate (see "Launch-gate framing" in the Phase 9 section)
 
 ### Decisions Closed (Reference)
 
@@ -478,23 +497,23 @@ Use Uniswap Trading API response — it returns permit data when needed. Sign wi
 
 ### LP Fee Tier (pool creation)
 
-| ID     | Task                                                                                                                   | Status |
-| ------ | ---------------------------------------------------------------------------------------------------------------------- | ------ |
-| PF-001 | Pool creation UI exposes fee tier selector: 0.01%, 0.05%, 0.30%, 1.00% (v4 standard tiers)                             | ⬜     |
-| PF-002 | Default fee tier per pair type: 0.01% for stablecoin pairs, 0.05% for ETH/stable, 0.30% for volatile, 1.00% for exotic | ⬜     |
-| PF-003 | Display selected fee tier in Liquidity page pool list and pool detail                                                  | ⬜     |
-| PF-004 | Enforce valid tick spacing for each fee tier (v4 requires matching `tickSpacing`)                                      | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| PF-001 | Pool creation UI exposes fee tier selector: 0.01%, 0.05%, 0.30%, 1.00% (v4 standard tiers). **Already shipped** in commit `8f36c91` (Phase 4b: Pool creation P4-003) — `client/src/features/liquidity/FeeTierPicker.tsx` (2×2 grid of buttons with percentage labels, pair-type hints, and tick-spacing display) wired into `client/src/features/liquidity/PoolCreateForm.tsx:96`. Server-side, `server/src/routes/pool-create.ts:30` requires `fee` in the request body and validates against the standard tiers via `isFeeTier` from `server/src/lib/v4-contracts.ts:134`.                                                                                                                                                                           | ✅     |
+| PF-002 | Default fee tier per pair type: 0.01% for stablecoin pairs, 0.05% for ETH/stable, 0.30% for volatile, 1.00% for exotic. **Already shipped** in commit `8f36c91` — `client/src/features/liquidity/fee-tiers.ts:DEFAULT_FEE_TIER_FOR_PAIR(aIsStable, bIsStable)` returns 100 (both stables), 500 (one stable), 3000 (neither stable), used in `PoolCreateForm.tsx:30`. **Note:** the function never auto-defaults to 1.00% — for the supported token set (ETH/USDC/EURC/cbBTC), all 6 pair combinations map cleanly to 0.01% / 0.05% / 0.30% defaults; cbBTC + stable currently classified as 0.05% (defensible for testnet beta; revisit per-pair-type bucketing when graduating to mainnet). The 1.00% tier remains user-pickable via `FeeTierPicker`. | ✅     |
+| PF-003 | Display selected fee tier in Liquidity page pool list and pool detail. **Inline rendering already exists**: `LiquidityListPage.tsx:73` renders `{pool.feeTier}` as inline text on DefiLlama-sourced pools, `PoolDetailPage.tsx:50-51` renders in a font-mono span, `AssetsCard.tsx:278` renders in position rows. **Pill-badge polish deferred** — gated on TD-004 design-source delivery (the Mantua design-source UI port may specify a different fee-tier display pattern; landing inline polish now risks contradicting that). The AssetsCard's fee column is currently hardcoded mock data (`AssetsCard.tsx:40-43`) — wiring it to real position data is part of the same Phase 8 UI port that will close this 🟡.                                | 🟡     |
+| PF-004 | Enforce valid tick spacing for each fee tier (v4 requires matching `tickSpacing`). **Already shipped, structurally stronger than spec.** Commit `8f36c91` introduced `TICK_SPACING_BY_FEE` (lookup table at `server/src/lib/v4-contracts.ts:127`) and `buildPoolKey` (`server/src/lib/pool-key.ts:42` — auto-derives `tickSpacing` from `fee`). The pool-create route never accepts a separate `tickSpacing` param, so feeTier↔tickSpacing mismatch is unrepresentable at the type level — no runtime validation needed because the wire format makes the bug impossible.                                                                                                                                                                              | ✅     |
 
 ### Mantua Service Fee (on swaps)
 
-| ID     | Task                                                                                                                               | Status |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| PF-005 | Generate or designate EOA fee recipient address; secure private key in hardware wallet; document address in `docs/architecture.md` | ⬜     |
-| PF-006 | Store fee config in `fee_config` table: `rate_bps`, `recipient`, `effective_from`, `effective_to`                                  | ⬜     |
-| PF-007 | Integrate Trading API `portionBips` + `portionRecipient` fields into quote + swap calls (default `MANTUA_FEE_BPS=10`)              | ⬜     |
-| PF-008 | UI: display fee breakdown in swap confirmation ("Uniswap LP fee: X bps, Mantua fee: Y bps, You pay: Z")                            | ⬜     |
-| PF-009 | Admin endpoint to update fee rate (signed by fee-admin key, logged to audit table); enforce `rate_bps ≤ 25` server-side            | ⬜     |
-| PF-010 | Track accumulated fee revenue (read EOA balance) — surface threshold alerts at $1k, $5k, $10k to drive multisig migration timing   | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                                                                                                                                                                                 | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| PF-005 | Generate or designate EOA fee recipient address; secure private key in hardware wallet; document address in `docs/architecture.md`. **DEFERRED — Phase F-mainnet sub-track per D-015.** No service-fee EOA recipient designated for testnet beta (no real revenue to receive). Re-engage when v2 graduates to Base Mainnet, gated on Risk 1's hardware-wallet hygiene + multisig migration plan.                                     | ⬜     |
+| PF-006 | Store fee config in `fee_config` table: `rate_bps`, `recipient`, `effective_from`, `effective_to`. **DEFERRED — Phase F-mainnet sub-track per D-015.** `fee_config` table not created in testnet beta (gates a feature that doesn't run). Re-engage at mainnet graduation.                                                                                                                                                           | ⬜     |
+| PF-007 | Integrate Trading API `portionBips` + `portionRecipient` fields into quote + swap calls (default `MANTUA_FEE_BPS=10`). **DEFERRED — Phase F-mainnet sub-track per D-015.** Trading API integration in `server/src/lib/uniswap.ts` does not pass `portionBips`/`portionRecipient`; the env-level `MANTUA_FEE_BPS=10` default in `server/src/env.ts:51` is unused at runtime until this ticket lands. Re-engage at mainnet graduation. | ⬜     |
+| PF-008 | UI: display fee breakdown in swap confirmation ("Uniswap LP fee: X bps, Mantua fee: Y bps, You pay: Z"). **DEFERRED — Phase F-mainnet sub-track per D-015.** No fee breakdown UI for testnet beta (avoids "Mantua fee: 0 bps" visual noise when no fee is collected). Re-engage at mainnet graduation, alongside the Phase 8 Swap-confirmation port (TD-004).                                                                        | ⬜     |
+| PF-009 | Admin endpoint to update fee rate (signed by fee-admin key, logged to audit table); enforce `rate_bps ≤ 25` server-side. **DEFERRED — Phase F-mainnet sub-track per D-015.** Admin functionality for an inactive feature not built in testnet beta. Re-engage at mainnet graduation.                                                                                                                                                 | ⬜     |
+| PF-010 | Track accumulated fee revenue (read EOA balance) — surface threshold alerts at $1k, $5k, $10k to drive multisig migration timing. **DEFERRED — Phase F-mainnet sub-track per D-015.** Revenue tracking deferred — no revenue to track in testnet beta. Re-engage at mainnet graduation, alongside Risk 1's multisig-migration trigger ($5k accumulated).                                                                             | ⬜     |
 
 ### PF-007 Details: Trading API Fee Integration
 
@@ -712,6 +731,29 @@ Output: {
 | P9-010 | Incident runbook: kill-switch activation, rollback, user comms                                       | ⬜     |
 | P9-011 | Soft launch: limited organic marketing, monitor for issues with low volume                           | ⬜     |
 | P9-012 | Public launch announcement                                                                           | ⬜     |
+
+### Launch-gate framing (added 2026-04-30 with D-015)
+
+Phase 9 covers two distinct launch gates with different residual lists. The original ticket table treats "launch" as a single event; D-015 (Mantua v2 testnet beta has zero fee/legal/spending-cap scope) splits that into two gates:
+
+**Testnet beta launch gate (closer):**
+
+- Phase 0 → 8 backend on `main`: ✅ as of merge of #59 (Phase 6/7/8 stack)
+- TD-004 closes — Mantua design source delivers UI flows for Phases 6/7/8 + analytics view (P7-004) + portfolio page (P8-001 → P8-007): required
+- TD-005 closes — Phase 6 + 7 E2E test harness with funded Sepolia agent wallet: required
+- Internal dogfood ≥ 2 weeks with zero critical incidents (P9-007 scoped to Sepolia): required
+- **Not required for testnet:** PF-005 → PF-010, fee-collection code paths, Risk 1 (EOA hardware-wallet hygiene), Risk 2 (legal review), multisig migration
+
+**Mainnet launch gate (later):**
+
+- Testnet beta gate satisfied: required
+- Phase F-mainnet sub-track (PF-005 → PF-010) shipped as a coordinated PR set: required
+- Crypto-counsel review per Risk 2: required
+- EOA fee recipient hardware-wallet hygiene per Risk 1 + multisig migration plan ($5k revenue OR 6-month trigger): required
+- Mainnet hook redeployments (4 hooks: Stable Protection, DynamicFee, RWAGate, ALO): required (currently Phase 5 is Base Sepolia only per the existing memory note "Phase 5 target is Base Sepolia, not mainnet")
+- AI-assisted security analysis re-run on each mainnet hook deployment (P5-017 → P5-026 cycle): required
+
+The existing P9 tickets (P9-001 → P9-012) span both gates as written — interpret each ticket against the gate it actually applies to. Most apply to mainnet (P9-002 mainnet fork test, P9-003 AI security sign-off, P9-008 mainnet transactions, P9-011 soft launch); fewer apply to testnet beta.
 
 ---
 
