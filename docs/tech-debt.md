@@ -118,14 +118,15 @@ starts driving the same paths from natural-language input.
 
 ---
 
-## TD-004 — Agent action-card sub-flows missing from the design source
+## TD-004 — Agent action-card sub-flows + Phase 7 analytics view missing from the design source
 
 **Slice:** P6-003 (Create & Manage Agent Wallet — UI side), P6-011
 (Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side),
 P6-005 (Swap Tokens — UI side), P6-006 (Add/Remove Liquidity — UI
 side), P6-007 (Query On-Chain Data — UI side), P6-008 (Portfolio
 Summary — UI side + surface-placement decision), P6-009 (Autonomous
-mode UI — text input + auto-execute wiring).
+mode UI — text input + auto-execute wiring), P7-004 (analytics
+result rendering — tables + lightweight-charts).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -191,6 +192,17 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    endpoint (P6-003 → P6-008). The current autonomous-step body is
    the "Autonomous mode is wiring up" placeholder, untouched since
    the design port.
+9. **Phase 7 analytics view** — P7-003 ships
+   `GET /api/analytics?type=...` (six query types: pools, pool,
+   chart, protocol, dex_volume, token_price) but P7-004 (result
+   rendering) is deferred. Needed: a route in the main app shell
+   (likely `/analyze` based on existing client folder structure)
+   with table renderers for tabular responses (pool list, dex
+   volume protocol breakdown, token-price grids) and
+   `lightweight-charts` for the time-series responses (pool TVL +
+   APY history; protocol TVL history). The chat-mode "Query
+   On-Chain Data" card (P6-007) can deep-link into this view once
+   it lands.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
@@ -236,10 +248,10 @@ with their Privy access token).
 
 ---
 
-## TD-005 — Phase 6 E2E test harness does not exist
+## TD-005 — Phase 6 + Phase 7 E2E test harness does not exist
 
 **Slice:** P6-012 (E2E: 6 chat-mode actions + 5 autonomous-mode
-instruction types).
+instruction types), P7-006 (10 representative analytics queries).
 
 **Gap:** P6-003 → P6-010 each ship server-side without integration
 tests against the real surfaces they call (a real DB, real CDP,
@@ -261,6 +273,14 @@ asks for the full E2E:
    0.05% with 100 USDC and 100 EURC"_ → `add_liquidity`; _"what's
    my agent balance"_ → `query`/`wallet`; _"buy a horse"_ →
    `reject`).
+3. **Phase 7 analytics — 10 representative queries** (P7-006) drive
+   `GET /api/analytics?type=...`: list pools (Base), single pool by
+   id, chart for a known pool (30-day), two protocol-by-slug lookups
+   (e.g. `uniswap`, `aave-v3`), two chain dex_volume lookups (e.g.
+   `base`, `ethereum`), three token_price queries with mixed key
+   shapes (`coingecko:ethereum`, `base:0x833589...`, batch of 5).
+   Asserts response shape, status codes for missing slugs (404), and
+   that repeat queries within 60s hit the cache (no upstream call).
 
 **Why accepted:** Two structural blockers stand between us and a real
 E2E run: (a) the deferred UIs in TD-004 — the chat-mode action cards
