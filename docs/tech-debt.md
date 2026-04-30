@@ -70,3 +70,87 @@ the deployed address, and ship the follow-up PR that:
 
 **Owner:** Phase 5 owner (TBD). Blocks: any Stable Protection pool
 creation on Base Sepolia testnet.
+
+---
+
+## TD-003 — Agent-wallet provisioning has no integration test
+
+**Slice:** P6-003 (Create & Manage Agent Wallet — server side).
+
+**Gap:** `server/src/lib/agent-wallet.ts` (`getOrCreateAgentWallet`,
+`getAgentWallet`) and the routes in `server/src/routes/agent-wallets.ts`
+ship with **only** a unit test of the pure name-derivation helper
+(`server/src/lib/agent-wallet.test.ts`). The orchestration —
+look-up-user → check-existing → call-CDP → upsert → handle race — has
+not been exercised against a real database, a fake CDP server, or any
+end-to-end fixture. The route handlers' error branches
+(`USER_NOT_FOUND`, `CDP_UNAVAILABLE`, the 500 path, the
+`onConflictDoNothing` race) are likewise untested.
+
+**Why accepted:** Same posture as TD-001 — there is no Anvil / mocked-CDP
+harness in the repo. Adding a Postgres-backed test setup with a
+fake CDP server would balloon this PR's diff well past the architectural
+change it actually delivers. Per the on-chain test gap policy, the
+bare-minimum acknowledgment is documented here in lieu of a real test.
+
+**Closure condition:** Stand up an integration-test scaffold that:
+
+1. Spins up an ephemeral Postgres (Drizzle migrations applied) and seeds
+   a `users` row with a known `privyUserId`.
+2. Stubs `setCdpClientForTesting(...)` with a fake `CdpClient` whose
+   `evm.getOrCreateAccount` returns a deterministic address and asserts
+   it was called with the derived `mantua-agent-${userId}` name.
+3. Calls `getOrCreateAgentWallet` twice in sequence and asserts the
+   second call returns the cached row without re-hitting the fake CDP.
+4. Calls it concurrently and asserts the race path
+   (`onConflictDoNothing` → re-read) returns the same row.
+5. Drives the routes via `supertest` so the `requireAuth` /
+   `walletRateLimiter` / `writeRateLimiter` chain is exercised, and
+   asserts the four error code paths
+   (`UNAUTHENTICATED` / `USER_NOT_FOUND` / `CDP_UNAVAILABLE` /
+   `INTERNAL`).
+
+**Owner:** Phase 6 owner (TBD). Blocks: nothing yet — the route is
+behind `requireAuth` and CDP creds are `.optional()`, so the only way
+to hit this code path on an un-set-up environment is a real
+authenticated POST. Worth closing before P6-009 (autonomous mode)
+starts driving the same paths from natural-language input.
+
+---
+
+## TD-004 — "Fund agent" UI does not exist in the design source
+
+**Slice:** P6-003 (Create & Manage Agent Wallet — UI side).
+
+**Gap:** The P6-003 ticket text calls for an explicit "Fund agent" UI
+where a user transfers a budget from their Privy wallet into the agent's
+CDP wallet. The Mantua design source
+(`~/Downloads/mantua-ai/project/src/chat.jsx`) has the
+`Fund Agent Wallet` action card in the chat-mode grid (line 22) but no
+sub-flow for what happens when it's clicked — the cards just call a
+host stub `window.__mantuaChatAction(a)`. The codebase rule that "UI is
+design-driven; feature tickets never motivate UI edits" (memory
+feedback) means the engineering side cannot invent that flow.
+
+**Why accepted:** Surfaced when scoping P6-003. User signed off on
+splitting P6-003: server-side provisioning lands now (this PR) and
+the Fund UI waits for the design source to add it. The Chat-mode wallet
+card is wired to the server `POST /api/agent/wallet` endpoint and shows
+the resulting address inline, but the Fund Agent Wallet card stays
+inert.
+
+**Closure condition:**
+
+1. Mantua design source adds a Fund-flow modal/sub-step (input amount,
+   chosen token, source-wallet preview, confirmation, success).
+2. Port the design into `client/src/features/agent/` following the
+   existing `chat.jsx` → `AgentPanel.tsx` port style.
+3. The transfer itself is a normal Privy-signed ERC-20 / ETH send to
+   the agent wallet's address (no new server endpoint needed —
+   `GET /api/agent/wallet` returns the address). Wire it through the
+   existing `useConfirmedAction` seam (P1-005).
+4. Flip P6-003 from 🟡 → ✅ in `docs/tasks/v2-roadmap.md`.
+
+**Owner:** Phase 6 / Design owner (TBD). Blocks: P6-003 cannot be marked
+fully shipped; agent users have no in-app way to fund their wallet
+(they can still send tokens to the address manually).
