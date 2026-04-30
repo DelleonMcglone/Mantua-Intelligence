@@ -5,6 +5,7 @@ import { logger } from "./lib/logger.ts";
 import { attachAuth } from "./middleware/auth.ts";
 import { killSwitch } from "./middleware/kill-switch.ts";
 import { ipRateLimiter } from "./middleware/rate-limit.ts";
+import { agentInstructionRouter } from "./routes/agent-instruction.ts";
 import { agentLiquidityRouter } from "./routes/agent-liquidity.ts";
 import { agentPortfolioRouter } from "./routes/agent-portfolio.ts";
 import { agentQueryRouter } from "./routes/agent-query.ts";
@@ -46,6 +47,7 @@ app.use(agentSwapRouter);
 app.use(agentLiquidityRouter);
 app.use(agentQueryRouter);
 app.use(agentPortfolioRouter);
+app.use(agentInstructionRouter);
 
 app.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, "server listening");
