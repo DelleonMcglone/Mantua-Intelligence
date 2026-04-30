@@ -129,7 +129,9 @@ mode UI — text input + auto-execute wiring), P7-004 (analytics
 result rendering — tables + lightweight-charts), P8-001 (Portfolio
 landing layout), P8-003/004/005 (Balances / LP Positions / History
 tabs), P8-006 (Hide Small Balances toggle UI), P8-007 (user/agent
-wallet switcher).
+wallet switcher), PN-006 (`<CommandBar />` on Swap/Liquidity/Agent
+pages), PN-008 (preview card), PN-009 (clarification-loop UI),
+PN-010 (CommandBar → confirmation modal wiring).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -223,6 +225,22 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
     a subset of this — once P8-001 lands, the agent's chat-mode
     portfolio sub-step can deep-link into the same view in agent
     mode.
+11. **Phase N command bar** — `POST /api/command/parse` (PN-003)
+    - the Zod intent schema (PN-002) ship the data layer; the UI is
+      deferred. Needed: a `<CommandBar />` component (PN-006) per the
+      Mantua design prototype that appears on Swap, Liquidity, and
+      Agent pages — text input + submit calls
+      `POST /api/command/parse` with the current page context (`page`,
+      `poolId`, `tokenInFocus`, `note`) populated. After the parser
+      returns, render a **preview card** (PN-008) showing the parsed
+      intent in human-readable form before any execution. For
+      `clarification_needed` intents, run a **clarification loop**
+      (PN-009) — show the LLM's question, capture the user's reply,
+      re-parse with the appended context. For action intents, wire
+      through the existing `useConfirmedAction` seam (P1-005) to the
+      matching action endpoint (PN-010). The server side already
+      enforces "never auto-execute": the parse route returns the
+      intent and stops there; execution requires a separate POST.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
@@ -268,10 +286,11 @@ with their Privy access token).
 
 ---
 
-## TD-005 — Phase 6 + Phase 7 E2E test harness does not exist
+## TD-005 — Phase 6 + Phase 7 + Phase N E2E test harness does not exist
 
 **Slice:** P6-012 (E2E: 6 chat-mode actions + 5 autonomous-mode
-instruction types), P7-006 (10 representative analytics queries).
+instruction types), P7-006 (10 representative analytics queries),
+PN-011 (25 prompt variations per intent type for the command bar).
 
 **Gap:** P6-003 → P6-010 each ship server-side without integration
 tests against the real surfaces they call (a real DB, real CDP,
@@ -330,3 +349,61 @@ documented here in lieu of a real test.
 
 **Owner:** Phase 6 / QA owner (TBD). Blocks: launch readiness
 checklist (Phase 9) which expects every Phase 6 ticket green.
+
+---
+
+## TD-006 — OpenAI fallback for the LLM provider abstraction
+
+**Slice:** PN-001 (LLM provider abstraction with Anthropic primary +
+OpenAI fallback).
+
+**Gap:** PN-001's spec calls for a fallback to OpenAI GPT (4.1 / 5)
+when the Anthropic API returns an availability error. The Anthropic
+primary path is shipping (`server/src/lib/command-bar-nlp.ts` for the
+command bar, `server/src/lib/agent-nlp.ts` for the agent mode); the
+fallback shape is **not** wired. Today, an Anthropic 5xx /
+rate-limit / overload propagates through the existing route as 502
+`UPSTREAM_FAILURE`.
+
+**Why accepted:** The fallback adds the `openai` SDK as a server
+dependency (real install, real transitive deps) plus the fallback
+control flow itself (which Anthropic error classes trigger
+fallback — `RateLimitError`? `InternalServerError`? both? — and how
+to time-box the retry). Shipping the Anthropic primary first lets us
+get the parser into beta and observe real failure rates before
+deciding fallback policy. The architecture-doc decision D-013
+(Anthropic primary, OpenAI fallback) remains accepted; this TD just
+tracks the fallback half.
+
+**Closure condition:**
+
+1. `npm install --workspace=@mantua/server openai`
+2. Add `OPENAI_API_KEY` to env.ts (already optional there).
+3. Define a small `LlmProvider` interface in
+   `server/src/lib/llm-provider.ts` with both implementations
+   (Anthropic primary, OpenAI fallback). Keep the existing
+   `parseCommand` / `parseInstruction` shape; only the internal
+   call-Claude-or-fall-back-to-OpenAI logic changes.
+4. Decide which Anthropic error classes trigger fallback. Default:
+   `Anthropic.InternalServerError` (5xx) and `Anthropic.APIError`
+   when `status >= 500` AND not a `BadRequestError` (400s are
+   parse-side bugs, not availability errors — don't fall back).
+   Explicitly **not** `RateLimitError` (429): retry with backoff
+   on the same provider rather than spending OpenAI tokens to work
+   around a temporary rate limit. Document the policy in
+   `docs/architecture.md`.
+5. Map OpenAI's tool-use shape (function calling) to the same
+   `Intent` shape produced by Anthropic's tool-use blocks. The
+   tool definitions can be shared structurally; only the wire
+   format differs.
+6. Test path: install a fake `LlmProvider` whose Anthropic side
+   throws `InternalServerError` and whose OpenAI side returns a
+   stubbed intent. Assert the parser falls back without surfacing
+   the Anthropic error to the route. Optionally run one live
+   smoke-test against both providers as a CI job.
+7. Flip PN-001 🟡 → ✅. Add a note pointing back at this TD's
+   closure SHA.
+
+**Owner:** Phase N owner (TBD). Blocks: PN-001 cannot flip to ✅;
+beta dogfood may experience hard parse failures during Anthropic
+outages where the fallback would have kept the command bar working.
