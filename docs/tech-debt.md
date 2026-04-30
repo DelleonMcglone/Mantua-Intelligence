@@ -124,7 +124,8 @@ starts driving the same paths from natural-language input.
 (Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side),
 P6-005 (Swap Tokens — UI side), P6-006 (Add/Remove Liquidity — UI
 side), P6-007 (Query On-Chain Data — UI side), P6-008 (Portfolio
-Summary — UI side + surface-placement decision).
+Summary — UI side + surface-placement decision), P6-009 (Autonomous
+mode UI — text input + auto-execute wiring).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -180,6 +181,16 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    tx list at minimum. Likely lives as a sub-step inside the Wallet
    card (P6-003), or as a route off the main app shell. Both are
    waiting on a design.
+8. **Autonomous mode chat UI** — P6-009 ships the server endpoint
+   (`POST /api/agent/instruction`, NLP parser → structured intent)
+   but the chat UI is deferred. Needed: a text input in the
+   `step === 'auto'` body of `AgentPanel.tsx`; on submit, call
+   `POST /api/agent/instruction`; render the result (parsed action
+   summary, clarification question, or rejection reason); wire an
+   "execute" affordance on a parsed action to the matching action
+   endpoint (P6-003 → P6-008). The current autonomous-step body is
+   the "Autonomous mode is wiring up" placeholder, untouched since
+   the design port.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
@@ -222,3 +233,60 @@ cannot be marked fully shipped; agent users have no in-app way to
 fund their wallet, change the agent's cap from the schema default,
 or send tokens (they can still call any of the endpoints via cURL
 with their Privy access token).
+
+---
+
+## TD-005 — Phase 6 E2E test harness does not exist
+
+**Slice:** P6-012 (E2E: 6 chat-mode actions + 5 autonomous-mode
+instruction types).
+
+**Gap:** P6-003 → P6-010 each ship server-side without integration
+tests against the real surfaces they call (a real DB, real CDP,
+real Uniswap Trading API, real Anthropic API, real RPC). TD-003
+captures the orchestration test gap for one ticket scope; P6-012
+asks for the full E2E:
+
+1. The 6 chat-mode actions (Wallet / Send / Swap / Liquidity-add /
+   Liquidity-remove / Query / Portfolio — note this is 7 endpoints
+   collapsing the wallet "Fund" and "Create" into one card per the
+   design source) drive `POST/GET /api/agent/wallet`,
+   `POST /api/agent/send`, `POST /api/agent/swap`,
+   `POST /api/agent/liquidity/{add,remove}`, `GET /api/agent/query`,
+   `GET /api/agent/portfolio`.
+2. Five representative autonomous-mode instruction types drive
+   `POST /api/agent/instruction` and assert the parsed intent kind
+   matches expectations (e.g. _"swap 10 USDC for ETH"_ → `swap`;
+   _"send 1 USDC to 0xabc..."_ → `send`; _"add liquidity to USDC/EURC
+   0.05% with 100 USDC and 100 EURC"_ → `add_liquidity`; _"what's
+   my agent balance"_ → `query`/`wallet`; _"buy a horse"_ →
+   `reject`).
+
+**Why accepted:** Two structural blockers stand between us and a real
+E2E run: (a) the deferred UIs in TD-004 — the chat-mode action cards
+and autonomous-mode input are inert, so there's no driver for E2E
+yet; and (b) a Sepolia-funded test agent wallet with stable signer
+setup needs to exist for the on-chain assertions to be repeatable.
+Per the on-chain test gap policy, the bare-minimum acknowledgment is
+documented here in lieu of a real test.
+
+**Closure condition:**
+
+1. TD-004 closes (UIs land); TD-003 closes (per-ticket integration
+   harness exists).
+2. Stand up an E2E scaffold that:
+   a. Provisions a fresh agent wallet on Base Sepolia, funds it with
+   Sepolia USDC + ETH from a known faucet wallet.
+   b. Drives the chat-mode UI through Playwright (or equivalent),
+   executing each of the 6 cards end-to-end and asserting the
+   resulting BaseScan tx confirms.
+   c. Drives the autonomous-mode UI with the 5 representative
+   instructions, asserts the parsed intent shape, and (where
+   executable) that the action also lands on-chain.
+3. Document residual flakiness sources (Trading API rate limits,
+   CoinGecko outages, Anthropic API hiccups) and run the suite in CI
+   on a nightly cadence with auto-retry on infrastructure failures.
+4. Flip P6-012 🟡 → ✅ once green for 7 consecutive nightly runs.
+
+**Owner:** Phase 6 / QA owner (TBD). Blocks: launch readiness
+checklist (Phase 9) which expects every Phase 6 ticket green.
