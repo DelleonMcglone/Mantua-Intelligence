@@ -12,6 +12,7 @@ import { agentQueryRouter } from "./routes/agent-query.ts";
 import { agentSendRouter } from "./routes/agent-send.ts";
 import { agentSwapRouter } from "./routes/agent-swap.ts";
 import { agentWalletsRouter } from "./routes/agent-wallets.ts";
+import { commandParseRouter } from "./routes/command-parse.ts";
 import { analyticsRouter } from "./routes/analytics.ts";
 import { complianceAdminRouter } from "./routes/compliance-admin.ts";
 import { healthRouter } from "./routes/health.ts";
@@ -51,6 +52,7 @@ app.use(agentLiquidityRouter);
 app.use(agentQueryRouter);
 app.use(agentPortfolioRouter);
 app.use(agentInstructionRouter);
+app.use(commandParseRouter);
 app.use(analyticsRouter);
 
 app.listen(env.PORT, () => {
