@@ -123,7 +123,8 @@ starts driving the same paths from natural-language input.
 **Slice:** P6-003 (Create & Manage Agent Wallet — UI side), P6-011
 (Agent-level spending cap — UI side), P6-004 (Send Tokens — UI side),
 P6-005 (Swap Tokens — UI side), P6-006 (Add/Remove Liquidity — UI
-side).
+side), P6-007 (Query On-Chain Data — UI side), P6-008 (Portfolio
+Summary — UI side + surface-placement decision).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -163,6 +164,22 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    picker, amount inputs (paired or single-side), slippage override,
    confirmation, tx-success state. The Remove flow needs a position
    list pulled from `/api/positions` filtered to the agent address.
+6. **Query On-Chain Data flow** — P6-007 ships
+   `GET /api/agent/query?type={pools|pool|chart}`. Needed: a query
+   builder UI in the chat-mode "Query On-Chain Data" sub-step that
+   maps a natural-language ask ("show me top USDC pools") to one of
+   the typed queries, and a result renderer (table for pools, chart
+   for historical). Phase 7 (P7-001 → P7-006) will widen this
+   substantially with rich query types — likely the right home for
+   the UI work, with the agent's chat card delegating to that view.
+7. **Portfolio Summary surface** — P6-008 ships
+   `GET /api/agent/portfolio` (balances + tx history). Two open
+   questions: (a) where this lives in the chat-mode UI (the design's
+   action grid uses "Fund Agent Wallet" instead of Portfolio); and
+   (b) what the rendering looks like — table of balances + recent
+   tx list at minimum. Likely lives as a sub-step inside the Wallet
+   card (P6-003), or as a route off the main app shell. Both are
+   waiting on a design.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
