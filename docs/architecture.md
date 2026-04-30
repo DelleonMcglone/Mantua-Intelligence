@@ -25,17 +25,17 @@ The v1 prototype (`Mantua Prototype.html` + `src/` + `assets/` + `landing/`) cur
 
 ## Stack at a glance
 
-| Layer       | Tool                                    | Why                                                |
-| ----------- | --------------------------------------- | -------------------------------------------------- |
-| Frontend    | Vite + React 19 + TypeScript (strict)   | Fast dev loop, strong types, broad ecosystem       |
-| Styling     | Tailwind 4 + Shadcn/ui                  | Token-driven CSS, accessible primitives            |
-| Auth/wallet | Privy (`@privy-io/react-auth`) + viem   | Embedded + external wallets; viem for chain calls  |
-| Backend     | Express 5 + TypeScript (strict)         | Mature, predictable; no over-frameworking          |
-| ORM         | Drizzle                                 | TS-first, lightweight, schema-as-code              |
-| Validation  | Zod 4                                   | Runtime + compile-time guarantees at boundaries    |
-| DB          | PostgreSQL (Neon planned per D-004)     | Serverless Postgres with branching for staging     |
-| Contracts   | Foundry (forge / anvil / cast)          | Standard for v4 hook work                          |
-| LLM         | Anthropic Claude primary, OpenAI fallback | Per D-013; provider-abstracted                   |
+| Layer       | Tool                                      | Why                                               |
+| ----------- | ----------------------------------------- | ------------------------------------------------- |
+| Frontend    | Vite + React 19 + TypeScript (strict)     | Fast dev loop, strong types, broad ecosystem      |
+| Styling     | Tailwind 4 + Shadcn/ui                    | Token-driven CSS, accessible primitives           |
+| Auth/wallet | Privy (`@privy-io/react-auth`) + viem     | Embedded + external wallets; viem for chain calls |
+| Backend     | Express 5 + TypeScript (strict)           | Mature, predictable; no over-frameworking         |
+| ORM         | Drizzle                                   | TS-first, lightweight, schema-as-code             |
+| Validation  | Zod 4                                     | Runtime + compile-time guarantees at boundaries   |
+| DB          | PostgreSQL (Neon planned per D-004)       | Serverless Postgres with branching for staging    |
+| Contracts   | Foundry (forge / anvil / cast)            | Standard for v4 hook work                         |
+| LLM         | Anthropic Claude primary, OpenAI fallback | Per D-013; provider-abstracted                    |
 
 ## Open architectural notes
 
@@ -56,6 +56,25 @@ The v1 prototype (`Mantua Prototype.html` + `src/` + `assets/` + `landing/`) cur
 
 ## CDP agent wallet (Phase 6)
 
+### Wallet boundary (D-008 — confirmed P6-000, 2026-04-30)
+
+Mantua runs **two wallets per user**, owned by different actors:
+
+| Wallet                | Owner     | Holds                    | Signing rights               | Funded by                                  |
+| --------------------- | --------- | ------------------------ | ---------------------------- | ------------------------------------------ |
+| Privy embedded wallet | The user  | The user's primary funds | User only (Privy auth)       | User's existing on-ramp                    |
+| CDP agent wallet      | The agent | A user-set budget        | Agent only (CDP-managed key) | User explicitly transfers from Privy → CDP |
+
+**Hard rule:** the agent never holds, sees, or can sign with the Privy wallet's keys. There is no path in code that lets the agent move funds out of the Privy wallet. The user funds the agent by sending tokens from Privy to CDP — this is the only direction funds cross the boundary, and it always requires the user's signature on the Privy side.
+
+**Why** (full rationale in `docs/decisions/v2-open-decisions.md` D-008): an autonomous LLM-driven actor must not have signing rights over the user's primary funds. Bounding the agent's blast radius to a separately-funded CDP wallet means the worst case from any agent bug, prompt injection, or misparsed instruction is loss of the agent's budget — not the user's main holdings. Mental model: Zapier doesn't get your Gmail password.
+
+**Spending caps stack at the wallet, not the user.** The user's Privy wallet has its own daily cap (D-009 / P1-001). The agent's CDP wallet has its own, independent cap (P6-011) that the user sets when funding the agent. Caps are enforced server-side in `server/src/lib/spending-cap.ts` against `daily_wallet_spend` keyed on the wallet address — the cap doesn't know which wallet is "primary" and which is "agent," and that's intentional.
+
+**Recovery.** If the user wants to "unfund" the agent, they sweep the CDP wallet back to their Privy wallet. The CDP wallet is not destroyed — it just sits empty, ready to be re-funded. There is no protocol-level concept of "deleting an agent."
+
+### Implementation path
+
 The chosen implementation path for P6-003 (Create & Manage Agent Wallet) is the [`create-onchain-agent`](https://www.npmjs.com/package/create-onchain-agent) scaffolder, which bootstraps an AgentKit-based wallet with the wallet-secret and policy-management plumbing already wired. The bare `@coinbase/cdp-sdk` direct path is **not** used for v2 — the AgentKit scaffold gives us spending policies, EIP-7702 delegation, and a coherent end-user-management story for free.
 
 Phase 2 only stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_SECRET`). Wallet provisioning happens in Phase 6.
@@ -64,14 +83,14 @@ Phase 2 only stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_K
 
 Server-side enforcement primitives. Every Phase 3+ write path goes through these BEFORE any Trading API or PoolManager call.
 
-| Rail | Module | Hard ceiling | Notes |
-| ---- | ------ | ------------ | ----- |
-| Spending cap (P1-001) | `server/src/lib/spending-cap.ts` | $50,000/day per wallet | Reads from `user_preferences.daily_cap_usd` (primary wallet) or `agent_wallets.daily_cap_usd`. Per-day tracking in `daily_wallet_spend`. Reset at 00:00 UTC. |
-| Wallet age (P1-002) | `server/src/lib/wallet-age.ts` | n/a | `recordFirstSeen` on first connection; `getWalletAge` returns `{ ageDays, tier, tierMaxCapUsd }`. Used by P1-003 cap-raise UI. |
-| Slippage (P1-004) | `server/src/lib/slippage.ts` | 500 bps (5%) | `classifySlippage(bps)` returns `ok` / `warn` / `double_confirm`. Above 500 bps throws `SafetyError`. |
-| Kill-switch (P1-006) | `server/src/middleware/kill-switch.ts` | n/a | Env `MANTUA_KILL_SWITCH=1` — all POST/PUT/PATCH/DELETE return 503. Reads + wallet connection unaffected. |
-| Rate limit (P1-007) | `server/src/middleware/rate-limit.ts` | 100 req / 15 min IP | Tighter `writeRateLimiter` and `walletRateLimiter` for chain-touching paths. Wallet keying activates after Phase 2 auth lands. |
-| Audit log (P1-008) | `server/src/lib/audit.ts` + `mantua_audit_log` table | n/a | Every write attempt logged with `(action, outcome, wallet, params, tx_hash, reason, ip, user_agent)`. Distinct from `portfolio_transactions` (which is success-only). |
+| Rail                  | Module                                               | Hard ceiling           | Notes                                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spending cap (P1-001) | `server/src/lib/spending-cap.ts`                     | $50,000/day per wallet | Reads from `user_preferences.daily_cap_usd` (primary wallet) or `agent_wallets.daily_cap_usd`. Per-day tracking in `daily_wallet_spend`. Reset at 00:00 UTC.          |
+| Wallet age (P1-002)   | `server/src/lib/wallet-age.ts`                       | n/a                    | `recordFirstSeen` on first connection; `getWalletAge` returns `{ ageDays, tier, tierMaxCapUsd }`. Used by P1-003 cap-raise UI.                                        |
+| Slippage (P1-004)     | `server/src/lib/slippage.ts`                         | 500 bps (5%)           | `classifySlippage(bps)` returns `ok` / `warn` / `double_confirm`. Above 500 bps throws `SafetyError`.                                                                 |
+| Kill-switch (P1-006)  | `server/src/middleware/kill-switch.ts`               | n/a                    | Env `MANTUA_KILL_SWITCH=1` — all POST/PUT/PATCH/DELETE return 503. Reads + wallet connection unaffected.                                                              |
+| Rate limit (P1-007)   | `server/src/middleware/rate-limit.ts`                | 100 req / 15 min IP    | Tighter `writeRateLimiter` and `walletRateLimiter` for chain-touching paths. Wallet keying activates after Phase 2 auth lands.                                        |
+| Audit log (P1-008)    | `server/src/lib/audit.ts` + `mantua_audit_log` table | n/a                    | Every write attempt logged with `(action, outcome, wallet, params, tx_hash, reason, ip, user_agent)`. Distinct from `portfolio_transactions` (which is success-only). |
 
 The hard ceilings live in `server/src/lib/constants.ts`. Lifting any of them requires a code change + redeploy — there is no admin path for them at runtime.
 
@@ -90,15 +109,15 @@ Both deferrals are tracked in `docs/tasks/v2-roadmap.md` and revisited at the en
 
 The v1 prototype (`Mantua Prototype.html`) is the design spec. Phase D extracts it into a reusable system before feature phases build UIs on top.
 
-| Artifact | Path |
-| --- | --- |
-| Constraint capture | `docs/design/notes.md` |
-| Token source | `client/src/styles/tokens.css` (CSS vars) |
-| Tailwind 4 binding | `client/src/index.css` (`@theme inline`) |
-| Component mapping | `docs/design/components.md` |
-| Shell scaffold | `client/src/components/shell/{AppShell,Header,Logo,Card}.tsx` |
-| Confirmation seam | `client/src/hooks/use-confirmed-action.tsx` |
-| Theme toggle | `client/src/hooks/use-theme.tsx` (`html[data-theme]`) |
+| Artifact           | Path                                                          |
+| ------------------ | ------------------------------------------------------------- |
+| Constraint capture | `docs/design/notes.md`                                        |
+| Token source       | `client/src/styles/tokens.css` (CSS vars)                     |
+| Tailwind 4 binding | `client/src/index.css` (`@theme inline`)                      |
+| Component mapping  | `docs/design/components.md`                                   |
+| Shell scaffold     | `client/src/components/shell/{AppShell,Header,Logo,Card}.tsx` |
+| Confirmation seam  | `client/src/hooks/use-confirmed-action.tsx`                   |
+| Theme toggle       | `client/src/hooks/use-theme.tsx` (`html[data-theme]`)         |
 
 ### Deviations from the prototype
 
