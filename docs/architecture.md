@@ -75,9 +75,15 @@ Mantua runs **two wallets per user**, owned by different actors:
 
 ### Implementation path
 
-The chosen implementation path for P6-003 (Create & Manage Agent Wallet) is the [`create-onchain-agent`](https://www.npmjs.com/package/create-onchain-agent) scaffolder, which bootstraps an AgentKit-based wallet with the wallet-secret and policy-management plumbing already wired. The bare `@coinbase/cdp-sdk` direct path is **not** used for v2 — the AgentKit scaffold gives us spending policies, EIP-7702 delegation, and a coherent end-user-management story for free.
+The chosen implementation path for P6-003 (Create & Manage Agent Wallet) is **bare [`@coinbase/cdp-sdk`](https://www.npmjs.com/package/@coinbase/cdp-sdk)** in the server (`server/src/lib/cdp/`). This reverses the earlier preference for `create-onchain-agent` / `@coinbase/agentkit`, for three reasons surfaced when scoping P6-003:
 
-Phase 2 only stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_SECRET`). Wallet provisioning happens in Phase 6.
+1. **`create-onchain-agent` is a project scaffolder, not a runtime dep** — you can't `npm install` it into an existing server. Following the original guidance literally would have meant running it once and copying its output, which is not a maintainable supply-chain story.
+2. **AgentKit pulls in ~30 transitive deps** including `ethers` (alongside our `viem`), `opensea-js`, `twitter-api-v2`, Solana SDKs, ZeroDev, Zora, Jupiter, vaultsfyi, sushi, ensofinance, clanker-sdk, etc. It is a kitchen-sink LLM-tools bundle aimed at autonomous agents that need every possible action. We only need EVM wallet provisioning; the bloat is unjustified.
+3. **The original justifications don't apply to our app:** AgentKit's spending policies are duplicated by our own `server/src/lib/spending-cap.ts` (P1-001); EIP-7702 delegation is not needed for P6-003; AgentKit's "end-user-management story" assumes a single-tenant agent, but we manage agents per-user via the `agent_wallets` Drizzle table.
+
+`@coinbase/cdp-sdk` itself has a small, sensible dep tree (viem, zod, axios, jose, plus Solana/SPL primitives we ignore) and exposes exactly the EVM-account-creation API we need. If a later Phase 6 ticket actually benefits from AgentKit primitives (e.g. autonomous-mode tool routing in P6-009/P6-010), that integration can be added incrementally and locally without retrofitting wallet creation.
+
+Phase 2 already stores the CDP API credentials in env (`CDP_PROJECT_ID`, `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_SECRET`); they remain `.optional()` in `server/src/env.ts` so the server still boots without them. Wallet provisioning happens in Phase 6 (P6-003).
 
 ## Mainnet safety rails (Phase 1)
 
