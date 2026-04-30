@@ -126,7 +126,10 @@ P6-005 (Swap Tokens — UI side), P6-006 (Add/Remove Liquidity — UI
 side), P6-007 (Query On-Chain Data — UI side), P6-008 (Portfolio
 Summary — UI side + surface-placement decision), P6-009 (Autonomous
 mode UI — text input + auto-execute wiring), P7-004 (analytics
-result rendering — tables + lightweight-charts).
+result rendering — tables + lightweight-charts), P8-001 (Portfolio
+landing layout), P8-003/004/005 (Balances / LP Positions / History
+tabs), P8-006 (Hide Small Balances toggle UI), P8-007 (user/agent
+wallet switcher).
 
 **Gap:** Multiple agent action-card sub-flows are missing from the
 Mantua design source (`~/Downloads/mantua-ai/project/src/chat.jsx`).
@@ -203,6 +206,23 @@ call a host stub `window.__mantuaChatAction(a)`. Affected so far:
    APY history; protocol TVL history). The chat-mode "Query
    On-Chain Data" card (P6-007) can deep-link into this view once
    it lands.
+10. **Phase 8 portfolio page** — `GET /api/portfolio` (P8-003) and
+    `PATCH /api/preferences` (P8-006) ship the data layer; the UI is
+    deferred. Needed: a portfolio landing route under
+    `client/src/features/portfolio/` per the v2 design source — tabs
+    for **Balances** (one row per supported token, USD value, swap
+    shortcut), **LP Positions** (driven by `GET /api/positions`,
+    hook badges via address-to-name mapping), **History** (Swap /
+    Pool / Deposits filtered from the `transactions` array client-
+    side, BaseScan link per row); a **Hide Small Balances** toggle
+    that PATCHes `/api/preferences` and re-renders the Balances list
+    filtered to balances ≥ $1; a **user/agent wallet switcher**
+    that flips the data source between `GET /api/portfolio` and
+    `GET /api/agent/portfolio` (both return identical shapes). The
+    P6-008 portfolio surface-placement question (item 7 above) is
+    a subset of this — once P8-001 lands, the agent's chat-mode
+    portfolio sub-step can deep-link into the same view in agent
+    mode.
 
 The codebase rule that "UI is design-driven; feature tickets never
 motivate UI edits" (memory feedback) means the engineering side cannot
