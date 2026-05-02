@@ -1,25 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import basicSsl from "@vitejs/plugin-basic-ssl";
 import path from "node:path";
 
 /**
- * P2-015 — HTTPS dev requirement. Privy's Web Crypto API key sharding
- * silently fails over plain HTTP outside `localhost`. `@vitejs/plugin-
- * basic-ssl` issues a self-signed cert so dev runs over HTTPS by default.
+ * Dev runs on plain HTTP at `http://localhost:5173`. `localhost` is one
+ * of the few origins the spec explicitly grants a "secure context" to
+ * even over HTTP, so Privy's Web Crypto API key sharding still works.
+ * Plain HTTP also lets the Claude Code preview pane render the app
+ * (it can't accept a self-signed cert).
  *
- * For staging/prod, use real TLS (Vercel handles this for the frontend).
+ * Staging / prod must serve over real TLS (Vercel handles the frontend).
  */
 export default defineConfig({
-  plugins: [react(), tailwindcss(), basicSsl()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },
   },
   server: {
     port: 5173,
     strictPort: true,
-    https: {},
     /**
      * Forward `/api` requests to the Express server so the browser
      * stays on `https://localhost:5173` and avoids mixed-content

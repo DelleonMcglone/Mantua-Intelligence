@@ -40,6 +40,14 @@
   --chip: #18181e;
   --row-hover: #121217;
 
+  /* Agent identity — teal stripe + low/mid alphas. From
+     `mantua-ai/project/Mantua Agent Flows.html`. Used by AgentStrip,
+     agent-mode buttons, and intent-card "agent" pill variant. Same
+     value in both themes (chroma family, not surface-dependent). */
+  --agent: #4cc6c6;
+  --agent-dim: #4cc6c622;
+  --agent-bd: #4cc6c655;
+
   /* Radii */
   --radius: 14px;
   --radius-sm: 10px;
@@ -107,7 +115,11 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "ss01", "cv11";
 }
