@@ -7,6 +7,7 @@
 
 # Claude Code
 .claude/settings.local.json
+.claude/worktrees/
 
 # Skills (reinstalled from skills-lock.json via `npx skills experimental_install`)
 .claude/skills/
@@ -35,6 +36,7 @@ build/
 .next/
 out/
 .vite/
+*.tsbuildinfo
 
 # Test / coverage
 coverage/
@@ -46,6 +48,13 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 contracts/.gas-snapshot
+contracts/lib/
+
+# Design source dropped in by `Mantua Prototype.html` for in-browser
+# comparison via `client/public/_proto/`. The bundle lives in
+# `~/Downloads/mantua-ai/` per the user-memory design-source rule;
+# `_proto/` is just a Vite-served mirror.
+client/public/_proto/
 
 # Drizzle
 drizzle/migrations/meta/_journal.json.bak
