@@ -1,16 +1,15 @@
 import { useState } from "react";
+import { ArrowLeft, X } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { AgentStrip } from "./AgentStrip.tsx";
 import { IntentCard } from "./IntentCard.tsx";
 import {
   BTN_GHOST,
   BTN_PRIMARY,
   PANEL_BODY,
-  PANEL_HEAD,
-  PANEL_TITLE,
   Spinner,
   TokenChip,
   TxRow,
-  X_CLOSE,
 } from "./agent-primitives.tsx";
 
 /**
@@ -39,12 +38,14 @@ type Step =
 
 interface Props {
   onClose: () => void;
+  /** Back returns to the agent mode picker. */
+  onBack?: () => void;
 }
 
 const AGENT_ADDR = "0x7a3f…bE19";
 const TX_HASH = "0x8f4a…c219";
 
-export function AutonomousFlow({ onClose }: Props) {
+export function AutonomousFlow({ onClose, onBack }: Props) {
   const [step, setStep] = useState<Step>("idle");
   const [instr, setInstr] = useState("Swap 10 USDC for ETH");
 
@@ -67,10 +68,30 @@ export function AutonomousFlow({ onClose }: Props) {
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>Autonomous mode</div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
+      <PanelHeader />
+
+      <div className="px-5 pt-4 pb-3.5 flex items-center justify-between gap-2.5">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-7 px-2 inline-flex items-center gap-1 rounded-xs border border-border-soft bg-transparent text-text-dim text-[12px] hover:text-text"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
+          </button>
+        ) : (
+          <span className="w-[60px]" />
+        )}
+        <div className="text-[15px] font-semibold inline-flex items-center gap-2">
+          <span aria-hidden>🤖</span> Autonomous Mode
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="h-7 w-7 inline-flex items-center justify-center rounded-xs border border-border-soft bg-transparent text-text-dim hover:text-text"
+        >
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -140,80 +161,45 @@ const CHIP_STYLE: React.CSSProperties = {
   fontFamily: "inherit",
 };
 
+const AUTONOMOUS_PROMPTS = [
+  "Swap 0.1 ETH to USDC on Base",
+  "Move my idle USDC into the highest-APR stable pool",
+  "Monitor cbBTC price and alert if it drops below $60k",
+  "Rebalance my portfolio to 60% ETH / 40% USDC",
+];
+
 function IdleStep({ onPick }: { onPick: (s: string) => void }) {
-  const examples = [
-    "Swap 10 USDC for ETH",
-    "Add liquidity to USDC/EURC",
-    "Send 5 USDC to vitalik.eth",
-  ];
   return (
-    <div style={{ ...PANEL_BODY, gap: 14 }}>
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          gap: 10,
-          padding: "24px 0",
-        }}
-      >
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: "var(--agent-dim)",
-            border: "1px solid var(--agent-bd)",
-            color: "var(--agent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 24,
-          }}
-        >
-          ⌘
+    <div className="flex-1 overflow-auto px-5 pt-2 pb-5 flex flex-col">
+      <div className="flex flex-col items-center text-center mt-10 mb-6 gap-2">
+        <div className="text-[64px] leading-none" aria-hidden>
+          🤖
         </div>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>Use the command bar</div>
-        <div style={{ fontSize: 12, color: "var(--text-dim)", maxWidth: 280 }}>
-          Type any instruction into the ⌘K bar at the top. Parsed plans appear here for your
-          confirmation.
+        <div className="text-[20px] font-semibold mt-1">Your autonomous agent is ready</div>
+        <div className="text-[13px] text-text-dim inline-flex items-center gap-1">
+          Powered by AgentKit · Type any instruction below
+          <span aria-hidden>↓</span>
         </div>
       </div>
-      <div>
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--text-mute)",
-            letterSpacing: ".06em",
-            marginBottom: 6,
-          }}
-        >
-          EXAMPLES
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {examples.map((e) => (
-            <button
-              key={e}
-              type="button"
-              style={CHIP_STYLE}
-              onClick={() => {
-                onPick(e);
-              }}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: "var(--text-mute)", marginTop: 8 }}>
-          Chips pre-fill the command bar.
-        </div>
+      <div className="flex flex-col gap-2.5 max-w-[560px] w-full mx-auto">
+        {AUTONOMOUS_PROMPTS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => {
+              onPick(p);
+            }}
+            className="flex items-center gap-3 w-full px-4 py-3 bg-bg-elev border border-border-soft rounded-md text-left text-[13px] text-text hover:border-accent hover:bg-row-hover transition-colors cursor-pointer"
+          >
+            <span className="text-accent text-[14px] leading-none">›</span>
+            <span className="flex-1">{p}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
+
 
 function ParsingStep({ instr }: { instr: string }) {
   return (

@@ -6,11 +6,6 @@ import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
 import { InputBar } from "./components/shell/InputBar.tsx";
 import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
-import {
-  CommandBar,
-  type CommandBarPage,
-  type CommandIntent,
-} from "./features/command-bar/CommandBar.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
@@ -74,81 +69,9 @@ function LeftColumn() {
   );
 }
 
-const ROUTES_WITH_COMMAND_BAR = new Set<Route["kind"]>([
-  "swap",
-  "pools",
-  "pool",
-  "pool-create",
-  "add-liquidity",
-  "positions",
-  "agent",
-]);
-
-function pageFromRoute(route: Route): CommandBarPage {
-  switch (route.kind) {
-    case "swap":
-      return "swap";
-    case "pools":
-    case "pool":
-    case "pool-create":
-    case "add-liquidity":
-    case "positions":
-      return "liquidity";
-    case "agent":
-      return "agent";
-    case "analyze":
-      return "analytics";
-    case "home":
-      return "other";
-  }
-}
-
-function routeFromIntent(intent: CommandIntent, setRoute: (r: Route) => void) {
-  switch (intent.action) {
-    case "swap":
-      setRoute({ kind: "swap" });
-      return;
-    case "add_liquidity":
-      setRoute({ kind: "pools" });
-      return;
-    case "remove_liquidity":
-      setRoute({ kind: "positions" });
-      return;
-    case "create_pool":
-      setRoute({ kind: "pool-create" });
-      return;
-    case "send_tokens":
-    case "portfolio_summary":
-      // Send + Portfolio live inside the agent panel (Send) and the
-      // home/left column (Portfolio). Route to the most reasonable
-      // surface for each — proper deep-link wiring lands in PN-010.
-      setRoute({ kind: intent.action === "portfolio_summary" ? "home" : "agent" });
-      return;
-    case "query_analytics":
-      setRoute({ kind: "analyze" });
-      return;
-    case "clarification_needed":
-    case "reject":
-      // Handled inside CommandBar — preview card stays open with the
-      // clarification message or rejection reason.
-      return;
-  }
-}
-
 function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
-  const showCommandBar = ROUTES_WITH_COMMAND_BAR.has(route.kind);
-  const poolId = route.kind === "pool" ? route.id : undefined;
   return (
     <Card className="flex-1 flex flex-col p-0 overflow-hidden self-stretch" style={{ padding: 0 }}>
-      {showCommandBar && (
-        <CommandBar
-          page={pageFromRoute(route)}
-          {...(poolId ? { poolId } : {})}
-          onIntent={(intent) => {
-            routeFromIntent(intent, setRoute);
-          }}
-        />
-      )}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <RouteContent route={route} setRoute={setRoute} />
       </div>
@@ -176,7 +99,13 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "swap":
-      return <SwapPanel />;
+      return (
+        <SwapPanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "pools":
       return (
         <LiquidityListPage
@@ -185,6 +114,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
           onCreate={() => {
             setRoute({ kind: "pool-create" });
+          }}
+          onClose={() => {
+            setRoute({ kind: "home" });
           }}
         />
       );
@@ -198,6 +130,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onAddLiquidity={(ctx) => {
             setRoute({ kind: "add-liquidity", ctx });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "pool-create":
@@ -209,6 +144,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onAddLiquidity={(ctx) => {
             setRoute({ kind: "add-liquidity", ctx });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "add-liquidity":
@@ -218,10 +156,19 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onBack={() => {
             setRoute({ kind: "positions" });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "positions":
-      return <PositionsList />;
+      return (
+        <PositionsList
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "analyze":
       return (
         <AnalyzePanel

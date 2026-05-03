@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { Card } from "@/components/shell/Card.tsx";
+import { ExternalLink } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { BASESCAN_URL } from "@/lib/tokens.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
@@ -18,9 +19,10 @@ interface Props {
   poolId: string;
   onBack: () => void;
   onAddLiquidity: (ctx: PoolKeyContext) => void;
+  onClose?: () => void;
 }
 
-export function PoolDetailPage({ poolId, onBack, onAddLiquidity }: Props) {
+export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Props) {
   const [range, setRange] = useState<ChartRange>("30D");
   const [metric, setMetric] = useState<Metric>("tvl");
   const { data, error, loading } = usePool(poolId, range);
@@ -34,23 +36,14 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity }: Props) {
   const addStatus = computeAddStatus(derived, poolState);
 
   return (
-    <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border-soft flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back to pool list"
-          className="text-text-dim hover:text-text"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h2 className="text-base font-semibold flex-1">
-          {data ? normalizePairSymbol(data.pool.symbol) : "Loading…"}
-        </h2>
-        {data?.pool.feeTier && (
-          <span className="text-xs text-text-mute font-mono">{data.pool.feeTier}</span>
-        )}
-      </div>
+    <>
+      <PanelHeader />
+      <PanelSubHeader
+        title={data ? normalizePairSymbol(data.pool.symbol) : "Loading…"}
+        {...(data?.pool.feeTier ? { subtitle: data.pool.feeTier } : {})}
+        onBack={onBack}
+        {...(onClose ? { onClose } : {})}
+      />
 
       {loading && <p className="px-5 py-8 text-xs text-text-dim text-center">Loading pool…</p>}
       {error && (
@@ -60,7 +53,7 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity }: Props) {
       )}
 
       {data && (
-        <div className="flex-1 overflow-auto p-5 space-y-5">
+        <div className="flex-1 overflow-auto px-5 pt-2 pb-5 space-y-5">
           <Stats
             tvl={data.pool.tvlUsd}
             apy={data.pool.apy}
@@ -110,7 +103,7 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity }: Props) {
           )}
         </div>
       )}
-    </Card>
+    </>
   );
 }
 

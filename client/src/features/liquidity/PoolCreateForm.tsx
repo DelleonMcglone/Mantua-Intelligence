@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { Card } from "@/components/shell/Card.tsx";
+import { ExternalLink } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
@@ -22,9 +23,10 @@ interface Props {
     fee: FeeTier;
     sqrtPriceX96: string;
   }) => void;
+  onClose?: () => void;
 }
 
-export function PoolCreateForm({ onBack, onAddLiquidity }: Props) {
+export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
   const [tokenA, setTokenA] = useState<TokenSymbol>("ETH");
   const [tokenB, setTokenB] = useState<TokenSymbol>("USDC");
   const [fee, setFee] = useState<FeeTier>(() =>
@@ -58,20 +60,15 @@ export function PoolCreateForm({ onBack, onAddLiquidity }: Props) {
   }
 
   return (
-    <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border-soft flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="text-text-dim hover:text-text"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h2 className="text-base font-semibold flex-1">Create pool</h2>
-      </div>
+    <>
+      <PanelHeader />
+      <PanelSubHeader
+        title="Create pool"
+        onBack={onBack}
+        {...(onClose ? { onClose } : {})}
+      />
 
-      <div className="flex-1 overflow-auto p-5 space-y-5">
+      <div className="flex-1 overflow-auto px-5 pt-2 pb-5 space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <PairCell
             label="Token A"
@@ -142,6 +139,6 @@ export function PoolCreateForm({ onBack, onAddLiquidity }: Props) {
           <p className="text-xs text-red text-center">{create.state.error.message}</p>
         )}
       </div>
-    </Card>
+    </>
   );
 }

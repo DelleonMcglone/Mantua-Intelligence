@@ -6,20 +6,30 @@ import { IntentCard } from "@/features/agent/IntentCard.tsx";
  * Mantua Prototype — `<CommandBar />` (F8 from `Mantua Agent Flows.html`
  * via `~/Downloads/mantua-ai/project/src/agent_flows.jsx`).
  *
- * Sticky natural-language command bar. Wires the design-source UI to
- * the real `POST /api/command/parse` endpoint shipped in PR #61
- * (`server/src/routes/command-parse.ts` — Phase N parser).
+ * NOT MOUNTED — kept as a reusable primitive only.
+ *
+ * The design source defines this component in `agent_flows.jsx:23`
+ * and exports it on `window` (`agent_flows.jsx:253`), but `app.jsx`
+ * does **not** render it. Per chat2 of the design handoff
+ * (`mantua-ai/chats/chat2.md`), the user explicitly directed:
+ *
+ *   "remove the chatbot at the top, the only chatbot is the one
+ *    at the bottom right"
+ *
+ * The bottom-right `<InputBar />` is the only natural-language
+ * surface in the prototype. PR #63 erroneously mounted this
+ * component at the top of the right column; the follow-up revert PR
+ * removed that mount. The component file is preserved here because
+ * the design pattern keeps unused primitives available for future
+ * reuse, and the wiring to the real `POST /api/command/parse`
+ * endpoint (PN-003 / PR #61) is already complete — if a future
+ * surface needs an inline command bar, just import and render.
  *
  * - ⌘K / Ctrl-K to focus the input from anywhere on the page.
  * - Esc to dismiss the parsed preview / clear input.
  * - Enter parses the command. The Phase N server returns a
  *   discriminated `intent` (one of 9 actions). On confirm, the parent
  *   `onIntent` callback drives navigation / execution.
- *
- * Pass-1 scope: parse + preview + cancel/confirm. Auto-execution
- * wiring (PN-010) follows the same `useConfirmedAction` seam used
- * elsewhere; `onIntent` keeps that decoupled from this component so
- * each mounting page picks its own routing/execution policy.
  */
 
 /* ───────────────────────── Phase N intent shape (mirror) ───────────── */
