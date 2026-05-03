@@ -75,5 +75,12 @@ export function AgentPanel({ onClose }: AgentPanelProps) {
   if (step === "send") return <SendFlow onClose={backToChat} />;
   if (step === "swap") return <SwapFlow onClose={backToChat} />;
   // step === "auto" — default arm; TS narrows the union for us.
-  return <AutonomousFlow onClose={backToChat} />;
+  return (
+    <AutonomousFlow
+      onClose={onClose}
+      onBack={() => {
+        setStep("mode");
+      }}
+    />
+  );
 }
