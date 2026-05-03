@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
@@ -13,12 +13,12 @@ import {
   type Permit2Bundle,
 } from "./permit2-helpers.ts";
 
-const BASE_CHAIN_ID = 8453;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
 const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ?? "https://mainnet.base.org";
-const publicClient = createPublicClient({ chain: base, transport: http(baseRpcUrl) });
+  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
+  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
+const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
 
 export interface AddLiquidityArgs {
   tokenA: TokenSymbol;
@@ -68,14 +68,14 @@ export function useAddLiquidity() {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId !== `eip155:${String(BASE_CHAIN_ID)}`) {
-        await wallet.switchChain(BASE_CHAIN_ID);
+      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
+        await wallet.switchChain(ACTIVE_CHAIN_ID);
       }
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: owner,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         transport: custom(provider),
       });
 
@@ -130,7 +130,7 @@ export function useAddLiquidity() {
       });
       const txHash = await walletClient.sendTransaction({
         account: owner,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         to,
         data,
         value: BigInt(calldata.value),

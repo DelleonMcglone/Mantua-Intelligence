@@ -1,8 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
-import { TOKENS, TOKEN_SYMBOLS, type TokenSymbol } from "@/lib/tokens.ts";
-import { cn } from "@/lib/utils.ts";
+import { TOKENS, USER_FACING_TOKEN_SYMBOLS, type TokenSymbol } from "@/lib/tokens.ts";
+import { TokenIcon } from "./TokenIcon.tsx";
 
 interface TokenSelectorProps {
   value: TokenSymbol;
@@ -10,62 +9,73 @@ interface TokenSelectorProps {
   disabledSymbol?: TokenSymbol;
 }
 
+/**
+ * Pill-style token picker — matches the design's `TokenPicker`
+ * (panels_more.jsx:307). Click to open a popover anchored under the
+ * pill with each user-facing Base Sepolia token. WETH is hidden;
+ * routing wraps ETH internally.
+ */
 export function TokenSelector({ value, onChange, disabledSymbol }: TokenSelectorProps) {
-  const t = TOKENS[value];
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (!ref.current) return;
+      if (!ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+    };
+  }, [open]);
+
   return (
-    <Dialog>
-      <DialogPrimitive.Trigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center gap-2 px-3 py-2 rounded-sm",
-            "bg-bg-elev border border-border hover:border-text-mute",
-            "transition-colors text-sm font-medium",
-          )}
-        >
-          <span className="font-mono">{t.symbol}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-text-mute" />
-        </button>
-      </DialogPrimitive.Trigger>
-      <DialogContent className="max-w-xs">
-        <DialogHeader>
-          <DialogTitle>Select token</DialogTitle>
-        </DialogHeader>
-        <ul className="space-y-1">
-          {TOKEN_SYMBOLS.map((sym) => {
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+        }}
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-panel-solid border border-border hover:border-text-mute transition-colors text-[14px] font-medium cursor-pointer"
+      >
+        <TokenIcon symbol={value} size={20} />
+        <span>{value}</span>
+        <ChevronDown className="h-3 w-3 text-text-mute" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 min-w-[160px] bg-panel-solid border border-border rounded-md p-1 shadow-xl">
+          {USER_FACING_TOKEN_SYMBOLS.map((sym) => {
             const tk = TOKENS[sym];
             const disabled = sym === disabledSymbol;
             return (
-              <li key={sym}>
-                <DialogPrimitive.Close asChild>
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      if (!disabled) onChange(sym);
-                    }}
-                    className={cn(
-                      "flex w-full items-center justify-between px-3 py-2 rounded-sm",
-                      "text-left transition-colors",
-                      sym === value && "bg-chip",
-                      !disabled && "hover:bg-chip cursor-pointer",
-                      disabled && "opacity-40 cursor-not-allowed",
-                    )}
-                  >
-                    <div>
-                      <div className="font-mono text-sm">{tk.symbol}</div>
-                      <div className="text-xs text-text-dim">{tk.name}</div>
-                    </div>
-                    {tk.native && (
-                      <span className="text-[10px] text-text-mute uppercase">Native</span>
-                    )}
-                  </button>
-                </DialogPrimitive.Close>
-              </li>
+              <button
+                key={sym}
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  if (disabled) return;
+                  onChange(sym);
+                  setOpen(false);
+                }}
+                className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-xs text-left text-[13px] ${
+                  sym === value ? "bg-chip" : ""
+                } ${
+                  disabled
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:bg-row-hover cursor-pointer"
+                }`}
+              >
+                <TokenIcon symbol={sym} size={18} />
+                <span className="flex-1">{tk.symbol}</span>
+                {tk.native && (
+                  <span className="text-[10px] text-text-mute uppercase">Native</span>
+                )}
+              </button>
             );
           })}
-        </ul>
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </div>
   );
 }

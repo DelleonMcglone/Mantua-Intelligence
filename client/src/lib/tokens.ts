@@ -122,6 +122,16 @@ export const TOKENS: Record<string, Token> = IS_MAINNET ? TOKENS_MAINNET : TOKEN
 export type TokenSymbol = keyof typeof TOKENS_MAINNET | keyof typeof TOKENS_SEPOLIA;
 export const TOKEN_SYMBOLS = Object.keys(TOKENS) as TokenSymbol[];
 
+/**
+ * User-facing list — what shows in the swap / liquidity selectors.
+ * WETH is intentionally excluded because the user-facing convention
+ * is to show ETH and let the contract layer wrap on demand. Keep
+ * `TOKEN_SYMBOLS` for routing-internal lookups.
+ */
+export const USER_FACING_TOKEN_SYMBOLS = TOKEN_SYMBOLS.filter(
+  (s): s is TokenSymbol => s !== "WETH",
+);
+
 export function getToken(symbol: string): Token {
   if (!isTokenSymbol(symbol)) throw new Error(`Unknown token on this network: ${symbol}`);
   return TOKENS[symbol];

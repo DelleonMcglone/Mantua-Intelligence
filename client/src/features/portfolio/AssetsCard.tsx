@@ -1,29 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
-
-interface Asset {
-  sym: AssetSymbol;
-  name: string;
-  price: string;
-  pct: number;
-  qty: string;
-  val: string;
-}
-
-const ASSETS: Asset[] = [
-  { sym: "ETH", name: "Ethereum", price: "$3,630.12", pct: -0.75, qty: "7.01", val: "$25,385.54" },
-  {
-    sym: "cbBTC",
-    name: "Coinbase Wrapped BTC",
-    price: "$67,224.32",
-    pct: 0.31,
-    qty: "0.22",
-    val: "$14,234.40",
-  },
-  { sym: "USDC", name: "USD Coin", price: "$1.00", pct: 0.0, qty: "7,292.36", val: "$7,292.38" },
-  { sym: "EURC", name: "Euro Coin", price: "$1.08", pct: 0.12, qty: "1,250.00", val: "$1,350.00" },
-];
+import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -61,13 +39,20 @@ export function AssetsCard() {
   const [openSort, setOpenSort] = useState(false);
   const [posSource, setPosSource] = useState<"all" | "mantua">("all");
 
+  const portfolio = usePortfolio();
+  const assets = useMemo<DisplayAsset[]>(() => {
+    if (!portfolio.walletAddress) return [];
+    return toDisplayAssets(portfolio.balances);
+  }, [portfolio.walletAddress, portfolio.balances]);
+
   const numVal = (s: string) => Number(s.replace(/[^\d.-]/g, "")) || 0;
-  const filtered = ASSETS.filter(
-    (a) =>
-      !q ||
-      a.sym.toLowerCase().includes(q.toLowerCase()) ||
-      a.name.toLowerCase().includes(q.toLowerCase()),
-  )
+  const filtered = assets
+    .filter(
+      (a) =>
+        !q ||
+        a.symbol.toLowerCase().includes(q.toLowerCase()) ||
+        a.name.toLowerCase().includes(q.toLowerCase()),
+    )
     .slice()
     .sort((a, b) => {
       if (sort === "Alphabetical") return a.name.localeCompare(b.name);
@@ -80,7 +65,7 @@ export function AssetsCard() {
   const mantuaCount = POSITIONS.filter((p) => p.source === "mantua").length;
 
   const tabs = [
-    { k: "assets" as const, label: "Assets", count: ASSETS.length },
+    { k: "assets" as const, label: "Assets", count: assets.length },
     { k: "positions" as const, label: "Positions", count: POSITIONS.length },
   ];
 
@@ -182,28 +167,43 @@ export function AssetsCard() {
       </div>
 
       <div className="max-h-[320px] overflow-auto">
+        {!portfolio.walletAddress && (
+          <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+            Connect a wallet to see your Base Sepolia balances.
+          </div>
+        )}
+        {portfolio.walletAddress && portfolio.loading && filtered.length === 0 && (
+          <div className="px-4 py-8 text-center text-[12px] text-text-dim">Loading balances…</div>
+        )}
+        {portfolio.walletAddress && portfolio.error && filtered.length === 0 && (
+          <div className="px-4 py-8 text-center text-[12px] text-red">
+            {portfolio.error}
+          </div>
+        )}
+        {portfolio.walletAddress && !portfolio.loading && !portfolio.error && filtered.length === 0 && (
+          <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+            No matching balances on Base Sepolia.
+          </div>
+        )}
         {filtered.map((a) => (
           <div
-            key={a.sym}
+            key={a.symbol}
             className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
           >
             <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">
-              <AssetIcon symbol={a.sym} size={28} />
+              <AssetRowIcon symbol={a.symbol} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-[14px]">{a.name}</span>
-                <span className={`text-[12px] ${a.pct >= 0 ? "text-green" : "text-red"}`}>
-                  {a.pct >= 0 ? "↗" : "↘"} {Math.abs(a.pct).toFixed(2)}%
-                </span>
               </div>
               <div className="text-[12px] text-text-dim mt-0.5">
-                {a.sym} · {a.price}
+                {a.symbol} · {a.price}
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[14px] font-medium">{a.qty}</div>
-              <div className="text-[12px] text-text-dim">{a.val}</div>
+              <div className="text-[14px] font-medium font-mono">{a.qty}</div>
+              <div className="text-[12px] text-text-dim font-mono">{a.val}</div>
             </div>
             <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
           </div>
@@ -298,5 +298,31 @@ export function AssetsCard() {
         </>
       )}
     </div>
+  );
+}
+
+const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC"];
+
+function AssetRowIcon({ symbol }: { symbol: string }) {
+  const norm = symbol === "WETH" ? "ETH" : symbol;
+  if ((KNOWN_ASSETS as readonly string[]).includes(norm)) {
+    return <AssetIcon symbol={norm as AssetSymbol} size={28} />;
+  }
+  const initial = symbol.slice(0, 1).toUpperCase();
+  return (
+    <svg width={28} height={28} viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="16" fill="#3b3b46" />
+      <text
+        x="16"
+        y="21"
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="700"
+        fill="#fff"
+        fontFamily="Inter, sans-serif"
+      >
+        {initial}
+      </text>
+    </svg>
   );
 }

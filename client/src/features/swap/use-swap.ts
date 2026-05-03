@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http, type WalletClient } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN } from "@/lib/chain.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { BASE_CHAIN_ID, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { BASE_CHAIN_ID, IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { QuoteResponse, SwapTx } from "./types.ts";
 
 const publicClient = createPublicClient({
-  chain: base,
-  transport: http(import.meta.env.VITE_BASE_RPC_URL ?? "https://mainnet.base.org"),
+  chain: ACTIVE_CHAIN,
+  transport: http(
+    import.meta.env.VITE_BASE_RPC_URL ??
+      (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org"),
+  ),
 });
 
 interface ExecuteParams {
@@ -43,7 +46,7 @@ export function useSwap() {
       const provider = await wallet.getEthereumProvider();
       const walletClient: WalletClient = createWalletClient({
         account: wallet.address as `0x${string}`,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         transport: custom(provider),
       });
 
@@ -68,7 +71,7 @@ export function useSwap() {
 
       const txHash = await walletClient.sendTransaction({
         account: wallet.address as `0x${string}`,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         to: swap.to,
         data: swap.data,
         value: BigInt(swap.value || "0"),

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
 import { ApiError, api } from "@/lib/api.ts";
+import { IS_MAINNET } from "@/lib/tokens.ts";
 
-const BASE_CHAIN_ID = 8453;
 const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ?? "https://mainnet.base.org";
-const publicClient = createPublicClient({ chain: base, transport: http(baseRpcUrl) });
+  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
+  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
+const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
 
 export interface RemoveArgs {
   positionId: string;
@@ -42,14 +43,14 @@ export function useRemoveLiquidity() {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId !== `eip155:${String(BASE_CHAIN_ID)}`) {
-        await wallet.switchChain(BASE_CHAIN_ID);
+      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
+        await wallet.switchChain(ACTIVE_CHAIN_ID);
       }
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: owner,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         transport: custom(provider),
       });
 
@@ -62,7 +63,7 @@ export function useRemoveLiquidity() {
       setState({ status: "signing" });
       const txHash = await walletClient.sendTransaction({
         account: owner,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         to: calldata.to,
         data: calldata.data,
       });

@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import type { TokenSymbol } from "@/lib/tokens.ts";
+import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 
-const BASE_CHAIN_ID = 8453;
+export type HookName = "stable-protection" | "dynamic-fee" | "rwa-gate" | "async-limit-order";
 
 const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ?? "https://mainnet.base.org";
+  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
+  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
 
 const publicClient = createPublicClient({
-  chain: base,
+  chain: ACTIVE_CHAIN,
   transport: http(baseRpcUrl),
 });
 
@@ -20,6 +21,7 @@ interface CalldataReq {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  hook?: HookName | null;
   initialAmount0Raw: string;
   initialAmount1Raw: string;
 }
@@ -49,9 +51,9 @@ export function useCreatePool() {
       // but at runtime the array can be empty during transitional auth states.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!wallet) throw new Error("No wallet connected");
-      const targetChainId = `eip155:${String(BASE_CHAIN_ID)}`;
+      const targetChainId = `eip155:${String(ACTIVE_CHAIN_ID)}`;
       if (wallet.chainId !== targetChainId) {
-        await wallet.switchChain(BASE_CHAIN_ID);
+        await wallet.switchChain(ACTIVE_CHAIN_ID);
       }
 
       setState({ status: "preparing" });
@@ -61,12 +63,12 @@ export function useCreatePool() {
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: wallet.address as `0x${string}`,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         transport: custom(provider),
       });
       const txHash = await walletClient.sendTransaction({
         account: wallet.address as `0x${string}`,
-        chain: base,
+        chain: ACTIVE_CHAIN,
         to: calldata.to,
         data: calldata.data,
         value: BigInt(calldata.value),
