@@ -1,5 +1,6 @@
-import { ArrowUpDown, BarChart3, Bot, Droplet, History, Plus } from "lucide-react";
+import { ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
 import { Logo } from "./Logo.tsx";
+import { PanelHeader } from "./PanelHeader.tsx";
 
 export type HomePromptId = "pool" | "swap" | "analyze" | "agent";
 
@@ -18,34 +19,13 @@ const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
 
 /**
  * Default right-column view — matches prototype `HomeMenu` in panels.jsx.
- * Header strip ("Ask Mantua" + New chat / History buttons), greeting line
- * with the Mantua avatar, and a 2x2 grid of prompt cards. Click any card
- * to navigate to the matching panel.
+ * Shared `<PanelHeader />` ("Ask Mantua" + New chat / History buttons),
+ * greeting line with the Mantua avatar, and a 2x2 grid of prompt cards.
  */
 export function HomeMenu({ onPromptSelect, onNewChat, onHistory }: Props) {
   return (
     <>
-      <div className="flex items-start gap-2.5 px-5 pt-4 pb-3.5 border-b border-border-soft">
-        <div className="flex-1 min-w-0">
-          <div className="text-[17px] font-semibold -tracking-[0.01em]">Ask Mantua</div>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="h-3.5 w-3.5" /> New chat
-          </button>
-          <button
-            type="button"
-            onClick={onHistory}
-            className="px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <History className="h-3.5 w-3.5" /> History
-          </button>
-        </div>
-      </div>
+      <PanelHeader onNewChat={onNewChat} onHistory={onHistory} />
 
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex items-start gap-3 mb-2.5">

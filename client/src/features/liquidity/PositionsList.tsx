@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
-import { Card } from "@/components/shell/Card.tsx";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { BASESCAN_TX } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "./fee-tiers.ts";
@@ -10,21 +11,22 @@ import { tokenLabelByAddress } from "./token-labels.ts";
 import { usePositions } from "./use-positions.ts";
 import type { Position } from "./positions-types.ts";
 
-export function PositionsList() {
+interface Props {
+  onClose?: () => void;
+}
+
+export function PositionsList({ onClose }: Props = {}) {
   const { data, error, loading, reload } = usePositions();
   const [removing, setRemoving] = useState<Position | null>(null);
 
   return (
-    <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border-soft flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">Your positions</h2>
-        <span className="text-xs text-text-mute">
-          Showing positions opened in Mantua.{" "}
-          <a href="/docs/external-positions" className="border-b border-dotted">
-            External positions coming soon
-          </a>
-        </span>
-      </div>
+    <>
+      <PanelHeader />
+      <PanelSubHeader
+        title="Your positions"
+        subtitle="Positions opened in Mantua. External positions coming soon."
+        {...(onClose ? { onClose } : {})}
+      />
 
       {loading && (
         <p className="px-5 py-8 text-xs text-text-dim text-center">Loading positions…</p>
@@ -58,7 +60,7 @@ export function PositionsList() {
           reload();
         }}
       />
-    </Card>
+    </>
   );
 }
 

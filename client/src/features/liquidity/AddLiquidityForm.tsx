@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { Card } from "@/components/shell/Card.tsx";
+import { ExternalLink } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
@@ -23,6 +24,7 @@ export interface PoolKeyContext {
 interface Props {
   ctx: PoolKeyContext;
   onBack: () => void;
+  onClose?: () => void;
 }
 
 /**
@@ -30,7 +32,7 @@ interface Props {
  * pool-create flow (with a known sqrtPriceX96) or the PoolDetailPage
  * (where the server reads slot0 via StateView at calldata time).
  */
-export function AddLiquidityForm({ ctx, onBack }: Props) {
+export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const [amountA, setAmountA] = useState("0.1");
   const [amountB, setAmountB] = useState("360");
   const [slippageBps, setSlippageBps] = useState(50);
@@ -63,23 +65,16 @@ export function AddLiquidityForm({ ctx, onBack }: Props) {
   }
 
   return (
-    <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-border-soft flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="text-text-dim hover:text-text"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h2 className="text-base font-semibold flex-1">
-          Add liquidity · {ctx.tokenA}/{ctx.tokenB}
-        </h2>
-        <span className="text-xs text-text-mute font-mono">{FEE_TIER_LABELS[ctx.fee]}</span>
-      </div>
+    <>
+      <PanelHeader />
+      <PanelSubHeader
+        title={`Add liquidity · ${ctx.tokenA}/${ctx.tokenB}`}
+        subtitle={FEE_TIER_LABELS[ctx.fee]}
+        onBack={onBack}
+        {...(onClose ? { onClose } : {})}
+      />
 
-      <div className="flex-1 overflow-auto p-5 space-y-5">
+      <div className="flex-1 overflow-auto px-5 pt-2 pb-5 space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <PairCell
             label={ctx.tokenA}
@@ -141,6 +136,6 @@ export function AddLiquidityForm({ ctx, onBack }: Props) {
           <p className="text-xs text-red text-center">{add.state.error.message}</p>
         )}
       </div>
-    </Card>
+    </>
   );
 }

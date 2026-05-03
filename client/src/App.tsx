@@ -99,7 +99,13 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "swap":
-      return <SwapPanel />;
+      return (
+        <SwapPanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "pools":
       return (
         <LiquidityListPage
@@ -108,6 +114,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
           onCreate={() => {
             setRoute({ kind: "pool-create" });
+          }}
+          onClose={() => {
+            setRoute({ kind: "home" });
           }}
         />
       );
@@ -121,6 +130,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onAddLiquidity={(ctx) => {
             setRoute({ kind: "add-liquidity", ctx });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "pool-create":
@@ -132,6 +144,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onAddLiquidity={(ctx) => {
             setRoute({ kind: "add-liquidity", ctx });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "add-liquidity":
@@ -141,10 +156,19 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onBack={() => {
             setRoute({ kind: "positions" });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
         />
       );
     case "positions":
-      return <PositionsList />;
+      return (
+        <PositionsList
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "analyze":
       return (
         <AnalyzePanel

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ExternalLink, AlertTriangle, ShieldAlert, ChevronDown } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import type { TokenSymbol } from "@/lib/tokens.ts";
@@ -18,13 +20,19 @@ import {
   isWarningZone,
 } from "./hook-types.ts";
 
+interface SwapPanelProps {
+  onClose?: () => void;
+}
+
 /**
  * Swap modal — implements `mantua-ai/project/Mantua Prototype.html`'s
- * `SwapPanel` (panels_more.jsx). Layout: Sell card → flip → Buy card →
- * Swap Hook dropdown → optional Peg-Zone indicator + warnings → Exchange
- * Rate card → Fee Architecture → divider stats → Review CTA.
+ * `SwapPanel` (panels_more.jsx). Chrome: shared `<PanelHeader />` ("Ask
+ * Mantua") + "Swap" subheader with close X. Body: Sell card → flip →
+ * Buy card → Swap Hook dropdown → optional Peg-Zone indicator +
+ * warnings → Exchange Rate card → Fee Architecture → divider stats →
+ * Review CTA.
  */
-export function SwapPanel() {
+export function SwapPanel({ onClose }: SwapPanelProps = {}) {
   const [tokenIn, setTokenIn] = useState<TokenSymbol>("ETH");
   const [tokenOut, setTokenOut] = useState<TokenSymbol>("USDC");
   const [amount, setAmount] = useState("");
@@ -92,13 +100,11 @@ export function SwapPanel() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-5 pt-4 pb-3.5 flex items-center justify-between border-b border-border-soft">
-        <h2 className="text-[20px] font-semibold">Swap</h2>
-      </div>
+      <PanelHeader />
+      <PanelSubHeader title="Swap" {...(onClose ? { onClose } : {})} />
 
       {/* Body */}
-      <div className="flex-1 overflow-auto px-5 pt-4 pb-5">
+      <div className="flex-1 overflow-auto px-5 pt-2 pb-5">
         {/* Sell card */}
         <Card>
           <div className="flex items-center justify-between text-[13px]">
