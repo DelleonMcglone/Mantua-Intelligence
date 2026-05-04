@@ -57,11 +57,28 @@ interface CalldataRes {
 }
 
 interface AddState {
-  status: "idle" | "preparing" | "approving" | "signing" | "pending" | "success" | "error";
+  status:
+    | "idle"
+    | "creating-pool"
+    | "pool-pending"
+    | "preparing"
+    | "approving"
+    | "signing"
+    | "pending"
+    | "success"
+    | "error";
   txHash?: `0x${string}`;
+  poolInitTx?: `0x${string}`;
   approvalTx?: `0x${string}`;
   error?: ApiError | Error;
   message?: string;
+}
+
+interface PoolCreateCalldataRes {
+  to: `0x${string}`;
+  data: `0x${string}`;
+  value: string;
+  poolKey: { currency0: string; currency1: string; sqrtPriceX96: string };
 }
 
 export function useAddLiquidity() {
@@ -84,9 +101,59 @@ export function useAddLiquidity() {
         transport: custom(provider),
       });
 
+      // Step 0 — initialize the pool if it doesn't exist yet.
+      // /api/pools/create/calldata returns 200 with init calldata when
+      // the pool needs creating, or 409 (POOL_ALREADY_EXISTS) when it's
+      // already on-chain. This makes the create-then-add transition
+      // invisible to the caller — one `execute()` does both, with two
+      // wallet popups labeled distinctly.
+      let poolSqrtPriceX96: string | undefined = args.sqrtPriceX96;
+      setState({ status: "creating-pool", message: "Checking pool…" });
+      try {
+        const initRes = await api.post<PoolCreateCalldataRes>(
+          "/api/pools/create/calldata",
+          {
+            tokenA: args.tokenA,
+            tokenB: args.tokenB,
+            fee: args.fee,
+            hook: args.hook ?? null,
+            initialAmount0Raw: args.amountARaw,
+            initialAmount1Raw: args.amountBRaw,
+          },
+        );
+        setState({ status: "creating-pool", message: "Sign pool initialization…" });
+        const initTx = await walletClient.sendTransaction({
+          account: owner,
+          chain: ACTIVE_CHAIN,
+          to: initRes.to,
+          data: initRes.data,
+          value: BigInt(initRes.value),
+        });
+        setState({ status: "pool-pending", poolInitTx: initTx, message: "Pool initializing…" });
+        await publicClient.waitForTransactionReceipt({ hash: initTx });
+        poolSqrtPriceX96 = initRes.poolKey.sqrtPriceX96;
+        void api.post("/api/pools/create/record", {
+          txHash: initTx,
+          tokenA: args.tokenA,
+          tokenB: args.tokenB,
+          fee: args.fee,
+          hook: args.hook ?? null,
+          outcome: "success",
+        });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== "POOL_ALREADY_EXISTS") throw err;
+        // Pool already exists — pull the on-chain price out of the 409 details
+        // (the server returns the live PoolKey + sqrtPriceX96 there).
+        const details = err.details as
+          | { poolKey?: { sqrtPriceX96?: string } }
+          | undefined;
+        poolSqrtPriceX96 = details?.poolKey?.sqrtPriceX96 ?? poolSqrtPriceX96;
+      }
+
       setState({ status: "preparing" });
       const calldata = await api.post<CalldataRes>("/api/liquidity/add/calldata", {
         ...args,
+        ...(poolSqrtPriceX96 ? { sqrtPriceX96: poolSqrtPriceX96 } : {}),
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1200,
       });
 
