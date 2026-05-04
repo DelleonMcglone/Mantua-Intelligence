@@ -4,6 +4,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { userPreferences, users } from "../db/schema/users.ts";
 import { logger } from "../lib/logger.ts";
+import { getPortfolioHistory } from "../lib/portfolio-history.ts";
+import { HISTORY_RANGES } from "../lib/price-history.ts";
 import { getUserPortfolio } from "../lib/user-portfolio.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { walletRateLimiter, writeRateLimiter } from "../middleware/rate-limit.ts";
@@ -52,6 +54,59 @@ portfolioRouter.get(
       logger.error({ err }, "user portfolio fetch failed");
       res.status(502).json({
         error: "Failed to load portfolio",
+        code: "UPSTREAM_FAILURE",
+      });
+    }
+  },
+);
+
+/**
+ * Portfolio chart series for the home shell. Returns a USD-value
+ * time series across the requested range, weighted by the user's
+ * current holdings (see `portfolio-history.ts` for the assumption
+ * caveat). Granularity is whatever CoinGecko returns for the
+ * underlying `days` window: 5-min for 1H/1D, hourly for TW/1M,
+ * daily for 1Y.
+ */
+const historyRangeSchema = z.enum(HISTORY_RANGES as [string, ...string[]]);
+
+portfolioRouter.get(
+  "/api/portfolio/history",
+  walletRateLimiter,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const privyUserId = req.privyUserId;
+    const walletAddress = req.walletAddress;
+    if (!privyUserId) {
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
+      return;
+    }
+    if (!walletAddress) {
+      res.status(409).json({
+        error: "No wallet linked to this user yet.",
+        code: "WALLET_REQUIRED",
+      });
+      return;
+    }
+    const parsed = historyRangeSchema.safeParse(req.query.range);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Invalid range. Expected one of 1H, 1D, TW, 1M, 1Y.",
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
+    try {
+      const portfolio = await getUserPortfolio(privyUserId, walletAddress);
+      const history = await getPortfolioHistory(
+        portfolio.balances,
+        parsed.data as (typeof HISTORY_RANGES)[number],
+      );
+      res.json(history);
+    } catch (err) {
+      logger.error({ err }, "portfolio history fetch failed");
+      res.status(502).json({
+        error: "Failed to load portfolio history",
         code: "UPSTREAM_FAILURE",
       });
     }
