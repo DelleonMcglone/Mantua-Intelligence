@@ -314,6 +314,18 @@ export function TestnetSwapPanel({ onClose }: Props) {
             View on BaseScan <ExternalLink className="h-3 w-3" />
           </a>
         )}
+        {swap.state.status === "success" && (
+          <button
+            type="button"
+            onClick={() => {
+              swap.reset();
+              setAmount("");
+            }}
+            className="block mx-auto mt-3 px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] cursor-pointer hover:text-text hover:border-text-mute transition-colors"
+          >
+            Make another swap
+          </button>
+        )}
         {swap.state.status === "error" && swap.state.error && (
           <p className="text-xs text-red text-center mt-3">{swap.state.error.message}</p>
         )}
