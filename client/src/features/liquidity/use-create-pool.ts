@@ -34,10 +34,22 @@ interface CalldataRes {
 }
 
 interface CreateState {
-  status: "idle" | "preparing" | "signing" | "pending" | "success" | "error";
+  status: "idle" | "preparing" | "signing" | "pending" | "success" | "error" | "exists";
   txHash?: `0x${string}`;
   poolKey?: CalldataRes["poolKey"];
   error?: ApiError | Error;
+}
+
+interface ExistingPoolDetails {
+  poolKey: CalldataRes["poolKey"];
+  hook: HookName | null;
+}
+
+function existingPoolFromError(err: unknown): ExistingPoolDetails | null {
+  if (!(err instanceof ApiError) || err.code !== "POOL_ALREADY_EXISTS") return null;
+  const d = err.details as ExistingPoolDetails | undefined;
+  if (!d?.poolKey) return null;
+  return d;
 }
 
 export function useCreatePool() {
@@ -94,6 +106,12 @@ export function useCreatePool() {
       });
       return txHash;
     } catch (err) {
+      const existing = existingPoolFromError(err);
+      if (existing) {
+        const e = err instanceof Error ? err : new Error("Pool already exists");
+        setState({ status: "exists", poolKey: existing.poolKey, error: e });
+        return null;
+      }
       const e = err instanceof Error ? err : new Error("create pool failed");
       setState({ status: "error", error: e });
       return null;

@@ -21,7 +21,14 @@ export function ratioLabel(a: string, b: string): string {
   return (bn / an).toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
-export type CreateStatus = "idle" | "preparing" | "signing" | "pending" | "success" | "error";
+export type CreateStatus =
+  | "idle"
+  | "preparing"
+  | "signing"
+  | "pending"
+  | "success"
+  | "error"
+  | "exists";
 
 export function ctaLabel(status: CreateStatus, notReady: boolean): string {
   if (notReady) return "Enter amounts";
@@ -34,6 +41,8 @@ export function ctaLabel(status: CreateStatus, notReady: boolean): string {
       return "Waiting for confirmation…";
     case "success":
       return "Pool created";
+    case "exists":
+      return "Pool already exists";
     default:
       return "Create pool";
   }

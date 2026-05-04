@@ -10,6 +10,7 @@ import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { encodeSqrtPriceX96 } from "../lib/sqrt-price.ts";
 import { getToken, isTokenSymbol } from "../lib/tokens.ts";
+import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
@@ -41,7 +42,7 @@ poolCreateRouter.post(
   "/api/pools/create/calldata",
   writeRateLimiter,
   requireAuth,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const parsed = calldataSchema.safeParse(req.body);
     if (!parsed.success) {
       res
@@ -67,6 +68,25 @@ poolCreateRouter.post(
       // static-tier choice still drives tickSpacing — only the fee
       // field is overridden.
       key.fee = effectivePoolFee(hook ?? null, fee);
+
+      // Preflight: PoolManager rejects re-initialization, but the revert
+      // bubbles through the wallet as "exceeds max transaction gas limit"
+      // (the RPC's eth_estimateGas falls back to the block cap when the
+      // call reverts). Reading slot0 lets us return a clean 409 with
+      // the existing PoolKey so the client can route to add-liquidity.
+      const existing = await readSlot0(key);
+      if (existing) {
+        res.status(409).json({
+          error: "Pool already exists. You can add liquidity to it.",
+          code: "POOL_ALREADY_EXISTS",
+          details: {
+            poolKey: { ...key, sqrtPriceX96: existing.sqrtPriceX96.toString() },
+            hook: hook ?? null,
+          },
+        });
+        return;
+      }
+
       const a0 = BigInt(initialAmount0Raw);
       const a1 = BigInt(initialAmount1Raw);
       const sqrtPriceX96 = encodeSqrtPriceX96(
