@@ -10,8 +10,9 @@
  * erc20-allowance.ts.
  */
 import { encodeFunctionData } from "viem";
+import { V4_POSITION_MANAGER } from "@/lib/tokens.ts";
 
-const POSITION_MANAGER = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
+const POSITION_MANAGER = V4_POSITION_MANAGER;
 
 interface PermitDetailsWire {
   token: `0x${string}`;
