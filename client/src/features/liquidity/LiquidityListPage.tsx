@@ -3,6 +3,7 @@ import { ChevronDown, Plus, Search } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { IS_MAINNET } from "@/lib/tokens.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { usePools } from "./use-pools.ts";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
@@ -191,7 +192,11 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
           </p>
         )}
         {!loading && !error && filtered.length === 0 && (
-          <p className="px-1 py-8 text-xs text-text-dim text-center">No pools match your search.</p>
+          <p className="px-1 py-8 text-xs text-text-dim text-center">
+            {!IS_MAINNET && enriched.length === 0
+              ? "No pools yet on Base Sepolia. Create one to get started."
+              : "No pools match your search."}
+          </p>
         )}
 
         {filtered.length > 0 && (
