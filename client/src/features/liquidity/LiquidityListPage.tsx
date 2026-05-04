@@ -3,12 +3,14 @@ import { ChevronDown, Plus, Search } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { IS_MAINNET } from "@/lib/tokens.ts";
+import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
+import { useTokenPrices } from "./use-token-prices.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { usePools } from "./use-pools.ts";
 import { FEE_TIER_LABELS } from "./fee-tiers.ts";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import { getLocalPools, type LocalPool } from "./local-pools.ts";
+import { getLocalPositions, type LocalPosition } from "./local-positions.ts";
 import type { PoolSummary } from "./types.ts";
 import { HOOK_LABELS } from "./hook-recommendations.ts";
 
@@ -70,6 +72,48 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   const [localPools, setLocalPools] = useState<LocalPool[]>(() =>
     IS_MAINNET ? [] : getLocalPools(),
   );
+  const [localPositions, setLocalPositions] = useState<LocalPosition[]>(() =>
+    IS_MAINNET ? [] : getLocalPositions(),
+  );
+
+  // Pull live USD prices for every token symbol present in the local
+  // pool list — used to convert per-position deposit amounts into a
+  // pool-level TVL approximation. Stable→stable pairs and ETH-quoted
+  // pairs all resolve via CoinGecko's existing 60s cache.
+  const symbolsForPricing = useMemo<TokenSymbol[]>(() => {
+    if (IS_MAINNET) return [];
+    const set = new Set<TokenSymbol>();
+    for (const p of localPools) {
+      set.add(p.tokenA);
+      set.add(p.tokenB);
+    }
+    return [...set];
+  }, [localPools]);
+  const tokenPrices = useTokenPrices(symbolsForPricing);
+
+  // Sum every local position's `amountA * priceA + amountB * priceB`
+  // bucketed by the pool's localStorage key. POC-grade — the real
+  // TVL would walk on-chain liquidity through tick math + token
+  // prices; this is good enough to stop showing $0.00 on pools we
+  // know the user just deposited into.
+  const localTvlByKey = useMemo<Record<string, number>>(() => {
+    if (IS_MAINNET) return {};
+    const out: Record<string, number> = {};
+    const accum = (key: string, addend: number) => {
+      out[key] = (out[key] ?? 0) + addend;
+    };
+    for (const pos of localPositions) {
+      const [a, b] = [pos.tokenA, pos.tokenB].sort();
+      const key = `${a}|${b}|${String(pos.fee)}|${pos.hook ?? "none"}`;
+      const amA = parseFloat(pos.amountA);
+      const amB = parseFloat(pos.amountB);
+      const pA = tokenPrices.prices[pos.tokenA] ?? 0;
+      const pB = tokenPrices.prices[pos.tokenB] ?? 0;
+      accum(key, (Number.isFinite(amA) ? amA : 0) * pA);
+      accum(key, (Number.isFinite(amB) ? amB : 0) * pB);
+    }
+    return out;
+  }, [localPositions, tokenPrices.prices]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -83,10 +127,12 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   }, []);
 
   // Re-read localStorage when the panel mounts so freshly-created
-  // pools from the AddLiquidityForm show up without a manual refresh.
+  // pools (and the positions that drive their TVL) show up without
+  // a manual refresh.
   useEffect(() => {
     if (IS_MAINNET) return;
     setLocalPools(getLocalPools());
+    setLocalPositions(getLocalPositions());
   }, []);
 
   const enriched = useMemo(() => {
@@ -108,12 +154,13 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
       else if (aMajor || bMajor) category = "Majors";
       else category = "Majors";
       const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "No Hook";
+      const tvlUsd = localTvlByKey[p.key] ?? 0;
       return {
         id: `local:${p.key}`,
         symbol: `${p.tokenA}-${p.tokenB}`,
         project: "mantua",
         feeTier: FEE_TIER_LABELS[p.fee],
-        tvlUsd: 0,
+        tvlUsd,
         apy: 0,
         volumeUsd1d: 0,
         volumeUsd7d: 0,

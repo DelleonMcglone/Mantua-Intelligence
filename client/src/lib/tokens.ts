@@ -20,6 +20,16 @@ export const BASE_CHAIN_ID: number = IS_MAINNET ? BASE_MAINNET_CHAIN_ID : BASE_S
 export const BASESCAN_URL = IS_MAINNET ? "https://basescan.org" : "https://sepolia.basescan.org";
 export const BASESCAN_TX = `${BASESCAN_URL}/tx/`;
 
+/**
+ * v4 PositionManager — network-driven. Single source of truth for any
+ * client code that needs to filter Transfer events from the position
+ * NFT or build calldata against the v4 periphery directly. Mirrors
+ * `V4_POSITION_MANAGER` in `server/src/lib/v4-contracts.ts`.
+ */
+export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
+  ? "0x7c5f5a4bbd8fd63184577525326123b519429bdc"
+  : "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80";
+
 export interface Token {
   symbol: string;
   name: string;
