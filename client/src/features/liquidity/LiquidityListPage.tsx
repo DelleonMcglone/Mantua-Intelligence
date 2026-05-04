@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button.tsx";
 import { IS_MAINNET } from "@/lib/tokens.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { usePools } from "./use-pools.ts";
+import { FEE_TIER_LABELS } from "./fee-tiers.ts";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
+import { getLocalPools, type LocalPool } from "./local-pools.ts";
 import type { PoolSummary } from "./types.ts";
+import { HOOK_LABELS } from "./hook-recommendations.ts";
 
 interface Props {
   onSelectPool: (poolId: string) => void;
@@ -64,6 +67,9 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   const [category, setCategory] = useState<Category>("All");
   const [openCat, setOpenCat] = useState(false);
   const catRef = useRef<HTMLDivElement | null>(null);
+  const [localPools, setLocalPools] = useState<LocalPool[]>(() =>
+    IS_MAINNET ? [] : getLocalPools(),
+  );
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -76,7 +82,51 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
     };
   }, []);
 
-  const enriched = useMemo(() => (data ?? []).map(classifyPool), [data]);
+  // Re-read localStorage when the panel mounts so freshly-created
+  // pools from the AddLiquidityForm show up without a manual refresh.
+  useEffect(() => {
+    if (IS_MAINNET) return;
+    setLocalPools(getLocalPools());
+  }, []);
+
+  const enriched = useMemo(() => {
+    const remote = (data ?? []).map(classifyPool);
+    if (IS_MAINNET) return remote;
+    // On testnet, show pools the user has touched locally. Synthesize
+    // a minimal `PoolSummary` shape so the existing row renderer
+    // works without a special-case branch.
+    const local: DerivedPool[] = localPools.map((p) => {
+      const aStable = STABLES.has(p.tokenA);
+      const bStable = STABLES.has(p.tokenB);
+      const aMajor = MAJORS.has(p.tokenA);
+      const bMajor = MAJORS.has(p.tokenB);
+      const aRwa = RWAS.has(p.tokenA);
+      const bRwa = RWAS.has(p.tokenB);
+      let category: DerivedPool["category"];
+      if (aRwa || bRwa) category = "RWAs";
+      else if (aStable && bStable) category = "Stables";
+      else if (aMajor || bMajor) category = "Majors";
+      else category = "Majors";
+      const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "No Hook";
+      return {
+        id: `local:${p.key}`,
+        symbol: `${p.tokenA}-${p.tokenB}`,
+        project: "mantua",
+        feeTier: FEE_TIER_LABELS[p.fee],
+        tvlUsd: 0,
+        apy: 0,
+        volumeUsd1d: 0,
+        volumeUsd7d: 0,
+        underlyingTokens: [],
+        stablecoin: aStable && bStable,
+        pair: { a: p.tokenA, b: p.tokenB },
+        category,
+        hookLabel,
+        hasHook: p.hook !== null,
+      };
+    });
+    return [...local, ...remote];
+  }, [data, localPools]);
 
   const totals = useMemo(() => {
     const tvl = enriched.reduce((s, p) => s + (p.tvlUsd || 0), 0);

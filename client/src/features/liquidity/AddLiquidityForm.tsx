@@ -460,6 +460,19 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             View on BaseScan <ExternalLink className="h-3 w-3" />
           </a>
         )}
+        {add.state.status === "success" && (
+          <button
+            type="button"
+            onClick={() => {
+              add.reset();
+              setAmountA("0.0");
+              setAmountB("0.0");
+            }}
+            className="block mx-auto mt-3 px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] cursor-pointer hover:text-text hover:border-text-mute transition-colors"
+          >
+            Add more liquidity
+          </button>
+        )}
         {add.state.status === "error" && add.state.error && (
           <p className="text-xs text-red text-center mt-3">{add.state.error.message}</p>
         )}
