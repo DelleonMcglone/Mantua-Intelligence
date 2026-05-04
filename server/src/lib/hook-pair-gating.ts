@@ -1,20 +1,16 @@
 /**
  * Phase 5 P5-002 — hook ↔ token-pair allowlist.
  *
- * Stable Protection's peg-zone logic only behaves correctly on pegged-
- * asset pairs (stable/stable, stable/euro). Pairing it with a volatile
- * asset would push the pool into CRITICAL on every swap and block
- * liquidity. Server-side gating refuses pool creation for disallowed
- * pairs before the request reaches PoolManager.initialize.
+ * Originally, Stable Protection's peg-zone logic only behaved correctly
+ * on pegged-asset pairs (stable/stable, stable/euro), so pool creation
+ * gated on an explicit allowlist. For the proof-of-concept build, the
+ * allowlist is empty — every hook accepts every pair, and the hook
+ * contract itself is the single source of truth on what it'll do at
+ * `beforeInitialize` / `beforeSwap` etc. If the hook reverts, the
+ * existing `POOL_CREATE_INVALID` / wallet error path still surfaces it.
  *
- * Hooks not present in HOOK_ALLOWED_SYMBOL_PAIRS impose no pair
- * restriction at this layer — the hook contract is responsible for any
- * on-chain enforcement.
- *
- * USDT is intentionally absent from the Sepolia allowlist: there is no
- * Tether-equivalent in the supported token registry on Base Sepolia.
- * Re-add `["USDC", "USDT"]` and `["EURC", "USDT"]` here when USDT is
- * registered in `tokens.ts`.
+ * Hooks not present in HOOK_ALLOWED_SYMBOL_PAIRS (i.e. every hook
+ * today) impose no pair restriction at this layer.
  */
 
 import { TOKENS, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
@@ -22,9 +18,7 @@ import { getHookAddress, type HookName } from "./v4-contracts.ts";
 
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
 
-const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {
-  "stable-protection": [["USDC", "EURC"]],
-};
+const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {};
 
 function lookupSymbol(addr: string): TokenSymbol | null {
   const lower = addr.toLowerCase();
