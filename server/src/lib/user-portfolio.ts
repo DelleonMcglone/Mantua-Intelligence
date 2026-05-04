@@ -3,6 +3,7 @@ import { type Address, parseAbi } from "viem";
 import { db } from "../db/client.ts";
 import { portfolioTransactions, type PortfolioTransaction } from "../db/schema/trading.ts";
 import { userPreferences, users } from "../db/schema/users.ts";
+import { logger } from "./logger.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { TOKENS, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
@@ -52,56 +53,75 @@ export async function getUserPortfolio(
 
   const balances = await Promise.all(
     tokens.map(async ([symbol, t]) => {
-      const raw = t.native
-        ? await baseRpcClient.getBalance({ address: lower as Address })
-        : await baseRpcClient.readContract({
-            address: t.address,
-            abi: ERC20_ABI,
-            functionName: "balanceOf",
-            args: [lower as Address],
-          });
-      const usdValue = await tokenAmountUsd(symbol, raw);
-      return {
-        symbol,
-        address: t.address,
-        decimals: t.decimals,
-        balanceRaw: raw.toString(),
-        usdValue,
-      };
+      try {
+        const raw = t.native
+          ? await baseRpcClient.getBalance({ address: lower as Address })
+          : await baseRpcClient.readContract({
+              address: t.address,
+              abi: ERC20_ABI,
+              functionName: "balanceOf",
+              args: [lower as Address],
+            });
+        const usdValue = await tokenAmountUsd(symbol, raw);
+        return {
+          symbol,
+          address: t.address,
+          decimals: t.decimals,
+          balanceRaw: raw.toString(),
+          usdValue,
+        };
+      } catch (err) {
+        logger.warn({ err, symbol, address: t.address }, "balance fetch failed; treating as 0");
+        return {
+          symbol,
+          address: t.address,
+          decimals: t.decimals,
+          balanceRaw: "0",
+          usdValue: 0,
+        };
+      }
     }),
   );
 
-  const transactions = await db
-    .select()
-    .from(portfolioTransactions)
-    .where(eq(portfolioTransactions.walletAddress, lower))
-    .orderBy(desc(portfolioTransactions.createdAt))
-    .limit(txLimit);
-
-  const userRows = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.privyUserId, privyUserId))
-    .limit(1);
-  const user = userRows.at(0);
-
+  // DB lookups (tx history + prefs) degrade to empty/null if Postgres is
+  // unreachable — balances come from RPC and shouldn't be hidden behind
+  // an offline database.
+  let transactions: PortfolioTransaction[] = [];
   let preferences: UserPortfolio["preferences"] = null;
-  if (user) {
-    const prefRows = await db
+  try {
+    transactions = await db
       .select()
-      .from(userPreferences)
-      .where(eq(userPreferences.userId, user.id))
+      .from(portfolioTransactions)
+      .where(eq(portfolioTransactions.walletAddress, lower))
+      .orderBy(desc(portfolioTransactions.createdAt))
+      .limit(txLimit);
+
+    const userRows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.privyUserId, privyUserId))
       .limit(1);
-    const pref = prefRows.at(0);
-    if (pref) {
-      // hide_small_balances is stored as jsonb (boolean); coerce safely.
-      const hide = typeof pref.hideSmallBalances === "boolean" ? pref.hideSmallBalances : true;
-      preferences = {
-        hideSmallBalances: hide,
-        dailyCapUsd: pref.dailyCapUsd,
-        defaultSlippageBps: pref.defaultSlippageBps,
-      };
+    const user = userRows.at(0);
+
+    if (user) {
+      const prefRows = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, user.id))
+        .limit(1);
+      const pref = prefRows.at(0);
+      if (pref) {
+        // hide_small_balances is stored as jsonb (boolean); coerce safely.
+        const hide = typeof pref.hideSmallBalances === "boolean" ? pref.hideSmallBalances : true;
+        preferences = {
+          hideSmallBalances: hide,
+          dailyCapUsd: pref.dailyCapUsd,
+          defaultSlippageBps: pref.defaultSlippageBps,
+        };
+      }
     }
+  } catch (err) {
+    logger.warn({ err }, "portfolio DB lookups failed; returning balances only");
   }
 
   return {

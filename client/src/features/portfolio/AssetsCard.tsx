@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
+type HookName = "Dynamic Fee" | "Stable Protection" | "RWAgate" | "Vanilla";
+
 interface PortfolioPosition {
   a: AssetSymbol;
   b: AssetSymbol;
@@ -12,13 +14,61 @@ interface PortfolioPosition {
   pct: string;
   up: boolean;
   source: "mantua" | "external";
+  hook: HookName;
 }
 
+const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
+  "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
+  "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
+  RWAgate: { bg: "rgba(139,108,240,0.12)", fg: "var(--accent)", bd: "rgba(139,108,240,0.35)" },
+  Vanilla: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
+};
+
 const POSITIONS: PortfolioPosition[] = [
-  { a: "ETH", b: "USDC", fee: "0.05%", value: "$12,840.20", pnl: "+$340.18", pct: "+2.71%", up: true, source: "mantua" },
-  { a: "cbBTC", b: "ETH", fee: "0.30%", value: "$8,210.55", pnl: "+$104.40", pct: "+1.28%", up: true, source: "mantua" },
-  { a: "USDC", b: "EURC", fee: "0.01%", value: "$2,104.00", pnl: "−$22.10", pct: "−1.04%", up: false, source: "external" },
-  { a: "ETH", b: "EURC", fee: "0.01%", value: "$540.21", pnl: "+$8.40", pct: "+1.58%", up: true, source: "external" },
+  {
+    a: "ETH",
+    b: "USDC",
+    fee: "0.05%",
+    value: "$12,840.20",
+    pnl: "+$340.18",
+    pct: "+2.71%",
+    up: true,
+    source: "mantua",
+    hook: "Dynamic Fee",
+  },
+  {
+    a: "cbBTC",
+    b: "ETH",
+    fee: "0.30%",
+    value: "$8,210.55",
+    pnl: "+$104.40",
+    pct: "+1.28%",
+    up: true,
+    source: "mantua",
+    hook: "RWAgate",
+  },
+  {
+    a: "USDC",
+    b: "EURC",
+    fee: "0.01%",
+    value: "$2,104.00",
+    pnl: "−$22.10",
+    pct: "−1.04%",
+    up: false,
+    source: "external",
+    hook: "Stable Protection",
+  },
+  {
+    a: "ETH",
+    b: "EURC",
+    fee: "0.01%",
+    value: "$540.21",
+    pnl: "+$8.40",
+    pct: "+1.58%",
+    up: true,
+    source: "external",
+    hook: "Stable Protection",
+  },
 ];
 
 const SORTS = ["Descending", "Ascending", "Alphabetical"] as const;
@@ -60,13 +110,16 @@ export function AssetsCard() {
       return numVal(b.val) - numVal(a.val);
     });
 
+  const positionsAvailable = portfolio.walletAddress ? POSITIONS : [];
   const visiblePositions =
-    posSource === "mantua" ? POSITIONS.filter((p) => p.source === "mantua") : POSITIONS;
-  const mantuaCount = POSITIONS.filter((p) => p.source === "mantua").length;
+    posSource === "mantua"
+      ? positionsAvailable.filter((p) => p.source === "mantua")
+      : positionsAvailable;
+  const mantuaCount = positionsAvailable.filter((p) => p.source === "mantua").length;
 
   const tabs = [
     { k: "assets" as const, label: "Assets", count: assets.length },
-    { k: "positions" as const, label: "Positions", count: POSITIONS.length },
+    { k: "positions" as const, label: "Positions", count: positionsAvailable.length },
   ];
 
   return (
@@ -103,112 +156,124 @@ export function AssetsCard() {
       {tab === "assets" && (
         <>
           <div className="px-4 py-3.5 border-b border-border-soft flex items-center gap-2.5">
-        <Search className="h-4 w-4 text-text-dim" />
-        <div className="flex-1">
-          <div className="text-[13px] font-medium">Assets</div>
-          <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-            }}
-            placeholder="Search assets"
-            className="border-none bg-transparent outline-none text-[12px] text-text-dim w-full p-0 mt-0.5"
-          />
-        </div>
-      </div>
+            <Search className="h-4 w-4 text-text-dim" />
+            <div className="flex-1">
+              <div className="text-[13px] font-medium">Assets</div>
+              <input
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                }}
+                placeholder="Search assets"
+                className="border-none bg-transparent outline-none text-[12px] text-text-dim w-full p-0 mt-0.5"
+              />
+            </div>
+          </div>
 
-      <div className="px-3.5 py-2.5 flex gap-2 items-center border-b border-border-soft relative">
-        <button
-          type="button"
-          className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1"
-        >
-          <span className="w-3.5 h-3.5 inline-flex items-center justify-center text-text-mute">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-            </svg>
-          </span>
-          All networks
-          <ChevronDown className="h-3 w-3" />
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              setOpenSort((v) => !v);
-            }}
-            className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1"
-          >
-            {sort}
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          {openSort && (
-            <div className="absolute top-[calc(100%+4px)] left-0 z-20 bg-panel-solid border border-border rounded-sm p-1 min-w-[140px] shadow-lg">
-              {SORTS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    setSort(s);
-                    setOpenSort(false);
-                  }}
-                  className={`block w-full px-2.5 py-2 border-none rounded-xs cursor-pointer text-text text-[13px] text-left ${
-                    sort === s ? "bg-chip" : "bg-transparent"
-                  }`}
+          <div className="px-3.5 py-2.5 flex gap-2 items-center border-b border-border-soft relative">
+            <button
+              type="button"
+              className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1"
+            >
+              <span className="w-3.5 h-3.5 inline-flex items-center justify-center text-text-mute">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  {s}
-                </button>
-              ))}
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                </svg>
+              </span>
+              All networks
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenSort((v) => !v);
+                }}
+                className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1"
+              >
+                {sort}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+              {openSort && (
+                <div className="absolute top-[calc(100%+4px)] left-0 z-20 bg-panel-solid border border-border rounded-sm p-1 min-w-[140px] shadow-lg">
+                  {SORTS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setSort(s);
+                        setOpenSort(false);
+                      }}
+                      className={`block w-full px-2.5 py-2 border-none rounded-xs cursor-pointer text-text text-[13px] text-left ${
+                        sort === s ? "bg-chip" : "bg-transparent"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <div className="flex-1" />
-        <div className="text-[12px] text-text-dim">PnL</div>
-      </div>
+            <div className="flex-1" />
+            <div className="text-[12px] text-text-dim">PnL</div>
+          </div>
 
-      <div className="max-h-[320px] overflow-auto">
-        {!portfolio.walletAddress && (
-          <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-            Connect a wallet to see your Base Sepolia balances.
-          </div>
-        )}
-        {portfolio.walletAddress && portfolio.loading && filtered.length === 0 && (
-          <div className="px-4 py-8 text-center text-[12px] text-text-dim">Loading balances…</div>
-        )}
-        {portfolio.walletAddress && portfolio.error && filtered.length === 0 && (
-          <div className="px-4 py-8 text-center text-[12px] text-red">
-            {portfolio.error}
-          </div>
-        )}
-        {portfolio.walletAddress && !portfolio.loading && !portfolio.error && filtered.length === 0 && (
-          <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-            No matching balances on Base Sepolia.
-          </div>
-        )}
-        {filtered.map((a) => (
-          <div
-            key={a.symbol}
-            className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
-          >
-            <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">
-              <AssetRowIcon symbol={a.symbol} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium text-[14px]">{a.name}</span>
+          <div className="max-h-[320px] overflow-auto">
+            {!portfolio.walletAddress && (
+              <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+                Connect a wallet to see your Base Sepolia balances.
               </div>
-              <div className="text-[12px] text-text-dim mt-0.5">
-                {a.symbol} · {a.price}
+            )}
+            {portfolio.walletAddress && portfolio.loading && filtered.length === 0 && (
+              <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+                Loading balances…
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[14px] font-medium font-mono">{a.qty}</div>
-              <div className="text-[12px] text-text-dim font-mono">{a.val}</div>
-            </div>
-            <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
+            )}
+            {portfolio.walletAddress && portfolio.error && filtered.length === 0 && (
+              <div className="px-4 py-8 text-center text-[12px] text-red">{portfolio.error}</div>
+            )}
+            {portfolio.walletAddress &&
+              !portfolio.loading &&
+              !portfolio.error &&
+              filtered.length === 0 && (
+                <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+                  No matching balances on Base Sepolia.
+                </div>
+              )}
+            {filtered.map((a) => (
+              <div
+                key={a.symbol}
+                className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
+              >
+                <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">
+                  <AssetRowIcon symbol={a.symbol} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-[14px]">{a.name}</span>
+                  </div>
+                  <div className="text-[12px] text-text-dim mt-0.5">
+                    {a.symbol} · {a.price}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[14px] font-medium font-mono">{a.qty}</div>
+                  <div className="text-[12px] text-text-dim font-mono">{a.val}</div>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
         </>
       )}
 
@@ -218,7 +283,7 @@ export function AssetsCard() {
             <span className="text-[11px] text-text-mute mr-0.5">Show</span>
             {(
               [
-                { k: "all", label: "All wallet positions", count: POSITIONS.length },
+                { k: "all", label: "All wallet positions", count: positionsAvailable.length },
                 { k: "mantua", label: "Opened in Mantua", count: mantuaCount },
               ] as const
             ).map((o) => {
@@ -253,47 +318,62 @@ export function AssetsCard() {
           )}
 
           <div className="max-h-[360px] overflow-auto">
-            {visiblePositions.length === 0 && (
+            {!portfolio.walletAddress && (
+              <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+                Connect a wallet to see your liquidity positions.
+              </div>
+            )}
+            {portfolio.walletAddress && visiblePositions.length === 0 && (
               <div className="px-3.5 py-8 text-center text-[12px] text-text-dim">
                 No positions in this view.
               </div>
             )}
-            {visiblePositions.map((p, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
-              >
-                <div className="flex flex-shrink-0">
-                  <AssetIcon symbol={p.a} size={26} />
-                  <div className="-ml-2">
-                    <AssetIcon symbol={p.b} size={26} />
+            {portfolio.walletAddress &&
+              visiblePositions.map((p, i) => {
+                const tint = HOOK_TINT[p.hook];
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
+                  >
+                    <div className="flex flex-shrink-0">
+                      <AssetIcon symbol={p.a} size={26} />
+                      <div className="-ml-2">
+                        <AssetIcon symbol={p.b} size={26} />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium text-[14px]">
+                          {p.a} / {p.b}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip text-text-mute border border-border-soft font-mono">
+                          {p.fee}
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded font-medium tracking-[0.02em] inline-block"
+                          style={{
+                            background: tint.bg,
+                            color: tint.fg,
+                            border: `1px solid ${tint.bd}`,
+                          }}
+                        >
+                          {p.hook}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[14px] font-medium font-mono">{p.value}</div>
+                      <div className={`text-[12px] font-mono ${p.up ? "text-green" : "text-red"}`}>
+                        {p.pnl} · {p.pct}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
                   </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-medium text-[14px]">
-                      {p.a} / {p.b}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip text-text-mute border border-border-soft font-mono">
-                      {p.fee}
-                    </span>
-                    {p.source === "external" && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-mono tracking-wider bg-[rgba(139,108,240,0.12)] text-accent border border-[rgba(139,108,240,0.35)]">
-                        external
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[12px] text-text-dim mt-0.5">LP position</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[14px] font-medium font-mono">{p.value}</div>
-                  <div className={`text-[12px] font-mono ${p.up ? "text-green" : "text-red"}`}>
-                    {p.pnl} · {p.pct}
-                  </div>
-                </div>
-                <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
-              </div>
-            ))}
+                );
+              })}
           </div>
         </>
       )}
