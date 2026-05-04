@@ -39,6 +39,20 @@ const HOOK_OPTIONS: (HookName | "none")[] = [
   "async-limit-order",
 ];
 
+/**
+ * Hooks whose `beforeInitialize` rejects pools that aren't using v4's
+ * dynamic-fee flag. The server-side calldata builder rewrites
+ * `key.fee` to the dynamic flag for these hooks; the user's tier
+ * choice still picks tickSpacing. Mirrors `HOOK_REQUIRES_DYNAMIC_FEE`
+ * in `server/src/lib/v4-contracts.ts`.
+ */
+const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
+  "stable-protection": true,
+  "dynamic-fee": true,
+  "rwa-gate": false,
+  "async-limit-order": false,
+};
+
 export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
   const [tokenA, setTokenA] = useState<TokenSymbol>("USDC");
   const [tokenB, setTokenB] = useState<TokenSymbol>("EURC");
@@ -137,6 +151,12 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
         <div>
           <p className="text-xs text-text-dim mb-2 uppercase tracking-wider">Fee tier</p>
           <FeeTierPicker value={fee} onChange={setFee} />
+          {hook !== "none" && HOOK_REQUIRES_DYNAMIC_FEE[hook] && (
+            <p className="text-[11px] text-text-mute mt-1.5">
+              {HOOK_LABELS[hook]} sets the fee dynamically per swap; your tier
+              selection determines tick spacing only.
+            </p>
+          )}
         </div>
 
         <div>

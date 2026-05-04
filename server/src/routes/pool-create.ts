@@ -14,6 +14,7 @@ import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
   V4_POOL_MANAGER,
+  effectivePoolFee,
   isFeeTier,
 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -60,6 +61,12 @@ poolCreateRouter.post(
         getToken(tokenB).address,
       );
       const { key, flipped } = buildPoolKey(tokenA, tokenB, fee, hookAddress);
+      // Hooks like Stable Protection require key.fee == DYNAMIC_FEE_FLAG
+      // and revert in beforeInitialize otherwise (showing up at the
+      // wallet as "exceeds max transaction gas limit"). The user's
+      // static-tier choice still drives tickSpacing — only the fee
+      // field is overridden.
+      key.fee = effectivePoolFee(hook ?? null, fee);
       const a0 = BigInt(initialAmount0Raw);
       const a1 = BigInt(initialAmount1Raw);
       const sqrtPriceX96 = encodeSqrtPriceX96(
@@ -119,8 +126,9 @@ poolCreateRouter.post(
       return;
     }
     const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress);
+    key.fee = effectivePoolFee(hook ?? null, fee);
     const poolKeyHash = keccak256(
-      toHex(`${key.currency0}|${key.currency1}|${String(fee)}|${String(key.tickSpacing)}|${key.hooks}`),
+      toHex(`${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}`),
     );
 
     if (outcome === "success") {
@@ -129,7 +137,7 @@ poolCreateRouter.post(
           poolKeyHash,
           token0: getToken(tokenA).address,
           token1: getToken(tokenB).address,
-          fee,
+          fee: key.fee,
           tickSpacing: key.tickSpacing,
           hookAddress: key.hooks,
           hookType: hook ?? "none",

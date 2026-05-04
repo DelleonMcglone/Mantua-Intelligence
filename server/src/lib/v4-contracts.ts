@@ -106,6 +106,39 @@ export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
   ],
 } as const;
 
+/**
+ * v4 dynamic-fee flag. Set in the high bit of the uint24 `fee` field
+ * to signal that the hook (not a fixed tier) supplies the per-swap
+ * fee in `beforeSwap`. v4-core: `LPFeeLibrary.isDynamicFee`.
+ */
+export const DYNAMIC_FEE_FLAG = 0x800000;
+
+/**
+ * Hooks whose `beforeInitialize` callback enforces
+ * `key.fee.isDynamicFee()`. Pool creation with one of these hooks must
+ * set `key.fee = DYNAMIC_FEE_FLAG` regardless of which static tier the
+ * user picked in the UI; the static tier still picks `tickSpacing`.
+ */
+export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
+  "stable-protection": true,
+  "dynamic-fee": true,
+  "rwa-gate": false,
+  "async-limit-order": false,
+};
+
+/**
+ * Resolve the actual `fee` field to encode in the PoolKey. When the
+ * hook requires dynamic fees, returns `DYNAMIC_FEE_FLAG`; otherwise
+ * returns the user's static fee tier as-is.
+ */
+export function effectivePoolFee(
+  hook: HookName | null | undefined,
+  staticFee: number,
+): number {
+  if (hook && HOOK_REQUIRES_DYNAMIC_FEE[hook]) return DYNAMIC_FEE_FLAG;
+  return staticFee;
+}
+
 /** Standard v4 fee tiers (fee in pips: 1 pip = 0.01 bps = 0.0001%). */
 export const FEE_TIERS = {
   STABLE: 100, // 0.01%

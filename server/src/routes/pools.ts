@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { IS_MAINNET } from "../lib/constants.ts";
 import { getBasePool, listBasePools, poolChart } from "../lib/defillama.ts";
 import { logger } from "../lib/logger.ts";
 
@@ -10,8 +11,19 @@ export const poolsRouter = Router();
  * Returns Base Uniswap pools sorted by TVL desc. Open route (no auth)
  * since it's read-only public data; rate-limit applies via the global
  * ipRateLimiter wired in server/src/index.ts.
+ *
+ * Testnet behavior: DefiLlama only indexes Base mainnet, so on
+ * `MANTUA_NETWORK=testnet` we return an empty list rather than
+ * surfacing mainnet pools that the user can't actually interact with
+ * from their Sepolia wallet. Once we have a Sepolia-aware aggregator
+ * (or we start indexing Mantua-created pools), swap this branch for
+ * the real source.
  */
 poolsRouter.get("/api/pools", async (_req: Request, res: Response) => {
+  if (!IS_MAINNET) {
+    res.json({ pools: [] });
+    return;
+  }
   try {
     const pools = await listBasePools();
     res.json({
