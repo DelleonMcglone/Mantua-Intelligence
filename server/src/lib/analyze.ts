@@ -285,11 +285,54 @@ const TOPIC_RUNNERS: Record<Topic, () => Promise<AnalyzeResponse> | AnalyzeRespo
   "mantua-hooks": mantuaHooks,
 };
 
+/**
+ * Per-topic response cache. CoinGecko's free tier (10–30 req/min)
+ * gets blown out fast otherwise — every suggestion click previously
+ * fired a fresh fetch even when the price barely changed. Two TTLs:
+ * `freshTtl` is the "no need to refetch" window; `staleTtl` keeps a
+ * stale response around so 429s during a brief upstream hiccup still
+ * surface a real answer (with a tiny "cached" hint) instead of an
+ * error card.
+ */
+interface CacheEntry {
+  response: AnalyzeResponse;
+  fetchedAt: number;
+}
+const cache = new Map<Topic, CacheEntry>();
+
+const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
+  // Static educational copy — never expires.
+  "mantua-hooks": { freshMs: Number.MAX_SAFE_INTEGER, staleMs: Number.MAX_SAFE_INTEGER },
+  // Live prices — 5min fresh, 30min stale-while-error.
+  "eth-price": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
+  "eurc-peg": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
+  "top-rwa-tokens": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
+  // DefiLlama pool data — 5min fresh, 60min stale.
+  "usdc-usdt-pool": { freshMs: 5 * 60_000, staleMs: 60 * 60_000 },
+  "cbbtc-24h-volume": { freshMs: 5 * 60_000, staleMs: 60 * 60_000 },
+};
+
 export async function runAnalyze(topic: Topic): Promise<AnalyzeResponse> {
+  const ttl = TOPIC_TTL[topic];
+  const cached = cache.get(topic);
+  const now = Date.now();
+  if (cached && now - cached.fetchedAt < ttl.freshMs) {
+    return cached.response;
+  }
   try {
-    return await TOPIC_RUNNERS[topic]();
+    const response = await TOPIC_RUNNERS[topic]();
+    cache.set(topic, { response, fetchedAt: now });
+    return response;
   } catch (err) {
-    logger.warn({ err, topic }, "analyze topic failed");
+    logger.warn({ err, topic }, "analyze topic fetch failed");
+    // Stale-while-error: if we have a cached answer that's still
+    // within the stale window, serve it rather than 502'ing the user.
+    if (cached && now - cached.fetchedAt < ttl.staleMs) {
+      return {
+        ...cached.response,
+        summary: `${cached.response.summary} (cached)`,
+      };
+    }
     throw err;
   }
 }

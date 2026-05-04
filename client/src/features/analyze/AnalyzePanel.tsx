@@ -61,6 +61,7 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (phase !== "result" || !active) return;
@@ -89,11 +90,15 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [phase, active]);
+  }, [phase, active, reloadKey]);
 
   function runQuery(topic: Topic, question: string) {
     setActive({ topic, question });
     setPhase("result");
+    setReloadKey((k) => k + 1);
+  }
+  function retry() {
+    setReloadKey((k) => k + 1);
   }
 
   return (
@@ -149,7 +154,7 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
         )}
 
         {phase === "result" && (
-          <ResultBody data={data} loading={loading} error={error} />
+          <ResultBody data={data} loading={loading} error={error} onRetry={retry} />
         )}
       </div>
     </>
@@ -160,10 +165,12 @@ function ResultBody({
   data,
   loading,
   error,
+  onRetry,
 }: {
   data: AnalyzeResponse | null;
   loading: boolean;
   error: string | null;
+  onRetry: () => void;
 }) {
   if (loading) {
     return (
@@ -173,9 +180,24 @@ function ResultBody({
     );
   }
   if (error) {
+    const isRateLimit = /429|rate.?limit/i.test(error);
     return (
-      <div className="bg-bg-elev border border-red/40 rounded-md p-5 text-[13px] text-red">
-        {error}
+      <div className="bg-bg-elev border border-red/40 rounded-md p-5 text-[13px] text-red space-y-2">
+        <div>{error}</div>
+        {isRateLimit && (
+          <div className="text-text-dim text-[12px]">
+            CoinGecko's free tier rate-limits aggressive callers. The server caches
+            successful responses for 5 minutes; one successful fetch will be served
+            from cache for everyone after that.
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onRetry}
+          className="px-3 py-1.5 rounded-xs border border-red/40 bg-transparent text-red text-[12px] cursor-pointer hover:bg-red/10 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
