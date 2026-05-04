@@ -1,27 +1,47 @@
 import { useMemo, useState } from "react";
+import { usePortfolio } from "./use-portfolio.ts";
+import { type HistoryRange, usePortfolioHistory } from "./use-portfolio-history.ts";
 
-const RANGES = ["1H", "1D", "TW", "1M", "1Y"] as const;
-type Range = (typeof RANGES)[number];
+const RANGES: HistoryRange[] = ["1H", "1D", "TW", "1M", "1Y"];
 
-const POINTS_BY_RANGE: Record<Range, number> = {
-  "1H": 80,
-  "1D": 100,
-  TW: 150,
-  "1M": 200,
-  "1Y": 260,
+const RANGE_LABEL: Record<HistoryRange, string> = {
+  "1H": "past hour",
+  "1D": "past day",
+  TW: "past week",
+  "1M": "past month",
+  "1Y": "past year",
 };
 
+const FALLBACK_POINTS = 80;
+
 /**
- * Portfolio card — matches prototype `PortfolioCard` in shell.jsx:
- * total value + week delta + amber line chart with dotted background +
- * range pills (1H/1D/TW/1M/1Y) and Live indicator. Chart shape is a
- * deterministic synthetic series (sharp early dip → climb → mid pullback
- * → final peak) keyed by the selected range. Real wallet balances
- * arrive in Phase 8.
+ * Portfolio card. Shows the user's current portfolio value (sum of
+ * on-chain balance USD valuations from `/api/portfolio`) and a
+ * historical chart driven by `/api/portfolio/history` weighted by
+ * current holdings. The range pills (1H/1D/TW/1M/1Y) refetch the
+ * server-side series and update the headline delta + chart in lock
+ * step.
+ *
+ * When no wallet is connected we show a placeholder ("$—") and a
+ * flat synthetic shape so the card still has visual weight in the
+ * design.
  */
 export function PortfolioCard() {
-  const [range, setRange] = useState<Range>("TW");
-  const points = useMemo(() => generateSeries(POINTS_BY_RANGE[range]), [range]);
+  const [range, setRange] = useState<HistoryRange>("TW");
+  const portfolio = usePortfolio();
+  const history = usePortfolioHistory(range);
+
+  const totalUsd = useMemo(
+    () => portfolio.balances.reduce((sum, b) => sum + b.usdValue, 0),
+    [portfolio.balances],
+  );
+
+  const connected = Boolean(portfolio.walletAddress);
+  const series = history.data?.series ?? [];
+  const points = series.length >= 2 ? series.map((p) => p.value) : flatSeries(totalUsd);
+  const delta = history.data?.delta ?? 0;
+  const pct = history.data?.pct ?? 0;
+  const up = delta >= 0;
 
   const w = 560;
   const h = 170;
@@ -42,9 +62,20 @@ export function PortfolioCard() {
     >
       <div className="text-center pt-[18px]">
         <div className="text-[13px] text-text-dim">Portfolio</div>
-        <div className="text-[34px] font-semibold mt-0.5 -tracking-[0.02em]">$72,697.83</div>
-        <div className="text-[13px] text-green mt-0.5">
-          <span className="mr-1">↗</span>3.51% past week
+        <div className="text-[34px] font-semibold mt-0.5 -tracking-[0.02em]">
+          {connected ? formatUsd(totalUsd) : "$—"}
+        </div>
+        <div className={`text-[13px] mt-0.5 ${up ? "text-green" : "text-red"}`}>
+          {connected && history.data ? (
+            <>
+              <span className="mr-1">{up ? "↗" : "↘"}</span>
+              {pct.toFixed(2)}% {RANGE_LABEL[range]}
+            </>
+          ) : (
+            <span className="text-text-mute">
+              {connected ? "Loading history…" : "Connect wallet to see your portfolio"}
+            </span>
+          )}
         </div>
       </div>
       <div className="relative mt-2">
@@ -98,17 +129,19 @@ export function PortfolioCard() {
   );
 }
 
-function generateSeries(n: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    let v = 58 + t * 36;
-    v -= 48 * Math.exp(-Math.pow((t - 0.09) / 0.045, 2));
-    v -= 6 * Math.exp(-Math.pow((t - 0.42) / 0.05, 2));
-    v -= 8 * Math.exp(-Math.pow((t - 0.62) / 0.06, 2));
-    v += 6 * Math.exp(-Math.pow((t - 0.78) / 0.04, 2));
-    v += Math.sin(t * 22) * 2.2 + Math.cos(t * 41) * 1.3 + Math.sin(t * 70) * 0.8;
-    out.push(v);
-  }
-  return out;
+/**
+ * Disconnected / pre-history fallback: a flat line at the user's
+ * current value (or 0). Keeps the chart visually present without
+ * pretending we know history.
+ */
+function flatSeries(value: number): number[] {
+  return Array<number>(FALLBACK_POINTS).fill(value);
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value)) return "$—";
+  return `$${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
