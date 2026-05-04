@@ -26,6 +26,7 @@ interface Props {
     tokenA: TokenSymbol;
     tokenB: TokenSymbol;
     fee: FeeTier;
+    hook: HookName | null;
     sqrtPriceX96: string;
   }) => void;
   onClose?: () => void;
@@ -263,6 +264,7 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
                   tokenA,
                   tokenB,
                   fee,
+                  hook: hook === "none" ? null : hook,
                   sqrtPriceX96: create.state.poolKey?.sqrtPriceX96 ?? "0",
                 });
               }}

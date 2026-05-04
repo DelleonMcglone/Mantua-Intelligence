@@ -15,6 +15,7 @@ import {
   POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
   V4_POSITION_MANAGER,
   type FeeTier,
+  type HookName,
 } from "./v4-contracts.ts";
 
 const SLIPPAGE_DENOM = 10_000n;
@@ -24,6 +25,11 @@ export interface BuildAddLiquidityArgs {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Hook bound to the pool. Required for hook-managed pools so the
+   *  reconstructed PoolKey matches on-chain (the `hooks` field is the
+   *  resolved address; `hookName` drives the dynamic-fee override). */
+  hookAddress?: `0x${string}`;
+  hookName?: HookName | null;
   amountARaw: bigint;
   amountBRaw: bigint;
   sqrtPriceX96: bigint;
@@ -56,7 +62,13 @@ export interface BuildAddLiquidityResult {
  * contract pulls at most amount0Max + amount1Max and reverts otherwise.
  */
 export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAddLiquidityResult {
-  const { key, flipped } = buildPoolKey(args.tokenA, args.tokenB, args.fee);
+  const { key, flipped } = buildPoolKey(
+    args.tokenA,
+    args.tokenB,
+    args.fee,
+    args.hookAddress ?? "0x0000000000000000000000000000000000000000",
+    args.hookName ?? null,
+  );
   const tickLower = getMinUsableTick(key.tickSpacing);
   const tickUpper = getMaxUsableTick(key.tickSpacing);
   const sqrtLower = getSqrtRatioAtTick(tickLower);

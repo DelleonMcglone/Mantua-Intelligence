@@ -11,11 +11,16 @@ import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
 import { useAddLiquidity } from "./use-add-liquidity.ts";
+import type { HookName } from "./use-create-pool.ts";
 
 export interface PoolKeyContext {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Hook bound to the pool. Required for hook-managed pools so the
+   *  reconstructed PoolKey matches on-chain (Stable Protection / Dynamic
+   *  Fee pools have `key.fee = DYNAMIC_FEE_FLAG`). Null = no-hook pool. */
+  hook?: HookName | null;
   /** Set by the pool-create flow with the just-initialized price.
    *  Omitted when entering from PoolDetailPage — server reads slot0. */
   sqrtPriceX96?: string;
@@ -94,6 +99,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
       tokenA: ctx.tokenA,
       tokenB: ctx.tokenB,
       fee: ctx.fee,
+      hook: ctx.hook ?? null,
       amountARaw,
       amountBRaw,
       ...(ctx.sqrtPriceX96 ? { sqrtPriceX96: ctx.sqrtPriceX96 } : {}),

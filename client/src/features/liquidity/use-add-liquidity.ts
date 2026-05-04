@@ -12,6 +12,7 @@ import {
   wrapInMulticall,
   type Permit2Bundle,
 } from "./permit2-helpers.ts";
+import type { HookName } from "./use-create-pool.ts";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
@@ -24,6 +25,10 @@ export interface AddLiquidityArgs {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Hook bound to the pool. Forwarded to the server so PoolKey
+   *  reconstruction applies `effectivePoolFee` (dynamic-fee hooks set
+   *  `key.fee = 0x800000`). Null/omitted = no-hook pool. */
+  hook?: HookName | null;
   amountARaw: string;
   amountBRaw: string;
   /** Optional. Omit for existing-pool adds — the server reads slot0
@@ -150,6 +155,7 @@ export function useAddLiquidity() {
         tokenA: args.tokenA,
         tokenB: args.tokenB,
         fee: args.fee,
+        hook: args.hook ?? null,
         amountARaw: args.amountARaw,
         amountBRaw: args.amountBRaw,
         liquidity: calldata.liquidity,

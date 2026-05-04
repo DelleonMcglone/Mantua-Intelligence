@@ -15,7 +15,6 @@ import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
   V4_POOL_MANAGER,
-  effectivePoolFee,
   isFeeTier,
 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -61,13 +60,12 @@ poolCreateRouter.post(
         getToken(tokenA).address,
         getToken(tokenB).address,
       );
-      const { key, flipped } = buildPoolKey(tokenA, tokenB, fee, hookAddress);
       // Hooks like Stable Protection require key.fee == DYNAMIC_FEE_FLAG
-      // and revert in beforeInitialize otherwise (showing up at the
-      // wallet as "exceeds max transaction gas limit"). The user's
-      // static-tier choice still drives tickSpacing — only the fee
-      // field is overridden.
-      key.fee = effectivePoolFee(hook ?? null, fee);
+      // and revert in beforeInitialize otherwise. `buildPoolKey` applies
+      // `effectivePoolFee` when `hookName` is provided so the user's
+      // static-tier choice still drives tickSpacing while the fee field
+      // is overridden when the bound hook demands it.
+      const { key, flipped } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null);
 
       // Preflight: PoolManager rejects re-initialization, but the revert
       // bubbles through the wallet as "exceeds max transaction gas limit"
@@ -145,8 +143,7 @@ poolCreateRouter.post(
       res.status(400).json({ error: message, code: "POOL_CREATE_INVALID" });
       return;
     }
-    const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress);
-    key.fee = effectivePoolFee(hook ?? null, fee);
+    const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null);
     const poolKeyHash = keccak256(
       toHex(`${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}`),
     );
