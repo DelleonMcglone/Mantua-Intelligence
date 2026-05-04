@@ -108,7 +108,7 @@ export function useAddLiquidity() {
       // invisible to the caller — one `execute()` does both, with two
       // wallet popups labeled distinctly.
       let poolSqrtPriceX96: string | undefined = args.sqrtPriceX96;
-      setState({ status: "creating-pool", message: "Checking pool…" });
+      setState({ status: "creating-pool", message: "Preparing pool…" });
       try {
         const initRes = await api.post<PoolCreateCalldataRes>(
           "/api/pools/create/calldata",
@@ -121,7 +121,7 @@ export function useAddLiquidity() {
             initialAmount1Raw: args.amountBRaw,
           },
         );
-        setState({ status: "creating-pool", message: "Sign pool initialization…" });
+        setState({ status: "creating-pool", message: "Confirm pool init in wallet…" });
         const initTx = await walletClient.sendTransaction({
           account: owner,
           chain: ACTIVE_CHAIN,
@@ -157,7 +157,7 @@ export function useAddLiquidity() {
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1200,
       });
 
-      setState({ status: "approving", message: "Checking Permit2 approvals…" });
+      setState({ status: "approving", message: `Checking ${args.tokenA} approval…` });
       const tA = TOKENS[args.tokenA];
       const tB = TOKENS[args.tokenB];
       const approvalA = await ensurePermit2Approval(
@@ -166,6 +166,7 @@ export function useAddLiquidity() {
         tA.native ? ZERO : tA.address,
         owner,
       );
+      setState({ status: "approving", message: `Checking ${args.tokenB} approval…` });
       const approvalB = await ensurePermit2Approval(
         walletClient,
         publicClient,
