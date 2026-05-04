@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ExternalLink, AlertTriangle, ShieldAlert, ChevronDown } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import type { TokenSymbol } from "@/lib/tokens.ts";
+import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import { HookSelector } from "./HookSelector.tsx";
 import { PegZoneIndicator } from "./PegZoneIndicator.tsx";
 import { TokenSelector } from "./TokenSelector.tsx";
@@ -41,6 +42,30 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
   const [hook, setHook] = useState<HookOption>("none");
   const confirm = useConfirmedAction();
   const swap = useSwap();
+  const portfolio = usePortfolio();
+
+  // Live balance for the Sell side, used by the 25/50/75/Max chips.
+  const balanceIn = useMemo(() => {
+    const b = portfolio.balances.find((x) => x.symbol === tokenIn);
+    return b ? BigInt(b.balanceRaw) : 0n;
+  }, [portfolio.balances, tokenIn]);
+  const balanceInDisplay = useMemo(
+    () => formatTokenAmount(tokenIn, balanceIn),
+    [tokenIn, balanceIn],
+  );
+
+  function applyPercent(pct: number) {
+    if (balanceIn === 0n) return;
+    // Native ETH: keep a small buffer for gas so "Max" doesn't leave the
+    // user without anything to pay the swap with. ERC-20s have no
+    // gas-token concern — use the full amount.
+    let raw = (balanceIn * BigInt(pct)) / 100n;
+    if (TOKENS[tokenIn].native && pct === 100) {
+      const buffer = 200_000_000_000_000n; // ~0.0002 ETH
+      raw = raw > buffer ? raw - buffer : 0n;
+    }
+    setAmount(formatTokenAmount(tokenIn, raw));
+  }
 
   // Phase 5 P5-003 — peg zone is hard-coded HEALTHY until the on-chain
   // status query lands. The component is wired so the value flows
@@ -87,6 +112,22 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
     setTokenOut(tokenIn);
   }
 
+  // When the user picks the same symbol that's already on the other
+  // side, swap them. Keeps the dropdown enabled for that symbol so
+  // "I want to swap to USDC" works without first having to flip.
+  function selectTokenIn(sym: TokenSymbol) {
+    if (sym === tokenOut) {
+      setTokenOut(tokenIn);
+    }
+    setTokenIn(sym);
+  }
+  function selectTokenOut(sym: TokenSymbol) {
+    if (sym === tokenIn) {
+      setTokenIn(tokenOut);
+    }
+    setTokenOut(sym);
+  }
+
   async function onSwap() {
     if (!quote.data) return;
     const ok = await confirm({
@@ -112,16 +153,29 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
         <Card>
           <div className="flex items-center justify-between text-[13px]">
             <span>Sell</span>
-            <span className="text-text-dim">Balance: 0.00</span>
+            <span className="text-text-dim">
+              Balance: {balanceInDisplay} {tokenIn}
+            </span>
           </div>
           <div className="flex gap-2 mt-2.5">
-            {(["25%", "50%", "75%", "Max"] as const).map((p) => (
+            {(
+              [
+                { label: "25%", pct: 25 },
+                { label: "50%", pct: 50 },
+                { label: "75%", pct: 75 },
+                { label: "Max", pct: 100 },
+              ] as const
+            ).map((p) => (
               <button
-                key={p}
+                key={p.label}
                 type="button"
-                className="flex-1 py-[7px] border border-border bg-transparent text-text-dim rounded-xs text-[12px] cursor-pointer font-medium hover:text-text hover:border-text-mute transition-colors"
+                onClick={() => {
+                  applyPercent(p.pct);
+                }}
+                disabled={balanceIn === 0n}
+                className="flex-1 py-[7px] border border-border bg-transparent text-text-dim rounded-xs text-[12px] cursor-pointer font-medium hover:text-text hover:border-text-mute transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {p}
+                {p.label}
               </button>
             ))}
           </div>
@@ -142,7 +196,7 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
                 ≈ ${(parseFloat(amount) * 0).toFixed(2)}
               </div>
             </div>
-            <TokenSelector value={tokenIn} onChange={setTokenIn} disabledSymbol={tokenOut} />
+            <TokenSelector value={tokenIn} onChange={selectTokenIn} />
           </div>
           <div className="border-t border-border-soft mt-3.5 pt-3 flex items-center justify-between text-[13px]">
             <span className="text-text-dim">Current Price</span>
@@ -181,7 +235,7 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
               />
               <div className="text-[13px] text-text-mute mt-0.5">≈ $0.00</div>
             </div>
-            <TokenSelector value={tokenOut} onChange={setTokenOut} disabledSymbol={tokenIn} />
+            <TokenSelector value={tokenOut} onChange={selectTokenOut} />
           </div>
           <div className="border-t border-border-soft mt-3.5 pt-3 flex items-center justify-between text-[13px]">
             <span className="text-text-dim">Current Price</span>

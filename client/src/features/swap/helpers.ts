@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/api.ts";
-import type { TokenSymbol } from "@/lib/tokens.ts";
+import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { parseTokenAmount } from "./format.ts";
 import type { useSwap } from "./use-swap.ts";
 
@@ -47,7 +47,12 @@ export function mapQuoteError(err: ApiError | Error | null): string | null {
       case "WALLET_REQUIRED":
         return "Please log in to fetch a quote.";
       case "UPSTREAM_QUOTE":
-        return "Upstream quote temporarily unavailable.";
+        // Uniswap's Trading API doesn't index Base Sepolia, so any
+        // testnet quote will fail upstream. Mainnet failures here are
+        // genuinely transient — surface different copy.
+        return IS_MAINNET
+          ? "Upstream quote temporarily unavailable."
+          : "Swap quotes are unavailable on Base Sepolia (Uniswap Trading API doesn't index testnet). Switch to mainnet to swap.";
       default:
         return err.message;
     }
