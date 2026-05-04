@@ -22,6 +22,8 @@ import { BASE_SCAN_TX, DEFAULT_SLIPPAGE_BPS } from "./constants.ts";
 
 interface Props {
   onClose?: () => void;
+  initialTokenIn?: TokenSymbol;
+  initialTokenOut?: TokenSymbol;
 }
 
 const HOOK_OPTIONS: { value: HookName | "none"; label: string }[] = [
@@ -73,15 +75,17 @@ function ctaLabel(status: ReturnType<typeof useTestnetSwap>["state"]["status"]):
  *   the pool whose `(currency0, currency1, fee, tickSpacing, hooks)`
  *   matches the user's selection.
  */
-export function TestnetSwapPanel({ onClose }: Props) {
-  const [tokenIn, setTokenIn] = useState<TokenSymbol>("USDC");
-  const [tokenOut, setTokenOut] = useState<TokenSymbol>("EURC");
+export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: Props) {
+  const seedIn: TokenSymbol = initialTokenIn ?? "USDC";
+  const seedOut: TokenSymbol = initialTokenOut ?? "EURC";
+  const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
+  const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
   const [amount, setAmount] = useState("");
   const [fee, setFee] = useState<FeeTier>(() =>
-    DEFAULT_FEE_TIER_FOR_PAIR(isStable("USDC"), isStable("EURC")),
+    DEFAULT_FEE_TIER_FOR_PAIR(isStable(seedIn), isStable(seedOut)),
   );
   const [hook, setHook] = useState<HookName | "none">(
-    () => recommendedHookForPair("USDC", "EURC") ?? "none",
+    () => recommendedHookForPair(seedIn, seedOut) ?? "none",
   );
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 

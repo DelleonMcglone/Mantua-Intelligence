@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import type { TokenSymbol } from "./lib/tokens.ts";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
 import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
@@ -21,16 +22,27 @@ type AnalyzeTopic =
   | "usdc-usdt-pool"
   | "top-rwa-tokens"
   | "cbbtc-24h-volume"
-  | "mantua-hooks";
+  | "mantua-hooks"
+  | "token-price";
 
 type Route =
   | { kind: "home" }
-  | { kind: "swap" }
+  | {
+      kind: "swap";
+      tokenIn?: TokenSymbol;
+      tokenOut?: TokenSymbol;
+    }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
   | { kind: "positions" }
-  | { kind: "analyze"; topic?: AnalyzeTopic; question?: string }
+  | {
+      kind: "analyze";
+      topic?: AnalyzeTopic;
+      question?: string;
+      /** Free-form symbol to pass to the `token-price` runner. */
+      symbol?: string;
+    }
   | { kind: "agent" };
 
 export default function App() {
@@ -107,6 +119,8 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "swap":
       return (
         <SwapPanel
+          {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
+          {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -162,14 +176,15 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "analyze":
-      // Key on topic+question so submitting a fresh query while
+      // Key on topic+question+symbol so submitting a fresh query while
       // already on the analyze panel remounts with the new initial
       // state — otherwise the seeded useState wouldn't update.
       return (
         <AnalyzePanel
-          key={`${route.topic ?? "none"}|${route.question ?? ""}`}
+          key={`${route.topic ?? "none"}|${route.question ?? ""}|${route.symbol ?? ""}`}
           {...(route.topic ? { initialTopic: route.topic } : {})}
           {...(route.question ? { initialQuestion: route.question } : {})}
+          {...(route.symbol ? { initialSymbol: route.symbol } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -197,6 +212,76 @@ function promptToRoute(id: HomePromptId): Route {
     case "agent":
       return { kind: "agent" };
   }
+}
+
+/**
+ * Known wallet-side token symbols that the swap / add-liquidity
+ * routes can pre-fill. Order matters: longer aliases first so
+ * "cbBTC" is checked before "BTC" — otherwise "swap ETH for cbBTC"
+ * would extract [ETH, BTC] and miss the cbBTC intent.
+ */
+const WALLET_TOKEN_ALIASES: { sym: TokenSymbol; aliases: string[] }[] = [
+  { sym: "cbBTC", aliases: ["cbbtc", "cb-btc"] },
+  { sym: "EURC", aliases: ["eurc"] },
+  { sym: "USDC", aliases: ["usdc"] },
+  { sym: "WETH", aliases: ["weth"] },
+  { sym: "ETH", aliases: ["eth", "ethereum"] },
+];
+
+/**
+ * Find every wallet-side token reference in `text`, in left-to-right
+ * order. Returns each `{sym, pos}` so callers can use the order
+ * (e.g. "swap ETH for cbBTC" → tokenIn=ETH, tokenOut=cbBTC).
+ */
+function extractWalletTokens(text: string): { sym: TokenSymbol; pos: number }[] {
+  const t = text.toLowerCase();
+  const claimed = new Array<boolean>(t.length).fill(false);
+  const found: { sym: TokenSymbol; pos: number }[] = [];
+  for (const entry of WALLET_TOKEN_ALIASES) {
+    for (const alias of entry.aliases) {
+      const re = new RegExp(`\\b${alias}\\b`, "g");
+      let m;
+      while ((m = re.exec(t)) !== null) {
+        if (claimed[m.index]) continue;
+        for (let i = m.index; i < m.index + alias.length; i++) claimed[i] = true;
+        found.push({ sym: entry.sym, pos: m.index });
+      }
+    }
+  }
+  return found.sort((a, b) => a.pos - b.pos);
+}
+
+/**
+ * "Token-ish" extractor for the analyze-price branch. Recognizes more
+ * names than `extractWalletTokens` (Bitcoin, Solana, etc.) since the
+ * server-side `token-price` runner accepts a wider alias map. Returns
+ * the first matched token name verbatim — server normalizes.
+ */
+function extractAnalyzeSymbol(text: string): string | null {
+  const t = text.toLowerCase();
+  const candidates: string[] = [
+    "bitcoin",
+    "btc",
+    "ethereum",
+    "eth",
+    "cbbtc",
+    "usdc",
+    "usdt",
+    "eurc",
+    "weth",
+    "solana",
+    "sol",
+    "maker",
+    "mkr",
+    "pendle",
+    "ondo",
+    "centrifuge",
+  ];
+  for (const c of candidates) {
+    const re = new RegExp(`\\b${c}\\b`);
+    if (re.test(t)) return c;
+  }
+  return null;
 }
 
 /**
@@ -234,24 +319,61 @@ function detectIntent(text: string): Route | null {
   if (/\busdc\b/.test(t) && /\busdt\b/.test(t)) {
     return { kind: "analyze", topic: "usdc-usdt-pool", question: text };
   }
-  if (
-    /\b(eth|ethereum)\b/.test(t) &&
-    /(price|cost|worth|trading|value|how much)/.test(t)
-  ) {
-    return { kind: "analyze", topic: "eth-price", question: text };
+
+  // Generic price intent — matches any token name in the analyze
+  // alias map (bitcoin, solana, pendle, etc.). Routes to the
+  // `token-price` topic with the matched symbol.
+  if (/(price|cost|worth|trading|value|how much)/.test(t)) {
+    const sym = extractAnalyzeSymbol(text);
+    if (sym) {
+      return { kind: "analyze", topic: "token-price", question: text, symbol: sym };
+    }
   }
 
   // Generic analyze opener — "analyze X", "research X", "what is X"
   // when no topic matched. Lands on the suggestions list with the
   // question echoed at the top.
   if (/^(analyze|research|tell me about|what is|show me)/.test(t)) {
+    // If the opener mentions a known token, still route to a price
+    // lookup ("What is bitcoin?" → token-price). Otherwise just
+    // open the analyze panel with the question echoed.
+    const sym = extractAnalyzeSymbol(text);
+    if (sym) {
+      return { kind: "analyze", topic: "token-price", question: text, symbol: sym };
+    }
     return { kind: "analyze", question: text };
   }
 
-  // Navigation intents.
-  if (/\bswap\b|\bexchange\b|\btrade\b/.test(t)) {
+  // Add-liquidity intent — "add liquidity to X/Y", "add to X Y pool",
+  // "lp X Y". Pulls the wallet-side token pair out and routes to the
+  // unified Add Liquidity / Create Pool form with the pair pre-set.
+  if (/\b(add|provide).*(liquidity|lp)\b/.test(t) || /^lp\b/.test(t)) {
+    const tokens = extractWalletTokens(text);
+    if (tokens.length >= 2) {
+      const [a, b] = tokens;
+      const fee = isStable(a!.sym) && isStable(b!.sym) ? 100 : 500;
+      return {
+        kind: "add-liquidity",
+        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: undefined },
+      };
+    }
+    return { kind: "pools" };
+  }
+
+  // Swap intent — "swap X for Y" / "swap X to Y" / "trade X for Y".
+  // Order matters: tokenIn before tokenOut.
+  if (/\b(swap|exchange|trade|convert)\b/.test(t)) {
+    const tokens = extractWalletTokens(text);
+    if (tokens.length >= 2) {
+      const [a, b] = tokens;
+      return { kind: "swap", tokenIn: a!.sym, tokenOut: b!.sym };
+    }
+    if (tokens.length === 1) {
+      return { kind: "swap", tokenIn: tokens[0]!.sym };
+    }
     return { kind: "swap" };
   }
+
   if (/\bposition/.test(t)) {
     return { kind: "positions" };
   }
@@ -260,6 +382,14 @@ function detectIntent(text: string): Route | null {
   }
 
   return null;
+}
+
+/**
+ * Stable-pair check that mirrors `isStable` from the liquidity helpers
+ * — kept inline here to avoid a cross-feature import for one bool.
+ */
+function isStable(s: TokenSymbol): boolean {
+  return s === "USDC" || s === "EURC";
 }
 
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
