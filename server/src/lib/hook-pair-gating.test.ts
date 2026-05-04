@@ -14,28 +14,22 @@ const EURC = TOKENS.EURC.address;
 const ETH = TOKENS.ETH.address;
 const UNKNOWN = "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead";
 
-describe("isHookPairAllowed — stable-protection", () => {
+// POC build (PR #74) opened the allowlist — every hook accepts every
+// pair at this server layer. The on-chain hook contract remains the
+// source of truth; if it doesn't like a pair, its `beforeInitialize`
+// reverts and the existing wallet error path surfaces it. These tests
+// guard the "we no longer pre-filter" contract.
+describe("isHookPairAllowed — stable-protection (open allowlist)", () => {
   it("allows USDC/EURC", () => {
     assert.equal(isHookPairAllowed("stable-protection", USDC, EURC), true);
   });
 
-  it("allows EURC/USDC (order-independent)", () => {
-    assert.equal(isHookPairAllowed("stable-protection", EURC, USDC), true);
+  it("allows USDC/ETH (formerly disallowed; now hook decides on-chain)", () => {
+    assert.equal(isHookPairAllowed("stable-protection", USDC, ETH), true);
   });
 
-  it("treats addresses case-insensitively", () => {
-    assert.equal(
-      isHookPairAllowed("stable-protection", USDC.toUpperCase(), EURC.toLowerCase()),
-      true,
-    );
-  });
-
-  it("rejects USDC/ETH (volatile pair)", () => {
-    assert.equal(isHookPairAllowed("stable-protection", USDC, ETH), false);
-  });
-
-  it("rejects unknown token addresses", () => {
-    assert.equal(isHookPairAllowed("stable-protection", USDC, UNKNOWN), false);
+  it("allows unknown token addresses (no pre-filter)", () => {
+    assert.equal(isHookPairAllowed("stable-protection", USDC, UNKNOWN), true);
   });
 });
 
@@ -54,13 +48,9 @@ describe("isHookPairAllowed — unrestricted hooks", () => {
   });
 });
 
-describe("listAllowedPairs", () => {
-  it("returns the explicit allowlist for stable-protection", () => {
-    const pairs = listAllowedPairs("stable-protection");
-    assert.deepEqual(pairs, [["USDC", "EURC"]]);
-  });
-
-  it("returns null for unrestricted hooks", () => {
+describe("listAllowedPairs (open allowlist)", () => {
+  it("returns null for every hook now that gating is open", () => {
+    assert.equal(listAllowedPairs("stable-protection"), null);
     assert.equal(listAllowedPairs("dynamic-fee"), null);
     assert.equal(listAllowedPairs("rwa-gate"), null);
     assert.equal(listAllowedPairs("async-limit-order"), null);
@@ -68,19 +58,19 @@ describe("listAllowedPairs", () => {
 });
 
 describe("assertHookPairAllowed", () => {
-  it("does not throw for an allowed pair", () => {
+  it("does not throw for any pair (open allowlist)", () => {
     assert.doesNotThrow(() => assertHookPairAllowed("stable-protection", USDC, EURC));
+    assert.doesNotThrow(() => assertHookPairAllowed("stable-protection", USDC, ETH));
   });
 
-  it("throws HookPairNotAllowedError for a disallowed pair", () => {
-    assert.throws(
-      () => assertHookPairAllowed("stable-protection", USDC, ETH),
-      (err: unknown) => {
-        assert.ok(err instanceof HookPairNotAllowedError);
-        assert.equal(err.hook, "stable-protection");
-        return true;
-      },
-    );
+  // Sanity check that the error class export survives — nothing
+  // in the runtime path emits it today, but callers still type
+  // against it. If the gating ever re-tightens, these throws come
+  // back; this guard makes that intentional.
+  it("HookPairNotAllowedError is still exported and constructible", () => {
+    const err = new HookPairNotAllowedError("stable-protection", USDC, ETH);
+    assert.ok(err instanceof HookPairNotAllowedError);
+    assert.equal(err.hook, "stable-protection");
   });
 });
 
@@ -95,11 +85,9 @@ describe("resolveHookForPool", () => {
     assert.equal(addr.toLowerCase(), "0xe5e6a9e09ad1e536788f0c142ad5bc69e8b020c0");
   });
 
-  it("rejects stable-protection on a volatile pair", () => {
-    assert.throws(
-      () => resolveHookForPool("stable-protection", USDC, ETH),
-      (err: unknown) => err instanceof HookPairNotAllowedError,
-    );
+  it("resolves stable-protection on any pair (open allowlist)", () => {
+    const addr = resolveHookForPool("stable-protection", USDC, ETH);
+    assert.equal(addr.toLowerCase(), "0xe5e6a9e09ad1e536788f0c142ad5bc69e8b020c0");
   });
 
   it("resolves dynamic-fee for any pair (no allowlist)", () => {
