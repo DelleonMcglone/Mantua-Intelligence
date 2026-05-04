@@ -1,15 +1,15 @@
 import { useCallback } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "../chain.ts";
+import { IS_MAINNET } from "../tokens.ts";
 
-const BASE_CHAIN_ID = 8453;
-const BASE_RPC_FALLBACK = "https://mainnet.base.org";
+const BASE_RPC_FALLBACK = IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org";
 
 /**
- * Public viem client for read-only chain calls. Uses the public Base RPC by
- * default; swap to a private RPC (Alchemy, QuickNode) by setting
- * VITE_BASE_RPC_URL in client/.env.local.
+ * Public viem client for read-only chain calls on the active network
+ * (Base Mainnet or Base Sepolia, driven by VITE_MANTUA_NETWORK). Swap to
+ * a private RPC (Alchemy, QuickNode) via VITE_BASE_RPC_URL.
  *
  * Bug fix: explicit `PublicClient` / `WalletClient` type annotations clash
  * with Privy's bundled (porto-vendored) viem under
@@ -17,7 +17,7 @@ const BASE_RPC_FALLBACK = "https://mainnet.base.org";
  * inferred. Runtime behavior unchanged.
  */
 export const publicClient = createPublicClient({
-  chain: base,
+  chain: ACTIVE_CHAIN,
   transport: http(import.meta.env.VITE_BASE_RPC_URL ?? BASE_RPC_FALLBACK),
 });
 
@@ -27,7 +27,8 @@ export const publicClient = createPublicClient({
  * waiting on the Privy `ready` flag before invoking.
  *
  * Chain assertion: throws if the active wallet is on anything other than
- * Base Mainnet (8453). The provider attempts an automatic switch first.
+ * the active Base network (mainnet or sepolia). The provider attempts an
+ * automatic switch first.
  */
 export function useBaseWalletClient() {
   const { wallets } = useWallets();
@@ -36,12 +37,12 @@ export function useBaseWalletClient() {
     const active = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
     if (!active) return null;
 
-    if (active.chainId && active.chainId !== `eip155:${BASE_CHAIN_ID}`) {
+    if (active.chainId && active.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
       try {
-        await active.switchChain(BASE_CHAIN_ID);
+        await active.switchChain(ACTIVE_CHAIN_ID);
       } catch {
         throw new Error(
-          `Wallet is on ${active.chainId}; Mantua only supports Base Mainnet (eip155:${BASE_CHAIN_ID}).`,
+          `Wallet is on ${active.chainId}; Mantua only supports ${ACTIVE_CHAIN.name} (eip155:${String(ACTIVE_CHAIN_ID)}).`,
         );
       }
     }
@@ -49,7 +50,7 @@ export function useBaseWalletClient() {
     const provider = await active.getEthereumProvider();
     return createWalletClient({
       account: active.address as `0x${string}`,
-      chain: base,
+      chain: ACTIVE_CHAIN,
       transport: custom(provider),
     });
   }, [wallets]);

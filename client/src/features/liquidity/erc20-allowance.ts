@@ -8,7 +8,7 @@
  * safety since both sides are well-tested viem 2.x.
  */
 import { parseAbi } from "viem";
-import { base } from "viem/chains";
+import { ACTIVE_CHAIN } from "@/lib/chain.ts";
 
 const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -51,7 +51,7 @@ export async function ensurePermit2Approval(
     functionName: "approve",
     args: [PERMIT2, MAX_UINT],
     account: owner,
-    chain: base,
+    chain: ACTIVE_CHAIN,
   });
   await publicClient.waitForTransactionReceipt({ hash: txHash });
   return txHash;

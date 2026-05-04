@@ -8,6 +8,7 @@ import type { TokenSymbol } from "@/lib/tokens.ts";
 import { HookSelector } from "./HookSelector.tsx";
 import { PegZoneIndicator } from "./PegZoneIndicator.tsx";
 import { TokenSelector } from "./TokenSelector.tsx";
+import { useBaselineRate } from "./use-baseline-rate.ts";
 import { useQuote } from "./use-quote.ts";
 import { useSwap } from "./use-swap.ts";
 import { formatTokenAmount } from "./format.ts";
@@ -69,7 +70,9 @@ export function SwapPanel({ onClose }: SwapPanelProps = {}) {
   const priceImpact = quote.data?.quote.quote.priceImpact;
   const aggregated = quote.data?.quote.quote.aggregatedOutputs?.[0];
   const minOut = aggregated ? formatTokenAmount(tokenOut, aggregated.minAmount) : null;
-  const rate = computeRate(amount, expectedOut, tokenIn, tokenOut);
+  const liveRate = computeRate(amount, expectedOut, tokenIn, tokenOut);
+  const baselineRate = useBaselineRate(tokenIn, tokenOut);
+  const rate = liveRate || baselineRate;
 
   const amountEntered = amountRaw !== "0" && parseFloat(amount) > 0;
   const slippagePct = slippageBps / 100;
