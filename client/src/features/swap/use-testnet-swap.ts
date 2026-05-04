@@ -1,0 +1,233 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+/**
+ * Testnet swap path. Uniswap's Trading API doesn't index Base Sepolia,
+ * so the production `useSwap` flow can't quote or build calldata
+ * there. This hook talks to our `/api/v4/quote` and
+ * `/api/v4/swap/calldata` endpoints (which call `V4Quoter` and build
+ * `PoolSwapTest.swap` calldata respectively) and runs the
+ * approve-if-needed → swap sequence in the user's wallet.
+ *
+ * For mainnet the existing `useSwap` is still the path; this is
+ * proof-of-concept-only and stays scoped to testnet via SwapPanel.
+ */
+import { useEffect, useState } from "react";
+import { useWallets } from "@privy-io/react-auth";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  parseAbi,
+} from "viem";
+import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
+import { ApiError, api } from "@/lib/api.ts";
+import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { type FeeTier } from "@/features/liquidity/fee-tiers.ts";
+import type { HookName } from "@/features/liquidity/use-create-pool.ts";
+
+const ZERO = "0x0000000000000000000000000000000000000000" as const;
+const MAX_UINT = (1n << 256n) - 1n;
+const FRESH_APPROVAL_THRESHOLD = 1n << 255n;
+
+const erc20 = parseAbi([
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+]);
+
+const baseRpcUrl: string =
+  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ?? "https://sepolia.base.org";
+const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
+
+interface QuoteRes {
+  amountOut: string;
+  gasEstimate: string;
+  poolKey: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string };
+  zeroForOne: boolean;
+}
+
+interface CalldataRes {
+  to: `0x${string}`;
+  data: `0x${string}`;
+  value: string;
+  approvalTarget: `0x${string}` | null;
+  quote: QuoteRes & { amountIn: string; amountOutMinimum: string };
+}
+
+export interface TestnetSwapArgs {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  fee: FeeTier;
+  hook: HookName | null;
+  amountInRaw: string;
+  slippageBps: number;
+}
+
+interface State {
+  status:
+    | "idle"
+    | "quoting"
+    | "approving"
+    | "signing"
+    | "pending"
+    | "success"
+    | "error";
+  amountOut?: string;
+  approvalTx?: `0x${string}`;
+  txHash?: `0x${string}`;
+  error?: ApiError | Error;
+  message?: string;
+}
+
+interface QuoteState {
+  data: QuoteRes | null;
+  loading: boolean;
+  error: ApiError | Error | null;
+}
+
+export function useTestnetQuote(args: {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  fee: FeeTier;
+  hook: HookName | null;
+  amountInRaw: string;
+  enabled: boolean;
+}): QuoteState {
+  const [state, setState] = useState<QuoteState>({ data: null, loading: false, error: null });
+
+  useEffect(() => {
+    if (!args.enabled || args.amountInRaw === "0" || args.tokenIn === args.tokenOut) {
+      setState({ data: null, loading: false, error: null });
+      return;
+    }
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    api
+      .post<QuoteRes>("/api/v4/quote", {
+        tokenIn: args.tokenIn,
+        tokenOut: args.tokenOut,
+        fee: args.fee,
+        hook: args.hook,
+        amountInRaw: args.amountInRaw,
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setState({ data, loading: false, error: null });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const e = err instanceof Error ? err : new Error("Quote failed");
+        setState({ data: null, loading: false, error: e });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.amountInRaw, args.enabled]);
+
+  return state;
+}
+
+export function useTestnetSwap() {
+  const { wallets } = useWallets();
+  const [state, setState] = useState<State>({ status: "idle" });
+
+  async function execute(args: TestnetSwapArgs): Promise<`0x${string}` | null> {
+    try {
+      const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
+      if (!wallet) throw new Error("No wallet connected");
+      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
+        await wallet.switchChain(ACTIVE_CHAIN_ID);
+      }
+      const owner = wallet.address as `0x${string}`;
+      const provider = await wallet.getEthereumProvider();
+      const walletClient = createWalletClient({
+        account: owner,
+        chain: ACTIVE_CHAIN,
+        transport: custom(provider),
+      }) as any;
+
+      setState({ status: "quoting", message: "Building swap…" });
+      const calldata = await api.post<CalldataRes>("/api/v4/swap/calldata", args);
+
+      setState({
+        status: "quoting",
+        amountOut: calldata.quote.amountOut,
+        message: "Building swap…",
+      });
+
+      // Approve input ERC-20 if needed (skip for native ETH input).
+      if (calldata.approvalTarget && !TOKENS[args.tokenIn].native) {
+        const tokenAddr = TOKENS[args.tokenIn].address;
+        const allowance = (await publicClient.readContract({
+          address: tokenAddr,
+          abi: erc20,
+          functionName: "allowance",
+          args: [owner, calldata.approvalTarget],
+        })) as bigint;
+        if (allowance < FRESH_APPROVAL_THRESHOLD) {
+          setState({
+            status: "approving",
+            amountOut: calldata.quote.amountOut,
+            message: `Approve ${args.tokenIn} in wallet…`,
+          });
+          const approvalTx: `0x${string}` = await walletClient.writeContract({
+            address: tokenAddr,
+            abi: erc20,
+            functionName: "approve",
+            args: [calldata.approvalTarget, MAX_UINT],
+            account: owner,
+            chain: ACTIVE_CHAIN,
+          });
+          await publicClient.waitForTransactionReceipt({ hash: approvalTx });
+          setState({
+            status: "approving",
+            approvalTx,
+            amountOut: calldata.quote.amountOut,
+            message: "Approval confirmed",
+          });
+        }
+      }
+
+      setState({
+        status: "signing",
+        amountOut: calldata.quote.amountOut,
+        message: "Sign swap in wallet…",
+      });
+      const txHash: `0x${string}` = await walletClient.sendTransaction({
+        account: owner,
+        chain: ACTIVE_CHAIN,
+        to: calldata.to,
+        data: calldata.data,
+        value: BigInt(calldata.value),
+      });
+      setState({
+        status: "pending",
+        txHash,
+        amountOut: calldata.quote.amountOut,
+        message: "Confirming on-chain…",
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      setState({
+        status: receipt.status === "success" ? "success" : "error",
+        txHash,
+        amountOut: calldata.quote.amountOut,
+        ...(receipt.status === "success"
+          ? {}
+          : { error: new Error("Transaction reverted") }),
+      });
+      return txHash;
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error("Swap failed");
+      setState({ status: "error", error: e });
+      return null;
+    }
+  }
+
+  return {
+    state,
+    execute,
+    reset: () => {
+      setState({ status: "idle" });
+    },
+  };
+}

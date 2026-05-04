@@ -4,9 +4,10 @@ import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import { HookSelector } from "./HookSelector.tsx";
+import { TestnetSwapPanel } from "./TestnetSwapPanel.tsx";
 import { PegZoneIndicator } from "./PegZoneIndicator.tsx";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { useBaselineRate } from "./use-baseline-rate.ts";
@@ -35,6 +36,18 @@ interface SwapPanelProps {
  * Review CTA.
  */
 export function SwapPanel({ onClose }: SwapPanelProps = {}) {
+  // Mainnet swaps go through Uniswap's Trading API (full routing,
+  // permit2, etc.). Testnet swaps go through V4Quoter + PoolSwapTest,
+  // wired in a sibling panel — the Trading API doesn't index Sepolia,
+  // so the production flow can't quote there.
+  if (!IS_MAINNET) {
+    return <TestnetSwapPanel {...(onClose ? { onClose } : {})} />;
+  }
+
+  return <MainnetSwapPanel {...(onClose ? { onClose } : {})} />;
+}
+
+function MainnetSwapPanel({ onClose }: SwapPanelProps = {}) {
   const [tokenIn, setTokenIn] = useState<TokenSymbol>("ETH");
   const [tokenOut, setTokenOut] = useState<TokenSymbol>("USDC");
   const [amount, setAmount] = useState("");

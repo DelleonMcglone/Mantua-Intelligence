@@ -12,6 +12,17 @@ const V4_POSITION_MANAGER_MAINNET = "0x7c5f5a4bbd8fd63184577525326123b519429bdc"
 const V4_POSITION_MANAGER_SEPOLIA = "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80" as const;
 const V4_STATE_VIEW_MAINNET = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
 const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8defb9b4" as const;
+const V4_QUOTER_MAINNET = "0x0d5e0f971ed27fbff6c2837bf31316121532048d" as const;
+const V4_QUOTER_SEPOLIA = "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba" as const;
+/**
+ * v4-core's `PoolSwapTest` helper — wraps `PoolManager.unlock` +
+ * `swap` + settle in a single call, pulling the input via standard
+ * ERC-20 transferFrom. We only have an address on Sepolia (the v4
+ * deployment broadcast records); on mainnet the production swap path
+ * remains the Uniswap Trading API. Used for the POC testnet swap flow
+ * since the Trading API doesn't index Sepolia.
+ */
+const POOL_SWAP_TEST_SEPOLIA = "0x8b5bcc363dde2614281ad875bad385e0a785d3b9" as const;
 
 export const V4_POOL_MANAGER: `0x${string}` = IS_MAINNET
   ? V4_POOL_MANAGER_MAINNET
@@ -22,6 +33,8 @@ export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
 export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
   ? V4_STATE_VIEW_MAINNET
   : V4_STATE_VIEW_SEPOLIA;
+export const V4_QUOTER: `0x${string}` = IS_MAINNET ? V4_QUOTER_MAINNET : V4_QUOTER_SEPOLIA;
+export const POOL_SWAP_TEST: `0x${string}` | null = IS_MAINNET ? null : POOL_SWAP_TEST_SEPOLIA;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
@@ -167,6 +180,95 @@ export const TICK_SPACING_BY_FEE: Record<FeeTier, number> = {
 export function isFeeTier(n: number): n is FeeTier {
   return n === 100 || n === 500 || n === 3000 || n === 10000;
 }
+
+/**
+ * v4-periphery `V4Quoter.quoteExactInputSingle` — returns the simulated
+ * output amount for a single-pool exact-in swap. Non-view but called
+ * via `eth_call`, which is fine because the contract reverts at the
+ * end of its internal swap simulation; the public wrapper catches that
+ * and returns the captured `(amountOut, gasEstimate)`.
+ */
+export const V4_QUOTER_ABI = [
+  {
+    type: "function",
+    name: "quoteExactInputSingle",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        type: "tuple",
+        name: "params",
+        components: [
+          {
+            type: "tuple",
+            name: "poolKey",
+            components: [
+              { type: "address", name: "currency0" },
+              { type: "address", name: "currency1" },
+              { type: "uint24", name: "fee" },
+              { type: "int24", name: "tickSpacing" },
+              { type: "address", name: "hooks" },
+            ],
+          },
+          { type: "bool", name: "zeroForOne" },
+          { type: "uint128", name: "exactAmount" },
+          { type: "bytes", name: "hookData" },
+        ],
+      },
+    ],
+    outputs: [
+      { type: "uint256", name: "amountOut" },
+      { type: "uint256", name: "gasEstimate" },
+    ],
+  },
+] as const;
+
+/**
+ * v4-core `PoolSwapTest.swap` — proof-of-concept testnet swap path.
+ * `testSettings.takeClaims = false` and `settleUsingBurn = false` make
+ * the swap behave like a normal user swap (input/output flow through
+ * standard ERC-20 transfers, ETH via msg.value). Caller must approve
+ * the input ERC-20 to PoolSwapTest first; native ETH is forwarded as
+ * `value`.
+ */
+export const POOL_SWAP_TEST_ABI = [
+  {
+    type: "function",
+    name: "swap",
+    stateMutability: "payable",
+    inputs: [
+      {
+        type: "tuple",
+        name: "key",
+        components: [
+          { type: "address", name: "currency0" },
+          { type: "address", name: "currency1" },
+          { type: "uint24", name: "fee" },
+          { type: "int24", name: "tickSpacing" },
+          { type: "address", name: "hooks" },
+        ],
+      },
+      {
+        type: "tuple",
+        name: "params",
+        components: [
+          { type: "bool", name: "zeroForOne" },
+          { type: "int256", name: "amountSpecified" },
+          { type: "uint160", name: "sqrtPriceLimitX96" },
+        ],
+      },
+      {
+        type: "tuple",
+        name: "testSettings",
+        components: [
+          { type: "bool", name: "takeClaims" },
+          { type: "bool", name: "settleUsingBurn" },
+        ],
+      },
+      { type: "bytes", name: "hookData" },
+    ],
+    outputs: [{ type: "int256", name: "delta" }],
+  },
+] as const;
 
 /**
  * v4 PoolManager.initialize ABI fragment. The full PoolManager has many
