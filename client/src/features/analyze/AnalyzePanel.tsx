@@ -1,14 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
+import { ApiError, api } from "@/lib/api.ts";
 
-const SUGGESTIONS = [
-  "What is the current price of ETH?",
-  "Is EURC trading above or below its peg?",
-  "Analyze USDC/USDT pool health",
-  "Show me top performing RWA tokens",
-  "What is cbBTC's 24h volume trend?",
-  "Learn about Mantua hooks",
+interface AnalyzeMetric {
+  label: string;
+  value: string;
+  hint?: string;
+}
+
+interface AnalyzeSource {
+  name: string;
+  url?: string;
+}
+
+interface AnalyzeResponse {
+  topic: Topic;
+  title: string;
+  summary: string;
+  metrics?: AnalyzeMetric[];
+  bullets?: string[];
+  sources?: AnalyzeSource[];
+}
+
+type Topic =
+  | "eth-price"
+  | "eurc-peg"
+  | "usdc-usdt-pool"
+  | "top-rwa-tokens"
+  | "cbbtc-24h-volume"
+  | "mantua-hooks";
+
+const SUGGESTIONS: { topic: Topic; question: string }[] = [
+  { topic: "eth-price", question: "What is the current price of ETH?" },
+  { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
+  { topic: "usdc-usdt-pool", question: "Analyze USDC/USDT pool health" },
+  { topic: "top-rwa-tokens", question: "Show me top performing RWA tokens" },
+  { topic: "cbbtc-24h-volume", question: "What is cbBTC's 24h volume trend?" },
+  { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
 ];
 
 interface AnalyzePanelProps {
@@ -16,23 +46,54 @@ interface AnalyzePanelProps {
 }
 
 /**
- * Mantua Prototype — `AnalyzePanel` (panels_more.jsx). Implements the
- * "suggest" phase of the design: 6 suggestion cards in a 2x2 grid.
- * The deep loading + results phases (chart, sentiment, risk breakdown)
- * are stubbed to a "Research coming soon" placeholder until the
- * DefiLlama route lands (Phase 7).
+ * Analyze & Research panel — backs each suggestion button with a real
+ * /api/analyze fetch (CoinGecko prices, DefiLlama Base pools,
+ * curated educational copy for hooks). The previous "Phase 7"
+ * stub is gone; failures fall back to a plain-error inline message.
  *
  * No standalone chat input lives here — the bottom-right `<InputBar />`
  * (rendered by `App.tsx`) is the only natural-language surface in the
- * prototype. See chat2 of the Mantua handoff bundle.
+ * prototype.
  */
 export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
-  const [phase, setPhase] = useState<"suggest" | "stub">("suggest");
-  const [query, setQuery] = useState("");
+  const [phase, setPhase] = useState<"suggest" | "result">("suggest");
+  const [active, setActive] = useState<{ topic: Topic; question: string } | null>(null);
+  const [data, setData] = useState<AnalyzeResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function runQuery(q: string) {
-    setQuery(q);
-    setPhase("stub");
+  useEffect(() => {
+    if (phase !== "result" || !active) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setData(null);
+    api
+      .get<AnalyzeResponse>(`/api/analyze?topic=${active.topic}`)
+      .then((res) => {
+        if (cancelled) return;
+        setData(res);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
+        setError(msg);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, active]);
+
+  function runQuery(topic: Topic, question: string) {
+    setActive({ topic, question });
+    setPhase("result");
   }
 
   return (
@@ -52,7 +113,7 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
             "Analyze & Research"
           ) : (
             <>
-              Research — <span className="text-accent">{query}</span>
+              Research — <span className="text-accent">{active?.question}</span>
             </>
           )
         }
@@ -71,30 +132,113 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
               SUGGESTED QUESTIONS
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              {SUGGESTIONS.map((q) => (
+              {SUGGESTIONS.map((s) => (
                 <button
-                  key={q}
+                  key={s.topic}
                   type="button"
                   onClick={() => {
-                    runQuery(q);
+                    runQuery(s.topic, s.question);
                   }}
                   className="flex items-center px-3.5 py-3.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left text-[13px] leading-snug font-medium min-h-[56px] hover:border-accent transition-colors"
                 >
-                  {q}
+                  {s.question}
                 </button>
               ))}
             </div>
           </>
         )}
 
-        {phase === "stub" && (
-          <div className="bg-bg-elev border border-border-soft rounded-md p-5 text-[13px] text-text-dim leading-relaxed">
-            <div className="font-semibold text-text mb-1">Research is on the way.</div>
-            The full analyze + research flow lights up once the DefiLlama route lands in
-            Phase 7. Until then, suggestions navigate to this stub.
-          </div>
+        {phase === "result" && (
+          <ResultBody data={data} loading={loading} error={error} />
         )}
       </div>
     </>
+  );
+}
+
+function ResultBody({
+  data,
+  loading,
+  error,
+}: {
+  data: AnalyzeResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <div className="bg-bg-elev border border-border-soft rounded-md p-5 text-[13px] text-text-dim">
+        Pulling live data…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="bg-bg-elev border border-red/40 rounded-md p-5 text-[13px] text-red">
+        {error}
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-bg-elev border border-border-soft rounded-md p-5">
+        <div className="font-semibold text-text text-[15px] mb-2">{data.title}</div>
+        <p className="text-[13px] text-text leading-relaxed">{data.summary}</p>
+      </div>
+
+      {data.metrics && data.metrics.length > 0 && (
+        <div className="bg-bg-elev border border-border-soft rounded-md p-5">
+          <div className="text-[10px] text-text-mute tracking-[0.08em] font-semibold mb-3">
+            METRICS
+          </div>
+          <dl className="grid grid-cols-1 gap-y-2.5">
+            {data.metrics.map((m, i) => (
+              <div
+                key={`${m.label}-${String(i)}`}
+                className="flex items-center justify-between text-[13px]"
+              >
+                <dt className="text-text-dim">{m.label}</dt>
+                <dd className="font-mono text-text">{m.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {data.bullets && data.bullets.length > 0 && (
+        <div className="bg-bg-elev border border-border-soft rounded-md p-5">
+          <ul className="space-y-2 text-[13px] text-text leading-relaxed list-disc list-outside pl-4 marker:text-text-mute">
+            {data.bullets.map((b, i) => (
+              <li key={String(i)}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.sources && data.sources.length > 0 && (
+        <div className="text-[11px] text-text-mute">
+          Sources:{" "}
+          {data.sources.map((s, i) => (
+            <span key={`${s.name}-${String(i)}`}>
+              {s.url ? (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-text-dim hover:text-accent inline-flex items-center gap-0.5"
+                >
+                  {s.name} <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              ) : (
+                <span>{s.name}</span>
+              )}
+              {i < data.sources!.length - 1 ? ", " : ""}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
