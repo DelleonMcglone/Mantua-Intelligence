@@ -8,6 +8,7 @@ import type { FeeTier } from "./fee-tiers.ts";
 import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
 import { rememberLocalPool } from "./local-pools.ts";
+import { rememberLocalPosition } from "./local-positions.ts";
 import {
   buildSignTypedDataArgs,
   wrapInMulticall,
@@ -236,10 +237,10 @@ export function useAddLiquidity() {
         outcome,
       });
 
-      // Track this pool locally so the LP list / Positions tab can
-      // show it on testnet without a Postgres / subgraph round-trip.
-      // On-chain state is still the source of truth; this is purely
-      // a client-side breadcrumb.
+      // Track this pool + position locally so the LP list and
+      // Positions tab can show them on testnet without a Postgres /
+      // subgraph round-trip. On-chain state is still the source of
+      // truth; this is purely a client-side breadcrumb.
       if (outcome === "success") {
         rememberLocalPool({
           tokenA: args.tokenA,
@@ -248,6 +249,30 @@ export function useAddLiquidity() {
           hook: args.hook ?? null,
           txHash,
         });
+        if (tokenId) {
+          // Format raw amounts back to display units for the
+          // Positions row. `formatBaseUnits` keeps it simple — it's
+          // the same conversion `formatTokenAmount` does.
+          const fmt = (raw: string, decimals: number): string => {
+            const r = BigInt(raw);
+            const denom = 10n ** BigInt(decimals);
+            const whole = r / denom;
+            const frac = r % denom;
+            if (frac === 0n) return whole.toString();
+            const s = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+            return `${whole.toString()}.${s.slice(0, 6)}`;
+          };
+          rememberLocalPosition({
+            tokenId,
+            tokenA: args.tokenA,
+            tokenB: args.tokenB,
+            fee: args.fee,
+            hook: args.hook ?? null,
+            amountA: fmt(args.amountARaw, tA.decimals),
+            amountB: fmt(args.amountBRaw, tB.decimals),
+            txHash,
+          });
+        }
       }
 
       setState({

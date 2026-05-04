@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { IS_MAINNET } from "@/lib/tokens.ts";
+import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
+import {
+  getLocalPositions,
+  type LocalPosition,
+} from "@/features/liquidity/local-positions.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
@@ -82,12 +88,57 @@ type Sort = (typeof SORTS)[number];
  * `external` pill on rows whose source !== "mantua". Real balances /
  * positions arrive in Phase 8.
  */
+/** Map our `HookName` enum → the legacy `PortfolioPosition.hook`
+ *  display label so the existing HOOK_TINT palette keeps working
+ *  unchanged when we render local positions. */
+function localHookLabel(h: LocalPosition["hook"]): HookName {
+  if (!h) return "Vanilla";
+  switch (h) {
+    case "stable-protection":
+      return "Stable Protection";
+    case "dynamic-fee":
+      return "Dynamic Fee";
+    case "rwa-gate":
+      return "RWAgate";
+    case "async-limit-order":
+      return "Vanilla"; // no design-source palette entry yet
+  }
+}
+
+function localPositionToRow(p: LocalPosition): PortfolioPosition {
+  return {
+    a: p.tokenA as AssetSymbol,
+    b: p.tokenB as AssetSymbol,
+    fee: FEE_TIER_LABELS[p.fee],
+    // We don't track running PnL client-side. Show deposited
+    // amounts in the value slot so the row stays informative.
+    value: `${p.amountA} ${p.tokenA} + ${p.amountB} ${p.tokenB}`,
+    pnl: "—",
+    pct: "—",
+    up: true,
+    source: "mantua",
+    hook: localHookLabel(p.hook),
+  };
+}
+
 export function AssetsCard() {
   const [tab, setTab] = useState<"assets" | "positions">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
   const [posSource, setPosSource] = useState<"all" | "mantua">("all");
+  const [localPositions, setLocalPositions] = useState<LocalPosition[]>(() =>
+    IS_MAINNET ? [] : getLocalPositions(),
+  );
+
+  // Re-read localStorage when the component mounts and when the user
+  // switches into the Positions tab so a fresh mint shows up without
+  // a manual page refresh.
+  useEffect(() => {
+    if (IS_MAINNET) return;
+    if (tab !== "positions") return;
+    setLocalPositions(getLocalPositions());
+  }, [tab]);
 
   const portfolio = usePortfolio();
   const assets = useMemo<DisplayAsset[]>(() => {
@@ -110,7 +161,15 @@ export function AssetsCard() {
       return numVal(b.val) - numVal(a.val);
     });
 
-  const positionsAvailable = portfolio.walletAddress ? POSITIONS : [];
+  // On testnet the LP rows come from our localStorage breadcrumb of
+  // freshly-minted positions (Postgres-backed reads are offline in
+  // the local dev env). Mainnet keeps the design-source mock until
+  // the production positions backend lights up.
+  const positionsAvailable = !portfolio.walletAddress
+    ? []
+    : IS_MAINNET
+      ? POSITIONS
+      : localPositions.map(localPositionToRow);
   const visiblePositions =
     posSource === "mantua"
       ? positionsAvailable.filter((p) => p.source === "mantua")
