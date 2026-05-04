@@ -30,7 +30,8 @@ type Topic =
   | "usdc-usdt-pool"
   | "top-rwa-tokens"
   | "cbbtc-24h-volume"
-  | "mantua-hooks";
+  | "mantua-hooks"
+  | "token-price";
 
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "eth-price", question: "What is the current price of ETH?" },
@@ -48,6 +49,9 @@ interface AnalyzePanelProps {
   initialTopic?: Topic;
   /** Original free-form question to label the result panel with. */
   initialQuestion?: string;
+  /** Token symbol to pass to the `token-price` runner — only
+   *  meaningful when initialTopic === "token-price". */
+  initialSymbol?: string;
 }
 
 /**
@@ -60,17 +64,27 @@ interface AnalyzePanelProps {
  * (rendered by `App.tsx`) is the only natural-language surface in the
  * prototype.
  */
-export function AnalyzePanel({ onClose, initialTopic, initialQuestion }: AnalyzePanelProps) {
+export function AnalyzePanel({
+  onClose,
+  initialTopic,
+  initialQuestion,
+  initialSymbol,
+}: AnalyzePanelProps) {
   const [phase, setPhase] = useState<"suggest" | "result">(
     initialTopic ? "result" : "suggest",
   );
-  const [active, setActive] = useState<{ topic: Topic; question: string } | null>(
+  const [active, setActive] = useState<{
+    topic: Topic;
+    question: string;
+    symbol?: string;
+  } | null>(
     initialTopic
       ? {
           topic: initialTopic,
           question:
             initialQuestion ??
             (SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? ""),
+          ...(initialSymbol ? { symbol: initialSymbol } : {}),
         }
       : null,
   );
@@ -85,8 +99,10 @@ export function AnalyzePanel({ onClose, initialTopic, initialQuestion }: Analyze
     setLoading(true);
     setError(null);
     setData(null);
+    const params = new URLSearchParams({ topic: active.topic });
+    if (active.symbol) params.set("symbol", active.symbol);
     api
-      .get<AnalyzeResponse>(`/api/analyze?topic=${active.topic}`)
+      .get<AnalyzeResponse>(`/api/analyze?${params.toString()}`)
       .then((res) => {
         if (cancelled) return;
         setData(res);

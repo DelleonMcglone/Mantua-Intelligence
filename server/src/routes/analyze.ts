@@ -25,11 +25,12 @@ analyzeRouter.get(
       });
       return;
     }
+    const symbol = typeof req.query.symbol === "string" ? req.query.symbol : undefined;
     try {
-      const result = await runAnalyze(parsed.data);
+      const result = await runAnalyze(parsed.data, symbol);
       res.json(result);
     } catch (err) {
-      logger.warn({ err, topic: parsed.data }, "analyze failed");
+      logger.warn({ err, topic: parsed.data, symbol }, "analyze failed");
       const message = err instanceof Error ? err.message : "Analyze failed";
       res.status(502).json({
         error: `Couldn't pull data right now: ${message}`,

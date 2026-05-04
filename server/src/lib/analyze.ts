@@ -21,9 +21,44 @@ export const TOPICS = [
   "top-rwa-tokens",
   "cbbtc-24h-volume",
   "mantua-hooks",
+  // Generic price lookup — uses the `?symbol=` query param (or the
+  // `symbol` body field) to drive a CoinGecko spot fetch. Falls back
+  // to a "we don't know that symbol" message when the symbol isn't in
+  // our small alias map.
+  "token-price",
 ] as const;
 export type Topic = (typeof TOPICS)[number];
 export const topicSchema = z.enum(TOPICS);
+
+/**
+ * Map common natural-language token names to CoinGecko ids and
+ * display labels. Kept as a flat array (not a record) so the order
+ * of matching is deterministic — longer aliases first to avoid
+ * "btc" cannibalizing "cbbtc" before the cb prefix is checked.
+ */
+const TOKEN_ALIASES: { aliases: string[]; coingeckoId: string; label: string; symbol: string }[] = [
+  { aliases: ["coinbase wrapped btc", "cbbtc", "cb-btc"], coingeckoId: "coinbase-wrapped-btc", label: "Coinbase Wrapped BTC", symbol: "cbBTC" },
+  { aliases: ["bitcoin", "btc"], coingeckoId: "bitcoin", label: "Bitcoin", symbol: "BTC" },
+  { aliases: ["ethereum", "eth"], coingeckoId: "ethereum", label: "Ethereum", symbol: "ETH" },
+  { aliases: ["solana", "sol"], coingeckoId: "solana", label: "Solana", symbol: "SOL" },
+  { aliases: ["usd coin", "usdc"], coingeckoId: "usd-coin", label: "USD Coin", symbol: "USDC" },
+  { aliases: ["tether", "usdt"], coingeckoId: "tether", label: "Tether", symbol: "USDT" },
+  { aliases: ["euro coin", "eurc"], coingeckoId: "euro-coin", label: "Euro Coin", symbol: "EURC" },
+  { aliases: ["wrapped ether", "weth"], coingeckoId: "weth", label: "Wrapped Ether", symbol: "WETH" },
+  { aliases: ["maker", "mkr"], coingeckoId: "maker", label: "Maker", symbol: "MKR" },
+  { aliases: ["pendle"], coingeckoId: "pendle", label: "Pendle", symbol: "PENDLE" },
+  { aliases: ["ondo"], coingeckoId: "ondo-finance", label: "Ondo", symbol: "ONDO" },
+  { aliases: ["centrifuge", "rwa"], coingeckoId: "centrifuge", label: "Centrifuge", symbol: "CFG" },
+];
+
+export function resolveTokenAlias(input: string): { coingeckoId: string; label: string; symbol: string } | null {
+  const norm = input.trim().toLowerCase();
+  if (!norm) return null;
+  for (const t of TOKEN_ALIASES) {
+    if (t.aliases.includes(norm)) return t;
+  }
+  return null;
+}
 
 export interface AnalyzeMetric {
   label: string;
@@ -258,6 +293,52 @@ async function topRwaTokens(): Promise<AnalyzeResponse> {
   };
 }
 
+const tokenPriceSchema = z.record(
+  z.string(),
+  z.object({
+    usd: z.number().optional(),
+    usd_24h_change: z.number().optional(),
+  }),
+);
+
+async function tokenPrice(symbol: string): Promise<AnalyzeResponse> {
+  const alias = resolveTokenAlias(symbol);
+  if (!alias) {
+    return {
+      topic: "token-price",
+      title: `Price lookup: ${symbol}`,
+      summary: `I don't have ${symbol} in my alias map yet. Known names: bitcoin, ethereum, cbBTC, USDC, USDT, EURC, WETH, MKR, PENDLE, ONDO, CFG, SOL.`,
+    };
+  }
+  const url = `${COINGECKO}/simple/price?ids=${alias.coingeckoId}&vs_currencies=usd&include_24hr_change=true`;
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`CoinGecko ${String(res.status)}`);
+  const json = tokenPriceSchema.parse(await res.json());
+  const entry = json[alias.coingeckoId];
+  if (!entry?.usd) {
+    return {
+      topic: "token-price",
+      title: `${alias.label} (${alias.symbol})`,
+      summary: `CoinGecko didn't return a price for ${alias.label} just now. Try again in a moment.`,
+    };
+  }
+  const change = entry.usd_24h_change ?? 0;
+  return {
+    topic: "token-price",
+    title: `${alias.label} (${alias.symbol}) spot price`,
+    summary: `${alias.label} (${alias.symbol}) is trading at ${fmtUsd(entry.usd)}${
+      Number.isFinite(change) ? `, ${fmtPct(change)} in the last 24h` : ""
+    }.`,
+    metrics: [
+      { label: "Price", value: fmtUsd(entry.usd) },
+      { label: "24h change", value: fmtPct(change) },
+    ],
+    sources: [
+      { name: "CoinGecko", url: `https://www.coingecko.com/en/coins/${alias.coingeckoId}` },
+    ],
+  };
+}
+
 function mantuaHooks(): AnalyzeResponse {
   return {
     topic: "mantua-hooks",
@@ -276,7 +357,10 @@ function mantuaHooks(): AnalyzeResponse {
   };
 }
 
-const TOPIC_RUNNERS: Record<Topic, () => Promise<AnalyzeResponse> | AnalyzeResponse> = {
+const TOPIC_RUNNERS: Record<
+  Exclude<Topic, "token-price">,
+  () => Promise<AnalyzeResponse> | AnalyzeResponse
+> = {
   "eth-price": ethPrice,
   "eurc-peg": eurcPeg,
   "usdc-usdt-pool": usdcUsdtPool,
@@ -298,33 +382,48 @@ interface CacheEntry {
   response: AnalyzeResponse;
   fetchedAt: number;
 }
-const cache = new Map<Topic, CacheEntry>();
+const cache = new Map<string, CacheEntry>();
+
+const PRICE_TTL = { freshMs: 5 * 60_000, staleMs: 30 * 60_000 };
+const POOL_TTL = { freshMs: 5 * 60_000, staleMs: 60 * 60_000 };
+const STATIC_TTL = { freshMs: Number.MAX_SAFE_INTEGER, staleMs: Number.MAX_SAFE_INTEGER };
 
 const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
-  // Static educational copy — never expires.
-  "mantua-hooks": { freshMs: Number.MAX_SAFE_INTEGER, staleMs: Number.MAX_SAFE_INTEGER },
-  // Live prices — 5min fresh, 30min stale-while-error.
-  "eth-price": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
-  "eurc-peg": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
-  "top-rwa-tokens": { freshMs: 5 * 60_000, staleMs: 30 * 60_000 },
-  // DefiLlama pool data — 5min fresh, 60min stale.
-  "usdc-usdt-pool": { freshMs: 5 * 60_000, staleMs: 60 * 60_000 },
-  "cbbtc-24h-volume": { freshMs: 5 * 60_000, staleMs: 60 * 60_000 },
+  "mantua-hooks": STATIC_TTL,
+  "eth-price": PRICE_TTL,
+  "eurc-peg": PRICE_TTL,
+  "top-rwa-tokens": PRICE_TTL,
+  "token-price": PRICE_TTL,
+  "usdc-usdt-pool": POOL_TTL,
+  "cbbtc-24h-volume": POOL_TTL,
 };
 
-export async function runAnalyze(topic: Topic): Promise<AnalyzeResponse> {
+/**
+ * Cache key for `token-price` includes the symbol so different
+ * lookups don't clobber each other; everything else just keys on
+ * the topic name.
+ */
+function cacheKey(topic: Topic, symbol?: string): string {
+  return topic === "token-price" ? `token-price:${(symbol ?? "").toLowerCase()}` : topic;
+}
+
+export async function runAnalyze(topic: Topic, symbol?: string): Promise<AnalyzeResponse> {
   const ttl = TOPIC_TTL[topic];
-  const cached = cache.get(topic);
+  const key = cacheKey(topic, symbol);
+  const cached = cache.get(key);
   const now = Date.now();
   if (cached && now - cached.fetchedAt < ttl.freshMs) {
     return cached.response;
   }
   try {
-    const response = await TOPIC_RUNNERS[topic]();
-    cache.set(topic, { response, fetchedAt: now });
+    const response =
+      topic === "token-price"
+        ? await tokenPrice(symbol ?? "")
+        : await TOPIC_RUNNERS[topic]();
+    cache.set(key, { response, fetchedAt: now });
     return response;
   } catch (err) {
-    logger.warn({ err, topic }, "analyze topic fetch failed");
+    logger.warn({ err, topic, symbol }, "analyze topic fetch failed");
     // Stale-while-error: if we have a cached answer that's still
     // within the stale window, serve it rather than 502'ing the user.
     if (cached && now - cached.fetchedAt < ttl.staleMs) {

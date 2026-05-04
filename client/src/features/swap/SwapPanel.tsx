@@ -25,6 +25,11 @@ import {
 
 interface SwapPanelProps {
   onClose?: () => void;
+  /** Pre-seed the Sell + Buy token selectors. Used when the chat
+   *  intent matcher pulls a pair out of the user's question
+   *  ("swap ETH for cbBTC" → tokenIn=ETH, tokenOut=cbBTC). */
+  initialTokenIn?: TokenSymbol;
+  initialTokenOut?: TokenSymbol;
 }
 
 /**
@@ -35,21 +40,33 @@ interface SwapPanelProps {
  * warnings → Exchange Rate card → Fee Architecture → divider stats →
  * Review CTA.
  */
-export function SwapPanel({ onClose }: SwapPanelProps = {}) {
+export function SwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPanelProps = {}) {
   // Mainnet swaps go through Uniswap's Trading API (full routing,
   // permit2, etc.). Testnet swaps go through V4Quoter + PoolSwapTest,
   // wired in a sibling panel — the Trading API doesn't index Sepolia,
   // so the production flow can't quote there.
   if (!IS_MAINNET) {
-    return <TestnetSwapPanel {...(onClose ? { onClose } : {})} />;
+    return (
+      <TestnetSwapPanel
+        {...(onClose ? { onClose } : {})}
+        {...(initialTokenIn ? { initialTokenIn } : {})}
+        {...(initialTokenOut ? { initialTokenOut } : {})}
+      />
+    );
   }
 
-  return <MainnetSwapPanel {...(onClose ? { onClose } : {})} />;
+  return (
+    <MainnetSwapPanel
+      {...(onClose ? { onClose } : {})}
+      {...(initialTokenIn ? { initialTokenIn } : {})}
+      {...(initialTokenOut ? { initialTokenOut } : {})}
+    />
+  );
 }
 
-function MainnetSwapPanel({ onClose }: SwapPanelProps = {}) {
-  const [tokenIn, setTokenIn] = useState<TokenSymbol>("ETH");
-  const [tokenOut, setTokenOut] = useState<TokenSymbol>("USDC");
+function MainnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPanelProps = {}) {
+  const [tokenIn, setTokenIn] = useState<TokenSymbol>(initialTokenIn ?? "ETH");
+  const [tokenOut, setTokenOut] = useState<TokenSymbol>(initialTokenOut ?? "USDC");
   const [amount, setAmount] = useState("");
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const [hook, setHook] = useState<HookOption>("none");
