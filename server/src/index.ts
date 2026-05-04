@@ -25,6 +25,7 @@ import { portfolioRouter } from "./routes/portfolio.ts";
 import { positionsRouter } from "./routes/positions.ts";
 import { quoteRouter } from "./routes/quote.ts";
 import { swapRouter } from "./routes/swap.ts";
+import { tokenPricesRouter } from "./routes/token-prices.ts";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -44,6 +45,7 @@ app.use(positionsRouter);
 app.use(portfolioRouter);
 app.use(quoteRouter);
 app.use(swapRouter);
+app.use(tokenPricesRouter);
 app.use(complianceAdminRouter);
 app.use(agentWalletsRouter);
 app.use(agentSendRouter);
