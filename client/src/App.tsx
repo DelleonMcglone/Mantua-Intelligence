@@ -219,13 +219,17 @@ function promptToRoute(id: HomePromptId): Route {
  * routes can pre-fill. Order matters: longer aliases first so
  * "cbBTC" is checked before "BTC" — otherwise "swap ETH for cbBTC"
  * would extract [ETH, BTC] and miss the cbBTC intent.
+ *
+ * Common typos are folded in (cbBCT for cbBTC, EUCR for EURC, etc.)
+ * so the chat input forgives single-character transpositions
+ * without needing fuzzy matching.
  */
 const WALLET_TOKEN_ALIASES: { sym: TokenSymbol; aliases: string[] }[] = [
-  { sym: "cbBTC", aliases: ["cbbtc", "cb-btc"] },
-  { sym: "EURC", aliases: ["eurc"] },
-  { sym: "USDC", aliases: ["usdc"] },
+  { sym: "cbBTC", aliases: ["cbbtc", "cb-btc", "cbbct", "cb-bct", "cbtc"] },
+  { sym: "EURC", aliases: ["eurc", "eucr"] },
+  { sym: "USDC", aliases: ["usdc", "uscd"] },
   { sym: "WETH", aliases: ["weth"] },
-  { sym: "ETH", aliases: ["eth", "ethereum"] },
+  { sym: "ETH", aliases: ["eth", "ethereum", "eht"] },
 ];
 
 /**
@@ -259,27 +263,29 @@ function extractWalletTokens(text: string): { sym: TokenSymbol; pos: number }[] 
  */
 function extractAnalyzeSymbol(text: string): string | null {
   const t = text.toLowerCase();
-  const candidates: string[] = [
-    "bitcoin",
-    "btc",
-    "ethereum",
-    "eth",
-    "cbbtc",
-    "usdc",
-    "usdt",
-    "eurc",
-    "weth",
-    "solana",
-    "sol",
-    "maker",
-    "mkr",
-    "pendle",
-    "ondo",
-    "centrifuge",
+  // Each entry maps the canonical alias used by the server's analyze
+  // alias map to a list of patterns we'll match in the chat. Common
+  // single-char typos are folded in (cbBCT for cbBTC, eht for eth)
+  // so the matcher forgives transpositions without fuzzy matching.
+  const candidates: { canonical: string; patterns: string[] }[] = [
+    { canonical: "bitcoin", patterns: ["bitcoin", "btc"] },
+    { canonical: "ethereum", patterns: ["ethereum", "eth", "eht"] },
+    { canonical: "cbbtc", patterns: ["cbbtc", "cbbct", "cb-btc", "cb-bct"] },
+    { canonical: "usdc", patterns: ["usdc", "uscd"] },
+    { canonical: "usdt", patterns: ["usdt"] },
+    { canonical: "eurc", patterns: ["eurc", "eucr"] },
+    { canonical: "weth", patterns: ["weth"] },
+    { canonical: "solana", patterns: ["solana", "sol"] },
+    { canonical: "maker", patterns: ["maker", "mkr"] },
+    { canonical: "pendle", patterns: ["pendle"] },
+    { canonical: "ondo", patterns: ["ondo"] },
+    { canonical: "centrifuge", patterns: ["centrifuge"] },
   ];
   for (const c of candidates) {
-    const re = new RegExp(`\\b${c}\\b`);
-    if (re.test(t)) return c;
+    for (const p of c.patterns) {
+      const re = new RegExp(`\\b${p}\\b`);
+      if (re.test(t)) return c.canonical;
+    }
   }
   return null;
 }
