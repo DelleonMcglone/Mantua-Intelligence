@@ -19,6 +19,7 @@ import {
   HOOK_LABELS,
   recommendedHookForPair,
 } from "./hook-recommendations.ts";
+import { useTokenPrices } from "./use-token-prices.ts";
 
 interface Props {
   onBack: () => void;
@@ -53,6 +54,17 @@ const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "rwa-gate": false,
   "async-limit-order": false,
 };
+
+/**
+ * Format a mirrored amount with enough precision for stable pairs
+ * (~6dp) without trailing zero noise. Trims to 6 significant decimals
+ * and drops trailing zeros.
+ */
+function formatMirror(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  const fixed = value.toFixed(6);
+  return fixed.replace(/\.?0+$/, "");
+}
 
 export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
   const [tokenA, setTokenA] = useState<TokenSymbol>("USDC");
@@ -91,6 +103,34 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
       document.removeEventListener("mousedown", onClickOutside);
     };
   }, [showHooks]);
+
+  // Mirror Token A → Token B (and vice-versa) at the real-world USD
+  // price ratio so the user can type once. Falls back to 1:1 for stable
+  // pairs when CoinGecko is unavailable; non-stable pairs without a
+  // ratio leave the other side untouched.
+  const tokenPrices = useTokenPrices(useMemo(() => [tokenA, tokenB], [tokenA, tokenB]));
+  const priceRatioAtoB = useMemo(() => {
+    const pa = tokenPrices.prices[tokenA];
+    const pb = tokenPrices.prices[tokenB];
+    if (pa && pb && pa > 0 && pb > 0) return pa / pb;
+    if (isStable(tokenA) && isStable(tokenB)) return 1;
+    return null;
+  }, [tokenPrices.prices, tokenA, tokenB]);
+
+  function onAmountAChange(value: string) {
+    setAmountA(value);
+    if (priceRatioAtoB === null) return;
+    const num = parseFloat(value);
+    if (!Number.isFinite(num)) return;
+    setAmountB(formatMirror(num * priceRatioAtoB));
+  }
+  function onAmountBChange(value: string) {
+    setAmountB(value);
+    if (priceRatioAtoB === null) return;
+    const num = parseFloat(value);
+    if (!Number.isFinite(num)) return;
+    setAmountA(formatMirror(num / priceRatioAtoB));
+  }
 
   const amountARaw = safeParse(tokenA, amountA);
   const amountBRaw = safeParse(tokenB, amountB);
@@ -137,7 +177,7 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
             onSymbolChange={setTokenA}
             disabledSymbol={tokenB}
             amount={amountA}
-            onAmountChange={setAmountA}
+            onAmountChange={onAmountAChange}
           />
           <PairCell
             label="Token B"
@@ -145,7 +185,7 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
             onSymbolChange={setTokenB}
             disabledSymbol={tokenA}
             amount={amountB}
-            onAmountChange={setAmountB}
+            onAmountChange={onAmountBChange}
           />
         </div>
 
