@@ -9,7 +9,7 @@
     "preview": "vite preview --port 4173",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "tsx --test 'src/**/*.test.ts'"
+    "test": "find src -name '*.test.ts' | xargs tsx --test"
   },
   "dependencies": {
     "@privy-io/react-auth": "3.22.2",
