@@ -9,6 +9,8 @@ import { logger } from "../lib/logger.ts";
 import { buildPermit2BatchTypedData } from "../lib/permit2.ts";
 import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
+import { resolveHookForPool } from "../lib/hook-pair-gating.ts";
+import { getToken } from "../lib/tokens.ts";
 import { tokenAmountUsd } from "../lib/usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "../lib/v4-add-liquidity.ts";
 import { readSlot0 } from "../lib/v4-state-view.ts";
@@ -73,11 +75,23 @@ liquidityAddRouter.post(
       return;
     }
     try {
+      const hookName = parsed.data.hook ?? null;
+      const hookAddress = resolveHookForPool(
+        hookName,
+        getToken(parsed.data.tokenA).address,
+        getToken(parsed.data.tokenB).address,
+      );
       let sqrtPriceX96: bigint;
       if (parsed.data.sqrtPriceX96) {
         sqrtPriceX96 = BigInt(parsed.data.sqrtPriceX96);
       } else {
-        const { key } = buildPoolKey(parsed.data.tokenA, parsed.data.tokenB, parsed.data.fee);
+        const { key } = buildPoolKey(
+          parsed.data.tokenA,
+          parsed.data.tokenB,
+          parsed.data.fee,
+          hookAddress,
+          hookName,
+        );
         const slot0 = await readSlot0(key);
         if (!slot0) {
           res.status(400).json({
@@ -92,6 +106,8 @@ liquidityAddRouter.post(
         tokenA: parsed.data.tokenA,
         tokenB: parsed.data.tokenB,
         fee: parsed.data.fee,
+        hookAddress,
+        hookName,
         amountARaw: BigInt(parsed.data.amountARaw),
         amountBRaw: BigInt(parsed.data.amountBRaw),
         sqrtPriceX96,

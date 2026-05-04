@@ -1,11 +1,18 @@
 import { z } from "zod";
 import { isTokenSymbol } from "../lib/tokens.ts";
-import { isFeeTier } from "../lib/v4-contracts.ts";
+import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
+
+const hookSchema = z.enum(HOOK_NAMES);
 
 export const calldataSchema = z.object({
   tokenA: z.string().refine(isTokenSymbol, "Unknown tokenA"),
   tokenB: z.string().refine(isTokenSymbol, "Unknown tokenB"),
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
+  /** Optional hook binding — must match the hook the pool was created
+   *  with so the reconstructed PoolKey matches on-chain (hooks like
+   *  Stable Protection set `key.fee = DYNAMIC_FEE_FLAG`, which the
+   *  client doesn't see). Omitted/null = no-hook pool. */
+  hook: hookSchema.nullable().optional(),
   amountARaw: z.string().regex(/^\d+$/),
   amountBRaw: z.string().regex(/^\d+$/),
   /** Optional. When omitted, the server reads slot0 via StateView. The
@@ -21,6 +28,7 @@ export const recordSchema = z.object({
   tokenA: z.string().refine(isTokenSymbol),
   tokenB: z.string().refine(isTokenSymbol),
   fee: z.number().int().refine(isFeeTier),
+  hook: hookSchema.nullable().optional(),
   amountARaw: z.string().regex(/^\d+$/),
   amountBRaw: z.string().regex(/^\d+$/),
   liquidity: z.string().regex(/^\d+$/),
