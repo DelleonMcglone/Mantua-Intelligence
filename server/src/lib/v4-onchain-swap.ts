@@ -68,6 +68,54 @@ function friendlyQuoterError(err: unknown): Error {
 }
 
 /**
+ * Binary-search the largest input amount that V4Quoter can quote for
+ * the given pool key without reverting. Used by the swap panel's
+ * percent chips on testnet so a 25% / 50% / Max click can't overshoot
+ * pool depth (or land on a non-existent pool).
+ *
+ * `upperBound` is the user's wallet balance in raw base units —
+ * if the pool can absorb that much, we short-circuit and return it
+ * directly. Otherwise we binary-search the [0, upperBound] interval.
+ *
+ * 24 iterations is enough to converge on any bound under 2^24 of
+ * raw-unit precision, which for a 6-dec stablecoin is ~16 USD —
+ * fine resolution for percent chips. Each iteration is one
+ * `eth_call`; total worst-case RPC fan-out is 25 (one direct probe
+ * + 24 search steps), only fired when the user actually clicks
+ * a percent chip.
+ */
+export async function findMaxQuotableInputV4(
+  args: Omit<OnchainQuoteArgs, "amountInRaw"> & { upperBound: bigint },
+): Promise<bigint> {
+  const { upperBound, ...rest } = args;
+  if (upperBound === 0n) return 0n;
+
+  // Direct probe at the full upper bound — if it works, the pool can
+  // absorb the user's whole balance and no cap is needed.
+  try {
+    await quoteExactInputV4({ ...rest, amountInRaw: upperBound });
+    return upperBound;
+  } catch {
+    // Fall through to binary search.
+  }
+
+  let lo = 0n;
+  let hi = upperBound;
+  for (let i = 0; i < 24; i++) {
+    if (hi - lo <= 1n) break;
+    const mid = (lo + hi) / 2n;
+    if (mid === lo) break;
+    try {
+      await quoteExactInputV4({ ...rest, amountInRaw: mid });
+      lo = mid;
+    } catch {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+/**
  * Build the v4 PoolKey and call `V4Quoter.quoteExactInputSingle` via
  * `eth_call`. Returns the simulated `amountOut` plus the constructed
  * `poolKey` (caller will reuse it to build PoolSwapTest calldata).
