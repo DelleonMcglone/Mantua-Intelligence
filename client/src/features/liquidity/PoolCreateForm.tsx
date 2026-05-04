@@ -229,7 +229,13 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
         <Button
           variant="primary"
           size="lg"
-          disabled={!ready || create.state.status !== "idle"}
+          disabled={
+            !ready ||
+            create.state.status === "preparing" ||
+            create.state.status === "signing" ||
+            create.state.status === "pending" ||
+            create.state.status === "success"
+          }
           onClick={() => {
             void onSubmit();
           }}
@@ -247,21 +253,27 @@ export function PoolCreateForm({ onBack, onAddLiquidity, onClose }: Props) {
             View on BaseScan <ExternalLink className="h-3 w-3" />
           </a>
         )}
-        {create.state.status === "success" && create.state.poolKey && (
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => {
-              onAddLiquidity({
-                tokenA,
-                tokenB,
-                fee,
-                sqrtPriceX96: create.state.poolKey?.sqrtPriceX96 ?? "0",
-              });
-            }}
-          >
-            Add liquidity to this pool →
-          </Button>
+        {(create.state.status === "success" || create.state.status === "exists") &&
+          create.state.poolKey && (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                onAddLiquidity({
+                  tokenA,
+                  tokenB,
+                  fee,
+                  sqrtPriceX96: create.state.poolKey?.sqrtPriceX96 ?? "0",
+                });
+              }}
+            >
+              Add liquidity to this pool →
+            </Button>
+          )}
+        {create.state.status === "exists" && (
+          <p className="text-xs text-text-mute text-center">
+            This pool already exists on Base Sepolia.
+          </p>
         )}
         {create.state.status === "error" && create.state.error && (
           <p className="text-xs text-red text-center">{create.state.error.message}</p>
