@@ -46,6 +46,28 @@ function resolveHookAddress(hook: HookName | null): `0x${string}` {
 }
 
 /**
+ * Inspect a viem-thrown error from V4Quoter and turn known reverts
+ * into human-friendly messages. Quoter wraps any internal failure as
+ * `UnexpectedRevertBytes(bytes)` (selector `0x6190b2b0`) — that
+ * usually means the pool hasn't been initialized for the requested
+ * key, the hook rejected the swap, or the input amount exceeded
+ * available liquidity.
+ */
+function friendlyQuoterError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/0x6190b2b0|UnexpectedRevertBytes/i.test(msg)) {
+    return new Error(
+      "Quote failed — pool may be missing liquidity, the hook rejected the swap, or the requested amount is larger than the pool can support. Try a smaller amount.",
+    );
+  }
+  if (/PoolNotInitialized|0x[0-9a-f]+ not initialized/i.test(msg)) {
+    return new Error("Pool not initialized for this pair + fee + hook combination.");
+  }
+  if (err instanceof Error) return err;
+  return new Error("Quote failed");
+}
+
+/**
  * Build the v4 PoolKey and call `V4Quoter.quoteExactInputSingle` via
  * `eth_call`. Returns the simulated `amountOut` plus the constructed
  * `poolKey` (caller will reuse it to build PoolSwapTest calldata).
@@ -61,34 +83,37 @@ export async function quoteExactInputV4(
     : getToken(args.tokenIn).address;
   const zeroForOne = tokenInAddr.toLowerCase() === key.currency0.toLowerCase();
 
-  const { result } = await baseRpcClient.simulateContract({
-    address: V4_QUOTER,
-    abi: V4_QUOTER_ABI,
-    functionName: "quoteExactInputSingle",
-    args: [
-      {
-        poolKey: {
-          currency0: key.currency0,
-          currency1: key.currency1,
-          fee: key.fee,
-          tickSpacing: key.tickSpacing,
-          hooks: key.hooks,
+  try {
+    const { result } = await baseRpcClient.simulateContract({
+      address: V4_QUOTER,
+      abi: V4_QUOTER_ABI,
+      functionName: "quoteExactInputSingle",
+      args: [
+        {
+          poolKey: {
+            currency0: key.currency0,
+            currency1: key.currency1,
+            fee: key.fee,
+            tickSpacing: key.tickSpacing,
+            hooks: key.hooks,
+          },
+          zeroForOne,
+          exactAmount: args.amountInRaw,
+          hookData: "0x",
         },
-        zeroForOne,
-        exactAmount: args.amountInRaw,
-        hookData: "0x",
-      },
-    ],
-  });
-
-  const [amountOut, gasEstimate] = result;
-  return {
-    poolKey: key,
-    zeroForOne,
-    amountIn: args.amountInRaw.toString(),
-    amountOut: amountOut.toString(),
-    gasEstimate: gasEstimate.toString(),
-  };
+      ],
+    });
+    const [amountOut, gasEstimate] = result;
+    return {
+      poolKey: key,
+      zeroForOne,
+      amountIn: args.amountInRaw.toString(),
+      amountOut: amountOut.toString(),
+      gasEstimate: gasEstimate.toString(),
+    };
+  } catch (err) {
+    throw friendlyQuoterError(err);
+  }
 }
 
 export interface SwapCalldataArgs {

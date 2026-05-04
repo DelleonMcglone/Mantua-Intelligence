@@ -7,6 +7,7 @@ import { IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
+import { rememberLocalPool } from "./local-pools.ts";
 import {
   buildSignTypedDataArgs,
   wrapInMulticall,
@@ -234,6 +235,20 @@ export function useAddLiquidity() {
         ...(tokenId ? { tokenId } : {}),
         outcome,
       });
+
+      // Track this pool locally so the LP list / Positions tab can
+      // show it on testnet without a Postgres / subgraph round-trip.
+      // On-chain state is still the source of truth; this is purely
+      // a client-side breadcrumb.
+      if (outcome === "success") {
+        rememberLocalPool({
+          tokenA: args.tokenA,
+          tokenB: args.tokenB,
+          fee: args.fee,
+          hook: args.hook ?? null,
+          txHash,
+        });
+      }
 
       setState({
         status: outcome === "success" ? "success" : "error",
