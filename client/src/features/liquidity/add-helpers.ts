@@ -2,6 +2,10 @@ import type { useAddLiquidity } from "./use-add-liquidity.ts";
 
 export function addCtaLabel(state: ReturnType<typeof useAddLiquidity>["state"]): string {
   switch (state.status) {
+    case "creating-pool":
+      return state.message ?? "Initializing pool…";
+    case "pool-pending":
+      return "Pool initializing…";
     case "preparing":
       return "Preparing calldata…";
     case "approving":
@@ -15,6 +19,6 @@ export function addCtaLabel(state: ReturnType<typeof useAddLiquidity>["state"]):
     case "error":
       return "Try again";
     default:
-      return "Add liquidity";
+      return "Create / Add Liquidity";
   }
 }

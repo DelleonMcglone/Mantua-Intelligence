@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
-import { FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
+import { DEFAULT_FEE_TIER_FOR_PAIR, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
+import { FeeTierPicker } from "./FeeTierPicker.tsx";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
-import { safeParse } from "./create-helpers.ts";
+import { isStable, safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
 import { useAddLiquidity } from "./use-add-liquidity.ts";
 import type { HookName } from "./use-create-pool.ts";
+import { HOOK_DESCRIPTIONS, HOOK_LABELS, recommendedHookForPair } from "./hook-recommendations.ts";
+import { useTokenPrices } from "./use-token-prices.ts";
 
 export interface PoolKeyContext {
   tokenA: TokenSymbol;
@@ -24,21 +27,47 @@ export interface PoolKeyContext {
   /** Set by the pool-create flow with the just-initialized price.
    *  Omitted when entering from PoolDetailPage — server reads slot0. */
   sqrtPriceX96?: string;
+  /** True when the form was opened against a known existing pool —
+   *  locks the pair / fee / hook controls so the user can't drift away
+   *  from the pool they're trying to deposit into. */
+  locked?: boolean;
 }
 
 interface Props {
-  ctx: PoolKeyContext;
+  /** Initial pair / fee / hook to pre-fill. Omit to start from defaults
+   *  (USDC/EURC + 0.01% + Stable Protection) — the form will then act
+   *  as a unified "create or add" surface. */
+  ctx?: PoolKeyContext;
   onBack: () => void;
   onClose?: () => void;
 }
 
-const HOOKS = [
-  { name: "No Hook", desc: "Standard execution" },
-  { name: "Stable Protection", desc: "Minimizes depeg & slippage" },
-  { name: "Dynamic Fee", desc: "Fees adjust to volatility" },
-  { name: "RWAgate", desc: "Compliance-gated routing" },
-  { name: "Async Limit Order", desc: "Off-chain matching, on-chain settle" },
+const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] = [
+  { value: "none", name: "No Hook", desc: "Standard execution" },
+  { value: "stable-protection", name: HOOK_LABELS["stable-protection"], desc: HOOK_DESCRIPTIONS["stable-protection"] },
+  { value: "dynamic-fee", name: HOOK_LABELS["dynamic-fee"], desc: HOOK_DESCRIPTIONS["dynamic-fee"] },
+  { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
+  { value: "async-limit-order", name: HOOK_LABELS["async-limit-order"], desc: HOOK_DESCRIPTIONS["async-limit-order"] },
 ];
+
+const DEFAULT_TOKEN_A: TokenSymbol = "USDC";
+const DEFAULT_TOKEN_B: TokenSymbol = "EURC";
+
+function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
+  return h ?? "none";
+}
+
+const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
+  "stable-protection": true,
+  "dynamic-fee": true,
+  "rwa-gate": false,
+  "async-limit-order": false,
+};
+
+function formatMirror(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  return value.toFixed(6).replace(/\.?0+$/, "");
+}
 
 const RANGE_OPTIONS = ["Full", "Wide", "Narrow", "Custom"] as const;
 type RangeOption = (typeof RANGE_OPTIONS)[number];
@@ -61,16 +90,39 @@ type ChartRange = (typeof CHART_RANGES)[number];
  * change is presentational; calldata + approvals path is unchanged.
  */
 export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
+  const locked = ctx?.locked === true;
+  const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? DEFAULT_TOKEN_A);
+  const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? DEFAULT_TOKEN_B);
+  const [fee, setFee] = useState<FeeTier>(
+    ctx?.fee ??
+      DEFAULT_FEE_TIER_FOR_PAIR(
+        isStable(ctx?.tokenA ?? DEFAULT_TOKEN_A),
+        isStable(ctx?.tokenB ?? DEFAULT_TOKEN_B),
+      ),
+  );
+  const [hook, setHook] = useState<HookName | "none">(() => {
+    if (ctx?.hook !== undefined) return hookFromCtx(ctx.hook);
+    return recommendedHookForPair(DEFAULT_TOKEN_A, DEFAULT_TOKEN_B) ?? "none";
+  });
+  const [hookTouched, setHookTouched] = useState(false);
   const [amountA, setAmountA] = useState("0.0");
   const [amountB, setAmountB] = useState("0.0");
   const [chartRange, setChartRange] = useState<ChartRange>("7D");
   const [chartTab, setChartTab] = useState<"volume" | "tvl">("volume");
-  const [hook, setHook] = useState(HOOKS[0]!);
   const [showHooks, setShowHooks] = useState(false);
   const [range, setRange] = useState<RangeOption>("Full");
   const hookRef = useRef<HTMLDivElement | null>(null);
   const confirm = useConfirmedAction();
   const add = useAddLiquidity();
+
+  // Auto-suggest a hook when the user changes the pair, but only until
+  // they explicitly pick one — same behavior as the (now-removed)
+  // dedicated PoolCreateForm.
+  const recommended = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
+  useEffect(() => {
+    if (locked || hookTouched) return;
+    setHook(recommended ?? "none");
+  }, [recommended, locked, hookTouched]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -83,26 +135,56 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
     };
   }, []);
 
-  const amountARaw = safeParse(ctx.tokenA, amountA);
-  const amountBRaw = safeParse(ctx.tokenB, amountB);
-  const ready = amountARaw !== "0" && amountBRaw !== "0";
+  // Mirror Token A ↔ Token B at the live USD price ratio so users
+  // type once. Stable-stable pairs fall back to 1:1; pairs with no
+  // available ratio (CoinGecko 4xx, etc.) leave the other side alone.
+  const tokenPrices = useTokenPrices(useMemo(() => [tokenA, tokenB], [tokenA, tokenB]));
+  const priceRatioAtoB = useMemo(() => {
+    const pa = tokenPrices.prices[tokenA];
+    const pb = tokenPrices.prices[tokenB];
+    if (pa && pb && pa > 0 && pb > 0) return pa / pb;
+    if (isStable(tokenA) && isStable(tokenB)) return 1;
+    return null;
+  }, [tokenPrices.prices, tokenA, tokenB]);
+
+  function onAmountAChange(value: string) {
+    setAmountA(value);
+    if (priceRatioAtoB === null) return;
+    const num = parseFloat(value);
+    if (!Number.isFinite(num)) return;
+    setAmountB(formatMirror(num * priceRatioAtoB));
+  }
+  function onAmountBChange(value: string) {
+    setAmountB(value);
+    if (priceRatioAtoB === null) return;
+    const num = parseFloat(value);
+    if (!Number.isFinite(num)) return;
+    setAmountA(formatMirror(num / priceRatioAtoB));
+  }
+
+  const amountARaw = safeParse(tokenA, amountA);
+  const amountBRaw = safeParse(tokenB, amountB);
+  const ready = tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0";
+  const hookName: HookName | null = hook === "none" ? null : hook;
+  const hookSummary = hook === "none" ? "No Hook" : HOOK_LABELS[hook];
+  const hookDesc = hook === "none" ? "Standard execution" : HOOK_DESCRIPTIONS[hook];
 
   async function onSubmit() {
     if (!ready) return;
     const ok = await confirm({
-      title: `Add liquidity to ${ctx.tokenA}/${ctx.tokenB}`,
-      description: `${amountA} ${ctx.tokenA} + ${amountB} ${ctx.tokenB} · fee ${FEE_TIER_LABELS[ctx.fee]} · range ${range}`,
-      confirmLabel: "Approve & add",
+      title: `Create / add liquidity · ${tokenA}/${tokenB} · ${hookSummary}`,
+      description: `${amountA} ${tokenA} + ${amountB} ${tokenB} · fee ${FEE_TIER_LABELS[fee]} · range ${range}`,
+      confirmLabel: "Sign in wallet",
     });
     if (!ok) return;
     await add.execute({
-      tokenA: ctx.tokenA,
-      tokenB: ctx.tokenB,
-      fee: ctx.fee,
-      hook: ctx.hook ?? null,
+      tokenA,
+      tokenB,
+      fee,
+      hook: hookName,
       amountARaw,
       amountBRaw,
-      ...(ctx.sqrtPriceX96 ? { sqrtPriceX96: ctx.sqrtPriceX96 } : {}),
+      ...(ctx?.sqrtPriceX96 ? { sqrtPriceX96: ctx.sqrtPriceX96 } : {}),
       slippageBps: 50,
     });
   }
@@ -133,19 +215,19 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           >
             <ArrowLeft className="h-3.5 w-3.5" />
           </button>
-          <TokenPairIcon a={ctx.tokenA} b={ctx.tokenB} size={22} />
+          <TokenPairIcon a={tokenA} b={tokenB} size={22} />
           <div className="text-[14px] font-semibold">
-            {ctx.tokenA} / {ctx.tokenB}
+            {tokenA} / {tokenB}
           </div>
           <span className="px-1.5 py-px rounded-[6px] text-[10px] font-medium tracking-[0.04em] bg-chip text-text-mute border border-border-soft uppercase">
-            {hook.name === "No Hook" ? "No Hook" : hook.name}
+            {hookSummary}
           </span>
         </div>
 
         {/* Mini stats row */}
         <div className="flex gap-3.5 text-[12px] text-text-dim mb-3.5">
           <span className="text-green inline-flex items-center gap-0.5">
-            ↗ {feeTierToPct(FEE_TIER_LABELS[ctx.fee])} Fee
+            ↗ {feeTierToPct(FEE_TIER_LABELS[fee])} Fee
           </span>
           <span>TVL — —</span>
           <span>APY — —</span>
@@ -195,7 +277,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
         {/* Chart */}
         <div className="mt-2.5">
           <div className="text-[11px] text-text-mute mb-1">
-            {ctx.tokenA}/{ctx.tokenB} Price
+            {tokenA}/{tokenB} Price
           </div>
           <Sparkline />
         </div>
@@ -206,12 +288,12 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           style={{ gridTemplateColumns: "1fr auto 1fr" }}
         >
           <TokenInputCard
-            label={ctx.tokenA}
-            sym={ctx.tokenA}
+            label={tokenA}
+            sym={tokenA}
             amount={amountA}
-            onAmountChange={setAmountA}
-            onSymbolChange={() => undefined}
-            disabledSymbol={ctx.tokenB}
+            onAmountChange={onAmountAChange}
+            onSymbolChange={locked ? () => undefined : setTokenA}
+            disabledSymbol={tokenB}
           />
           <button
             type="button"
@@ -222,14 +304,30 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
           <TokenInputCard
-            label={ctx.tokenB}
-            sym={ctx.tokenB}
+            label={tokenB}
+            sym={tokenB}
             amount={amountB}
-            onAmountChange={setAmountB}
-            onSymbolChange={() => undefined}
-            disabledSymbol={ctx.tokenA}
+            onAmountChange={onAmountBChange}
+            onSymbolChange={locked ? () => undefined : setTokenB}
+            disabledSymbol={tokenA}
           />
         </div>
+
+        {/* Fee tier picker — only when not locked to an existing pool */}
+        {!locked && (
+          <div className="mt-4">
+            <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
+              FEE TIER
+            </div>
+            <FeeTierPicker value={fee} onChange={setFee} />
+            {hookName && HOOK_REQUIRES_DYNAMIC_FEE[hookName] && (
+              <p className="text-[11px] text-text-mute mt-1.5">
+                {hookSummary} sets the fee dynamically per swap; your tier
+                selection determines tick spacing only.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Hook + Range */}
         <div className="grid grid-cols-2 gap-3 mt-4">
@@ -241,33 +339,36 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
               <button
                 type="button"
                 onClick={() => {
+                  if (locked) return;
                   setShowHooks((v) => !v);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left"
+                disabled={locked}
+                className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left disabled:cursor-not-allowed"
               >
                 <ArrowUp className="h-3.5 w-3.5 text-text-dim" />
                 <div className="flex-1">
-                  <div className="text-[13px] font-medium">{hook.name}</div>
-                  <div className="text-[11px] text-text-dim">{hook.desc}</div>
+                  <div className="text-[13px] font-medium">{hookSummary}</div>
+                  <div className="text-[11px] text-text-dim">{hookDesc}</div>
                 </div>
-                <ChevronDown className="h-3.5 w-3.5 text-text-dim" />
+                {!locked && <ChevronDown className="h-3.5 w-3.5 text-text-dim" />}
               </button>
-              {showHooks && (
+              {showHooks && !locked && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-panel-solid border border-border rounded-md p-1 shadow-xl">
-                  {HOOKS.map((h) => (
+                  {HOOK_OPTIONS.map((opt) => (
                     <button
-                      key={h.name}
+                      key={opt.value}
                       type="button"
                       onClick={() => {
-                        setHook(h);
+                        setHook(opt.value);
+                        setHookTouched(true);
                         setShowHooks(false);
                       }}
                       className={`block w-full px-2.5 py-2 rounded-xs text-left ${
-                        hook.name === h.name ? "bg-chip" : "hover:bg-row-hover"
+                        hook === opt.value ? "bg-chip" : "hover:bg-row-hover"
                       }`}
                     >
-                      <div className="text-[13px] font-medium">{h.name}</div>
-                      <div className="text-[11px] text-text-dim">{h.desc}</div>
+                      <div className="text-[13px] font-medium">{opt.name}</div>
+                      <div className="text-[11px] text-text-dim">{opt.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -300,26 +401,45 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
         {/* Fee Tier + Hook Benefit */}
         <div className="flex justify-between items-center mt-4 text-[13px]">
           <span className="text-text-dim">Fee Tier</span>
-          <span className="font-mono text-text">{FEE_TIER_LABELS[ctx.fee]}</span>
+          <span className="font-mono text-text">{FEE_TIER_LABELS[fee]}</span>
         </div>
         <div className="flex justify-between items-center mt-2 text-[13px]">
           <span className="text-text-dim">Hook Benefit</span>
-          <span className="text-green">{hook.desc}</span>
+          <span className="text-green">{hookDesc}</span>
         </div>
 
         {/* CTA */}
         <Button
           variant="primary"
           size="lg"
-          disabled={!ready || add.state.status !== "idle"}
+          disabled={
+            !ready ||
+            add.state.status === "creating-pool" ||
+            add.state.status === "pool-pending" ||
+            add.state.status === "preparing" ||
+            add.state.status === "approving" ||
+            add.state.status === "signing" ||
+            add.state.status === "pending" ||
+            add.state.status === "success"
+          }
           onClick={() => {
             void onSubmit();
           }}
           className="w-full mt-5"
         >
-          {ready ? addCtaLabel(add.state) : "Review & Sign Position"}
+          {ready ? addCtaLabel(add.state) : "Enter amounts"}
         </Button>
 
+        {add.state.poolInitTx && (
+          <a
+            href={`${BASESCAN_TX}${add.state.poolInitTx}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
+          >
+            Pool init tx <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
         {add.state.approvalTx && (
           <a
             href={`${BASESCAN_TX}${add.state.approvalTx}`}

@@ -12,7 +12,6 @@ import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
-import { PoolCreateForm } from "./features/liquidity/PoolCreateForm.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 import { PositionsList } from "./features/liquidity/PositionsList.tsx";
 
@@ -21,8 +20,7 @@ type Route =
   | { kind: "swap" }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
-  | { kind: "pool-create" }
-  | { kind: "add-liquidity"; ctx: PoolKeyContext }
+  | { kind: "add-liquidity"; ctx?: PoolKeyContext }
   | { kind: "positions" }
   | { kind: "analyze" }
   | { kind: "agent" };
@@ -113,7 +111,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
             setRoute({ kind: "pool", id });
           }}
           onCreate={() => {
-            setRoute({ kind: "pool-create" });
+            setRoute({ kind: "add-liquidity" });
           }}
           onClose={() => {
             setRoute({ kind: "home" });
@@ -128,21 +126,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
             setRoute({ kind: "pools" });
           }}
           onAddLiquidity={(ctx) => {
-            setRoute({ kind: "add-liquidity", ctx });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
-    case "pool-create":
-      return (
-        <PoolCreateForm
-          onBack={() => {
-            setRoute({ kind: "pools" });
-          }}
-          onAddLiquidity={(ctx) => {
-            setRoute({ kind: "add-liquidity", ctx });
+            setRoute({ kind: "add-liquidity", ctx: { ...ctx, locked: true } });
           }}
           onClose={() => {
             setRoute({ kind: "home" });
@@ -152,9 +136,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "add-liquidity":
       return (
         <AddLiquidityForm
-          ctx={route.ctx}
+          {...(route.ctx ? { ctx: route.ctx } : {})}
           onBack={() => {
-            setRoute({ kind: "positions" });
+            setRoute({ kind: "pools" });
           }}
           onClose={() => {
             setRoute({ kind: "home" });
