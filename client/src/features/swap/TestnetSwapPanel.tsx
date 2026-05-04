@@ -17,7 +17,11 @@ import { recommendedHookForPair, HOOK_LABELS } from "@/features/liquidity/hook-r
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { formatTokenAmount, parseTokenAmount } from "./format.ts";
-import { useTestnetQuote, useTestnetSwap } from "./use-testnet-swap.ts";
+import {
+  useTestnetMaxInput,
+  useTestnetQuote,
+  useTestnetSwap,
+} from "./use-testnet-swap.ts";
 import { BASE_SCAN_TX, DEFAULT_SLIPPAGE_BPS } from "./constants.ts";
 
 interface Props {
@@ -102,6 +106,23 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
     [tokenIn, balanceIn],
   );
 
+  // Probe pool depth on the active key so the chips can't overshoot.
+  // Capped at 95% of the discovered max so we leave a tiny safety
+  // margin against price-impact drift between the search and the
+  // actual swap call.
+  const poolMax = useTestnetMaxInput({
+    tokenIn,
+    tokenOut,
+    fee,
+    hook: hook === "none" ? null : hook,
+    balanceRaw: balanceIn,
+    enabled: balanceIn > 0n,
+  });
+  const cappedMax = useMemo<bigint | null>(() => {
+    if (poolMax.maxInputRaw === null) return null;
+    return (poolMax.maxInputRaw * 95n) / 100n;
+  }, [poolMax.maxInputRaw]);
+
   function applyPercent(pct: number) {
     if (balanceIn === 0n) return;
     let raw = (balanceIn * BigInt(pct)) / 100n;
@@ -109,6 +130,11 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
       const buffer = 200_000_000_000_000n;
       raw = raw > buffer ? raw - buffer : 0n;
     }
+    // Clamp to the largest amount the pool can absorb. If we don't
+    // have a max yet (loading or lookup failed), fall through with
+    // the raw balance × pct — the existing quote-failure path will
+    // surface a clear error if it overshoots.
+    if (cappedMax !== null && raw > cappedMax) raw = cappedMax;
     setAmount(formatTokenAmount(tokenIn, raw));
   }
 
@@ -174,6 +200,12 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
               Balance: {balanceInDisplay} {tokenIn}
             </span>
           </div>
+          {cappedMax !== null && cappedMax < balanceIn && (
+            <div className="text-[11px] text-text-mute mt-1.5">
+              Pool depth caps swaps at ~{formatTokenAmount(tokenIn, cappedMax)} {tokenIn}.
+              Percent chips clamp here.
+            </div>
+          )}
           <div className="flex gap-2 mt-2.5">
             {([
               { label: "25%", pct: 25 },

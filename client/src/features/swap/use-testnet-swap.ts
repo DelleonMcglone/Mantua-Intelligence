@@ -84,6 +84,70 @@ interface QuoteState {
   error: ApiError | Error | null;
 }
 
+interface MaxInputState {
+  /** Raw base-units cap. `null` while loading or if not yet fetched
+   *  for the current pool. */
+  maxInputRaw: bigint | null;
+  loading: boolean;
+}
+
+/**
+ * Look up the largest input amount the pool can absorb without the
+ * V4Quoter reverting, bounded by the user's `balanceRaw`. The percent
+ * chips clamp to `min(balance × pct, max × 0.95)` so a click can't
+ * overshoot pool depth.
+ *
+ * Refetches on pair / fee / hook / balance change. Each fetch fires
+ * one POST to `/api/v4/swap/max-input` which itself runs ~25
+ * `eth_call`s — so don't poll on a tight interval.
+ */
+export function useTestnetMaxInput(args: {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  fee: FeeTier;
+  hook: HookName | null;
+  balanceRaw: bigint;
+  enabled: boolean;
+}): MaxInputState {
+  const [state, setState] = useState<MaxInputState>({
+    maxInputRaw: null,
+    loading: false,
+  });
+
+  useEffect(() => {
+    if (!args.enabled || args.balanceRaw === 0n || args.tokenIn === args.tokenOut) {
+      setState({ maxInputRaw: null, loading: false });
+      return;
+    }
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true }));
+    api
+      .post<{ maxInputRaw: string }>("/api/v4/swap/max-input", {
+        tokenIn: args.tokenIn,
+        tokenOut: args.tokenOut,
+        fee: args.fee,
+        hook: args.hook,
+        upperBoundRaw: args.balanceRaw.toString(),
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setState({ maxInputRaw: BigInt(data.maxInputRaw), loading: false });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // On failure, return null so the caller falls back to the
+        // raw wallet balance — the existing quote-failure path will
+        // surface a clear error then.
+        setState({ maxInputRaw: null, loading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.balanceRaw, args.enabled]);
+
+  return state;
+}
+
 export function useTestnetQuote(args: {
   tokenIn: TokenSymbol;
   tokenOut: TokenSymbol;
