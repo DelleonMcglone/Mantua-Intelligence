@@ -43,6 +43,11 @@ const SUGGESTIONS: { topic: Topic; question: string }[] = [
 
 interface AnalyzePanelProps {
   onClose: () => void;
+  /** Skip the suggestions screen and run this topic immediately —
+   *  used when the chat input matched a known topic. */
+  initialTopic?: Topic;
+  /** Original free-form question to label the result panel with. */
+  initialQuestion?: string;
 }
 
 /**
@@ -55,9 +60,20 @@ interface AnalyzePanelProps {
  * (rendered by `App.tsx`) is the only natural-language surface in the
  * prototype.
  */
-export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
-  const [phase, setPhase] = useState<"suggest" | "result">("suggest");
-  const [active, setActive] = useState<{ topic: Topic; question: string } | null>(null);
+export function AnalyzePanel({ onClose, initialTopic, initialQuestion }: AnalyzePanelProps) {
+  const [phase, setPhase] = useState<"suggest" | "result">(
+    initialTopic ? "result" : "suggest",
+  );
+  const [active, setActive] = useState<{ topic: Topic; question: string } | null>(
+    initialTopic
+      ? {
+          topic: initialTopic,
+          question:
+            initialQuestion ??
+            (SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? ""),
+        }
+      : null,
+  );
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +149,16 @@ export function AnalyzePanel({ onClose }: AnalyzePanelProps) {
       <div className="px-5 py-3.5 flex-1 overflow-auto">
         {phase === "suggest" && (
           <>
+            {initialQuestion && (
+              <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3 mb-4 text-[13px] text-text-dim">
+                Got your question:{" "}
+                <span className="text-text">"{initialQuestion}"</span>
+                <div className="text-[11px] text-text-mute mt-1">
+                  I don't have a dedicated runner for this yet — pick a related
+                  suggestion below or rephrase.
+                </div>
+              </div>
+            )}
             <div className="text-[11px] text-text-mute tracking-[0.08em] mb-2.5 font-semibold">
               SUGGESTED QUESTIONS
             </div>
