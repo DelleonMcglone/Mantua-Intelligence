@@ -728,7 +728,7 @@ E2E"). Mainnet would be a future, separately-scoped phase.
 | ------ | ---------------------------------------------------------------------------------------------------------- | ------ |
 | P9-001 | Full E2E test suite in Playwright — all flows Phase 3–8 against Base Sepolia                               | ⬜     |
 | P9-002 | Base Sepolia fork test environment (Anvil) for CI                                                          | ⬜     |
-| P9-003 | Confirm AI-assisted security analysis sign-off for the Sepolia hook deployments (P5-026); residuals logged | ⬜     |
+| P9-003 | Confirm AI-assisted security analysis sign-off for the Sepolia hook deployments (P5-026); residuals logged | ✅     |
 | P9-004 | Provision testnet hosting per D-004: Vercel (frontend) + Railway or Fly.io (backend) + Neon (Postgres)     | ⬜     |
 | P9-005 | Configure CI/CD: GitHub Actions → Vercel + Railway/Fly deploy; staging branch auto-deploys                 | ⬜     |
 | P9-006 | Production build: frontend + backend + DB migrations                                                       | ⬜     |
