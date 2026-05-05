@@ -97,11 +97,27 @@ All 8 RWAGate Mediums are in upstream `lib/`. No own-source Medium issues.
 All P5-017 findings start as **Open**. Triage moves to:
 - **In review** — owner is investigating
 - **Accepted-as-risk** — known false positive (link to upstream issue / explanation) or risk explicitly accepted (with rationale)
+- **Accepted-as-risk (testnet)** — accepted only for the Base Sepolia testnet beta (P9-003 sign-off in [`sign-off.md`](sign-off.md#testnet-beta-sign-off-p9-003)). Must close to ✅ Fixed or supersede with auditor sign-off before mainnet.
 - **Fixed** — code change merged (link to commit)
 - **Won't fix** — out of scope (with rationale)
 
 P5-018 picks up triage. P5-019 → P5-026 cover other tools (Mythril,
 semgrep, Echidna fuzz, manual review, audit) and re-run after fixes.
+
+### P9-003 testnet-beta triage (2026-05-05)
+
+All 14 own-source Mediums marked **Accepted-as-risk (testnet)**:
+
+| ID | Finding | Class | Rationale |
+|---|---|---|---|
+| SF-001 → SF-004 | StableSwap `divide-before-multiply` (4×) | A — algorithm-dictated order | Iterative D-solver / Y-from-D math; Slither flags pattern mechanically. No impact at testnet magnitudes (≤1k token units). |
+| SF-005 → SF-007 | StableProtection `unused-return` (3×) | B — discarded tuple returns | `getSlot0` / `classifyZone` returns we don't act on. No state leak. |
+| SF-008 | DynamicFee `_sqrtPriceX96ToPrice` divide-before-multiply | A | Standard Q96 → priceE18 conversion. |
+| SF-009 → SF-014 | DynamicFee `unused-return` (6×) | B | Chainlink `latestRoundData` round/timestamp + Uniswap `getSlot0` returns we don't gate logic on. |
+| SF-015 | AsyncLimitOrder Slither compile failure | C — vendor-deps gap | Pinned `lib/v4-periphery` missing `BaseHook.sol`. Fix path is a periphery submodule bump on the ALO repo. ALO is not on the user-facing testnet flow per `docs/sepolia-e2e-runbook.md`; analysis-pending status acceptable for beta. |
+
+Full rationale and pre-mainnet fix paths in
+[`sign-off.md`](sign-off.md#residuals--accepted-for-testnet-beta).
 
 ### Note on upstream-dep findings
 
