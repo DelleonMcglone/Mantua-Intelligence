@@ -34,6 +34,19 @@ for the unblock checklist.
 When unblocking a stub, replace `vm.skip(true)` with the actual test
 body and remove the corresponding row from this table.
 
+## Full lifecycle (P9-002)
+
+`FullLifecycleE2E.t.sol` walks the entire user-facing v2 flow — pool
+create → add liquidity → swap (both directions) → remove liquidity —
+against the live Stable Protection hook. Two test cases:
+
+- `test_fullLifecycle_createAddSwapRemove` — single end-to-end pass.
+- `test_fullLifecycle_repeatAddSwapRemove` — back-to-back add/swap/remove
+  cycles to catch stale-state regressions.
+
+Both run unconditionally and pass against current Base Sepolia state.
+Wired into CI via `.github/workflows/contracts.yml`.
+
 ## Conventions
 
 - All integration tests inherit from `BaseSepoliaFork`, which handles
