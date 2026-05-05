@@ -51,9 +51,10 @@ update this document and announce the change in-app.
 | Coinbase Developer Platform (CDP) | Your Mantua user ID, the agent wallet's address | https://www.coinbase.com/legal/privacy |
 | CoinGecko | Token symbols + amounts (for USD pricing requests) | https://www.coingecko.com/en/privacy |
 | DefiLlama | Pool IDs (for analytics requests) | https://defillama.com/privacy |
-| Uniswap Trading API (mainnet swaps only) | Your wallet address, the swap parameters | https://uniswap.org/privacy-policy |
 | Hosting providers (Vercel / Railway / Neon — exact set TBD per P9-004) | Whatever an HTTPS request to Mantua's API surfaces | TBD |
 | Anthropic / OpenAI (only when AI features are invoked) | The natural-language question you typed; never your wallet contents | https://www.anthropic.com/legal/privacy / https://openai.com/policies/privacy-policy |
+
+The testnet beta swap path uses an **on-chain v4 Quoter + PoolSwapTest helper** on Base Sepolia. No third-party trading API is in the data flow.
 
 We never sell your data. We never share it with advertisers.
 

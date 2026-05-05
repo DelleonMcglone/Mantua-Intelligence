@@ -12,7 +12,9 @@
 These Terms of Service ("Terms") govern your access to and use of
 Mantua (the "Service"), an interface for interacting with Uniswap v4
 liquidity pools and Mantua's deployed Liquidity Hooks ("Stable
-Protection," "Dynamic Fee," "RWAgate," and "Async Limit Order"). By
+Protection," "Dynamic Fee," "RWAgate," and "Async Limit Order") on
+**Base Sepolia, a public Ethereum testnet**. The Service is operated
+in a testnet beta only — there is no mainnet deployment. By
 connecting a wallet to the Service or otherwise using it, you accept
 these Terms.
 
@@ -23,8 +25,10 @@ these Terms.
 The Service is a **non-custodial interface**. Mantua does not hold your
 private keys, route any of your funds through accounts we control, or
 custody assets at any point. Every transaction originates from a
-wallet you control and is broadcast to a public blockchain (Base
-Mainnet or Base Sepolia, depending on which network you select).
+wallet you control and is broadcast to **Base Sepolia, a public
+Ethereum testnet**. Sepolia ETH and Sepolia-issued ERC-20s have no
+real-world value — testnet beta participants should not deposit any
+mainnet asset to the Service.
 
 The Service exposes:
 
@@ -84,16 +88,11 @@ You understand and accept that:
 
 ## 5. Fees
 
-Mantua may charge a small protocol fee on certain operations. The
-exact fee structure, including basis points and recipient address, is
-documented in-app at the point of confirmation and on-chain at the
-contract level. By signing a transaction, you authorize the fee shown
-on that confirmation screen.
+The testnet beta does **not** charge protocol fees. Mainnet would; the
+testnet beta does not. Network gas fees are paid in Sepolia ETH (no
+real-world value) to Base Sepolia sequencers; nothing flows to Mantua.
 
-Network gas fees are paid in the chain's native token (ETH on Base)
-and go to validators / sequencers, not to Mantua.
-
-`[REVIEW: jurisdictional fee disclosure rules; whether the in-app surface meets the standard for affirmative consent.]`
+`[REVIEW: confirm "no fees on testnet" stays accurate through any future testnet governance changes.]`
 
 ## 6. Agent wallets (Coinbase Developer Platform)
 
