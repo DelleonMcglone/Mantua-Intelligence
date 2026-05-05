@@ -42,6 +42,14 @@ jobs:
         continue-on-error: true
 
       - name: Server tests
+        # `env.ts` parses required vars at module load; tests that
+        # import any chain into `tokens.ts` need stubs. Real values
+        # only matter for runtime — these satisfy the zod schema
+        # without hitting any external service.
+        env:
+          DATABASE_URL: postgres://stub:stub@localhost:5432/stub
+          PRIVY_APP_ID: ci-stub
+          PRIVY_APP_SECRET: ci-stub
         run: npm test --workspace=@mantua/server
 
       - name: Server lint

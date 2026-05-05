@@ -5,8 +5,8 @@ import { Logo } from "./Logo.tsx";
 
 interface HeaderProps {
   walletAddress?: string | undefined;
-  onConnect?: () => void;
-  onDisconnect?: () => void;
+  onConnect?: (() => void) | undefined;
+  onDisconnect?: (() => void) | undefined;
 }
 
 /**

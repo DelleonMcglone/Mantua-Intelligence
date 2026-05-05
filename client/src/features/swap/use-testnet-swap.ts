@@ -25,7 +25,6 @@ import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { type FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 
-const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const MAX_UINT = (1n << 256n) - 1n;
 const FRESH_APPROVAL_THRESHOLD = 1n << 255n;
 

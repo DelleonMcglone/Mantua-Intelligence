@@ -141,7 +141,7 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(a!.sym) && isStable(b!.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: undefined },
+        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: null },
       };
     }
     return { kind: "pools" };
