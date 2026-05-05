@@ -715,51 +715,43 @@ Output: {
 
 ---
 
-## ✅ PHASE 9: E2E Testing & Launch
+## ✅ PHASE 9: E2E Testing & Launch (Base Sepolia testnet beta)
 
-| ID     | Task                                                                                                 | Status |
-| ------ | ---------------------------------------------------------------------------------------------------- | ------ |
-| P9-001 | Full E2E test suite in Playwright — all flows Phase 3–8                                              | ⬜     |
-| P9-002 | Mainnet fork test environment (Anvil) for CI                                                         | ⬜     |
-| P9-003 | Confirm AI-assisted security analysis sign-off complete (P5-026); residual accepted risks documented | ⬜     |
-| P9-004 | Provision hosting per D-004: Vercel (frontend) + Railway or Fly.io (backend) + Neon (Postgres)       | ⬜     |
-| P9-005 | Configure CI/CD: GitHub Actions → Vercel + Railway/Fly deploy; staging branch auto-deploys           | ⬜     |
-| P9-006 | Production build: frontend + backend + DB migrations                                                 | ⬜     |
-| P9-007 | Deploy to staging, dogfood internally with team wallets for at least 2 weeks                         | ⬜     |
-| P9-008 | Staging E2E: 10 real mainnet transactions across swap, LP, agent, all 4 hooks                        | ⬜     |
-| P9-009 | Terms of Service + Privacy Policy drafted and reviewed                                               | ⬜     |
-| P9-010 | Incident runbook: kill-switch activation, rollback, user comms                                       | ⬜     |
-| P9-011 | Soft launch: limited organic marketing, monitor for issues with low volume                           | ⬜     |
-| P9-012 | Public launch announcement                                                                           | ⬜     |
+Mantua v2 ships as a **Base Sepolia testnet beta**. There is no mainnet
+launch in this phase — no real user funds, no fee collection, no
+legal review of the production product, no mainnet hook redeploys.
+The original P9 ticket set has been pruned to the testnet-only scope
+per the user's 2026-05-05 direction ("only Base Sepolia, no mainnet
+E2E"). Mainnet would be a future, separately-scoped phase.
 
-### Launch-gate framing (added 2026-04-30 with D-015)
+| ID     | Task                                                                                                       | Status |
+| ------ | ---------------------------------------------------------------------------------------------------------- | ------ |
+| P9-001 | Full E2E test suite in Playwright — all flows Phase 3–8 against Base Sepolia                               | ⬜     |
+| P9-002 | Base Sepolia fork test environment (Anvil) for CI                                                          | ⬜     |
+| P9-003 | Confirm AI-assisted security analysis sign-off for the Sepolia hook deployments (P5-026); residuals logged | ⬜     |
+| P9-004 | Provision testnet hosting per D-004: Vercel (frontend) + Railway or Fly.io (backend) + Neon (Postgres)     | ⬜     |
+| P9-005 | Configure CI/CD: GitHub Actions → Vercel + Railway/Fly deploy; staging branch auto-deploys                 | ⬜     |
+| P9-006 | Production build: frontend + backend + DB migrations                                                       | ⬜     |
+| P9-007 | Deploy to staging, dogfood internally with team wallets on Base Sepolia for at least 2 weeks               | ⬜     |
+| P9-008 | Sepolia E2E: 10+ funded testnet transactions across swap, LP, agent, all 4 hooks                           | ⬜     |
+| P9-009 | Terms of Service + Privacy Policy drafted and reviewed (testnet beta scope)                                | ⬜     |
+| P9-010 | Incident runbook: kill-switch activation, rollback, user comms                                             | ⬜     |
+| P9-011 | Soft launch: limited organic announcement of the Sepolia beta, monitor for issues                          | ⬜     |
+| P9-012 | Public launch announcement (testnet beta open to all)                                                      | ⬜     |
 
-Phase 9 covers two distinct launch gates with different residual lists. The original ticket table treats "launch" as a single event; D-015 (Mantua v2 testnet beta has zero fee/legal/spending-cap scope) splits that into two gates:
-
-**Testnet beta launch gate (closer):**
+### Testnet beta launch gate
 
 - Phase 0 → 8 backend on `main`: ✅ as of merge of #59 (Phase 6/7/8 stack)
 - TD-004 closes — Mantua design source delivers UI flows for Phases 6/7/8 + analytics view (P7-004) + portfolio page (P8-001 → P8-007): required
 - TD-005 closes — Phase 6 + 7 E2E test harness with funded Sepolia agent wallet: required
-- Internal dogfood ≥ 2 weeks with zero critical incidents (P9-007 scoped to Sepolia): required
-- **Not required for testnet:** PF-005 → PF-010, fee-collection code paths, Risk 1 (EOA hardware-wallet hygiene), Risk 2 (legal review), multisig migration
-
-**Mainnet launch gate (later):**
-
-- Testnet beta gate satisfied: required
-- Phase F-mainnet sub-track (PF-005 → PF-010) shipped as a coordinated PR set: required
-- Crypto-counsel review per Risk 2: required
-- EOA fee recipient hardware-wallet hygiene per Risk 1 + multisig migration plan ($5k revenue OR 6-month trigger): required
-- Mainnet hook redeployments (4 hooks: Stable Protection, DynamicFee, RWAGate, ALO): required (currently Phase 5 is Base Sepolia only per the existing memory note "Phase 5 target is Base Sepolia, not mainnet")
-- AI-assisted security analysis re-run on each mainnet hook deployment (P5-017 → P5-026 cycle): required
-
-The existing P9 tickets (P9-001 → P9-012) span both gates as written — interpret each ticket against the gate it actually applies to. Most apply to mainnet (P9-002 mainnet fork test, P9-003 AI security sign-off, P9-008 mainnet transactions, P9-011 soft launch); fewer apply to testnet beta.
+- Internal dogfood ≥ 2 weeks with zero critical incidents (P9-007): required
+- **Not required for the testnet beta:** PF-005 → PF-010 (fee admin), fee-collection code paths in production, Risk 1 (EOA hardware-wallet hygiene — no real-funds recipient), Risk 2 (full crypto-counsel review — testnet draft per P9-009 is enough), multisig migration, mainnet hook deployments.
 
 ---
 
 ## ⚠️ Critical Implementation Rules
 
-1. **Base only** — supported chain IDs are 8453 (mainnet) and 84532 (sepolia), selected at runtime via `MANTUA_NETWORK`. No Unichain Sepolia, no Anvil in production code paths. Phase 5 dev/test runs on Base Sepolia; mainnet redeploy is a launch-gating step (Phase 9).
+1. **Base Sepolia only (testnet beta)** — the live target is Base Sepolia (chain ID 84532). The code keeps mainnet branches (chain ID 8453) selectable via `MANTUA_NETWORK` so a future mainnet phase can flip a flag rather than refactor, but the v2 testnet beta does not deploy to mainnet. No Unichain Sepolia, no Anvil in production code paths.
 2. **Chain ID matches `MANTUA_NETWORK`** — read from `useChainId()` and reject mismatches
 3. **NEVER hardcode token prices** — Dune's hardcoded testnet prices (ETH=$2000 etc.) were a v1 expedient; v2 pulls live prices
 4. **NEVER duplicate swap/liquidity logic** — single shared module, used by UI and agent
