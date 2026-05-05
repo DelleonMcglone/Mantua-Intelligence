@@ -188,21 +188,21 @@ describe("detectIntent: add-liquidity", () => {
   it("'add liquidity to USDC/EURC pool' → add-liquidity ctx", () => {
     assert.deepEqual(detectIntent("add liquidity to a USDC EURC pool"), {
       kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: undefined },
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
     });
   });
 
   it("'add liquidity to ETH cbBCT' (typo) extracts both tokens", () => {
     assert.deepEqual(detectIntent("add liquidity to a ETH cbBCT pool"), {
       kind: "add-liquidity",
-      ctx: { tokenA: "ETH", tokenB: "cbBTC", fee: 500, hook: undefined },
+      ctx: { tokenA: "ETH", tokenB: "cbBTC", fee: 500, hook: null },
     });
   });
 
   it("'lp USDC EURC' (LP shorthand)", () => {
     assert.deepEqual(detectIntent("lp USDC EURC"), {
       kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: undefined },
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
     });
   });
 

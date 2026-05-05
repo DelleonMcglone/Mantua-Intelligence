@@ -119,9 +119,13 @@ function MainnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPane
   const expectedOut = quote.data
     ? formatTokenAmount(tokenOut, quote.data.quote.quote.output.amount)
     : "";
-  const lpFeePips = quote.data?.quote.quote.fee?.amount
-    ? Number(quote.data.quote.quote.fee.amount)
-    : undefined;
+  // Uniswap Trading API removed `fee` from the v1/quote response in
+  // a recent rev; the field used to surface per-route LP fee in
+  // pips. The UI still has a row for it (renders "—" until we wire
+  // a different source), so keep the variable typed but always
+  // undefined until the Trading API surfaces fee again or we read
+  // it from on-chain.
+  const lpFeePips: number | undefined = undefined;
   const priceImpact = quote.data?.quote.quote.priceImpact;
   const aggregated = quote.data?.quote.quote.aggregatedOutputs?.[0];
   const minOut = aggregated ? formatTokenAmount(tokenOut, aggregated.minAmount) : null;

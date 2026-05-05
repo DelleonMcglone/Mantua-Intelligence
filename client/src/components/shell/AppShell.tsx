@@ -3,8 +3,8 @@ import { Header } from "./Header.tsx";
 
 interface AppShellProps {
   walletAddress?: string | undefined;
-  onConnect?: () => void;
-  onDisconnect?: () => void;
+  onConnect?: (() => void) | undefined;
+  onDisconnect?: (() => void) | undefined;
   left: ReactNode;
   right: ReactNode;
 }
