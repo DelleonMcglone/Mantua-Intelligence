@@ -17,11 +17,7 @@ import { recommendedHookForPair, HOOK_LABELS } from "@/features/liquidity/hook-r
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { formatTokenAmount, parseTokenAmount } from "./format.ts";
-import {
-  useTestnetMaxInput,
-  useTestnetQuote,
-  useTestnetSwap,
-} from "./use-testnet-swap.ts";
+import { useTestnetMaxInput, useTestnetQuote, useTestnetSwap } from "./use-testnet-swap.ts";
 import { BASE_SCAN_TX, DEFAULT_SLIPPAGE_BPS } from "./constants.ts";
 
 interface Props {
@@ -130,11 +126,13 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
       const buffer = 200_000_000_000_000n;
       raw = raw > buffer ? raw - buffer : 0n;
     }
-    // Clamp to the largest amount the pool can absorb. If we don't
-    // have a max yet (loading or lookup failed), fall through with
-    // the raw balance × pct — the existing quote-failure path will
-    // surface a clear error if it overshoots.
-    if (cappedMax !== null && raw > cappedMax) raw = cappedMax;
+    // Clamp to the largest amount the pool can absorb. Skip the clamp
+    // when `cappedMax` is null (loading / lookup failed) OR zero (no
+    // pool exists for this pair+fee+hook combo): clamping-to-zero was
+    // making the chips silently do nothing on testnet pairs without
+    // depth. Let the value through and surface "no pool" via the
+    // quote-failure path instead.
+    if (cappedMax !== null && cappedMax > 0n && raw > cappedMax) raw = cappedMax;
     setAmount(formatTokenAmount(tokenIn, raw));
   }
 
@@ -148,9 +146,7 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
     enabled: amountInRaw !== "0",
   });
 
-  const expectedOut = quote.data
-    ? formatTokenAmount(tokenOut, quote.data.amountOut)
-    : "";
+  const expectedOut = quote.data ? formatTokenAmount(tokenOut, quote.data.amountOut) : "";
 
   function selectTokenIn(sym: TokenSymbol) {
     if (sym === tokenOut) setTokenOut(tokenIn);
@@ -200,19 +196,27 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
               Balance: {balanceInDisplay} {tokenIn}
             </span>
           </div>
-          {cappedMax !== null && cappedMax < balanceIn && (
+          {cappedMax !== null && cappedMax === 0n && (
+            <div className="text-[11px] text-amber mt-1.5">
+              No pool found for {tokenIn}/{tokenOut} at this fee tier and hook. Try a different fee
+              tier, hook, or pair.
+            </div>
+          )}
+          {cappedMax !== null && cappedMax > 0n && cappedMax < balanceIn && (
             <div className="text-[11px] text-text-mute mt-1.5">
-              Pool depth caps swaps at ~{formatTokenAmount(tokenIn, cappedMax)} {tokenIn}.
-              Percent chips clamp here.
+              Pool depth caps swaps at ~{formatTokenAmount(tokenIn, cappedMax)} {tokenIn}. Percent
+              chips clamp here.
             </div>
           )}
           <div className="flex gap-2 mt-2.5">
-            {([
-              { label: "25%", pct: 25 },
-              { label: "50%", pct: 50 },
-              { label: "75%", pct: 75 },
-              { label: "Max", pct: 100 },
-            ] as const).map((p) => (
+            {(
+              [
+                { label: "25%", pct: 25 },
+                { label: "50%", pct: 50 },
+                { label: "75%", pct: 75 },
+                { label: "Max", pct: 100 },
+              ] as const
+            ).map((p) => (
               <button
                 key={p.label}
                 type="button"
@@ -249,7 +253,16 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
             aria-label="Flip tokens"
             className="w-[34px] h-[34px] rounded-full bg-bg-elev border border-border flex items-center justify-center cursor-pointer text-green hover:border-green/60 transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M7 20V4M7 4l-4 4M7 4l4 4" />
               <path d="M17 4v16M17 20l-4-4M17 20l4-4" />
             </svg>
@@ -299,12 +312,8 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
           </select>
         </div>
 
-        {quote.loading && (
-          <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>
-        )}
-        {quote.error && (
-          <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>
-        )}
+        {quote.loading && <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>}
+        {quote.error && <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>}
 
         <Button
           variant="primary"
