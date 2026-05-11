@@ -1,8 +1,17 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request, RequestHandler } from "express";
+import { env } from "../env.ts";
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
 const ONE_MIN_MS = 60 * 1000;
+
+/**
+ * Skip rate limits in `development` so a single dev user running the
+ * full polling loop (portfolio every 15s + history + positions +
+ * max-input + …) doesn't trip the prod ceilings inside a 15-min
+ * window. Test/prod still enforce the limits.
+ */
+const skipInDev = () => env.NODE_ENV === "development";
 
 /**
  * P1-007 — generic per-IP limiter for any API route. 100 req / 15 min.
@@ -14,6 +23,7 @@ export const ipRateLimiter: RequestHandler = rateLimit({
   limit: 100,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  skip: skipInDev,
   message: { error: "Too many requests from this IP.", code: "RATE_LIMITED" },
 });
 
@@ -27,6 +37,7 @@ export const writeRateLimiter: RequestHandler = rateLimit({
   limit: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  skip: skipInDev,
   message: { error: "Too many write requests.", code: "RATE_LIMITED" },
 });
 
@@ -40,6 +51,7 @@ export const walletRateLimiter: RequestHandler = rateLimit({
   limit: 30,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  skip: skipInDev,
   keyGenerator: (req: Request) => {
     const wallet = (req as Request & { walletAddress?: string }).walletAddress;
     if (wallet) return `wallet:${wallet.toLowerCase()}`;
