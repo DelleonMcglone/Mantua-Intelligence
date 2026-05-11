@@ -13,7 +13,12 @@ import { isStable, safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
 import { useAddLiquidity } from "./use-add-liquidity.ts";
 import type { HookName } from "./use-create-pool.ts";
-import { HOOK_DESCRIPTIONS, HOOK_LABELS, recommendedHookForPair } from "./hook-recommendations.ts";
+import {
+  HOOK_DESCRIPTIONS,
+  HOOK_LABELS,
+  hookCompatibilityError,
+  recommendedHookForPair,
+} from "./hook-recommendations.ts";
 import { useTokenPrices } from "./use-token-prices.ts";
 
 export interface PoolKeyContext {
@@ -164,8 +169,10 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
 
   const amountARaw = safeParse(tokenA, amountA);
   const amountBRaw = safeParse(tokenB, amountB);
-  const ready = tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0";
   const hookName: HookName | null = hook === "none" ? null : hook;
+  const hookIncompatible = hookCompatibilityError(tokenA, tokenB, hookName);
+  const ready =
+    tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0" && hookIncompatible === null;
   const hookSummary = hook === "none" ? "No Hook" : HOOK_LABELS[hook];
   const hookDesc = hook === "none" ? "Standard execution" : HOOK_DESCRIPTIONS[hook];
 
@@ -408,6 +415,10 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           <span className="text-green">{hookDesc}</span>
         </div>
 
+        {hookIncompatible && (
+          <p className="text-xs text-amber text-center mt-3">{hookIncompatible}</p>
+        )}
+
         {/* CTA */}
         <Button
           variant="primary"
@@ -427,7 +438,11 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           }}
           className="w-full mt-5"
         >
-          {ready ? addCtaLabel(add.state) : "Enter amounts"}
+          {hookIncompatible
+            ? "Hook unavailable for this pair"
+            : ready
+              ? addCtaLabel(add.state)
+              : "Enter amounts"}
         </Button>
 
         {add.state.poolInitTx && (
