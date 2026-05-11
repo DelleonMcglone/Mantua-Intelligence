@@ -5,6 +5,9 @@ interface AppShellProps {
   walletAddress?: string | undefined;
   onConnect?: (() => void) | undefined;
   onDisconnect?: (() => void) | undefined;
+  /** Optional click handler for the logo / wordmark — used to send
+   *  the user back to the landing page from inside the app shell. */
+  onLogoClick?: (() => void) | undefined;
   left: ReactNode;
   right: ReactNode;
 }
@@ -19,6 +22,7 @@ export function AppShell({
   walletAddress,
   onConnect,
   onDisconnect,
+  onLogoClick,
   left,
   right,
 }: AppShellProps) {
@@ -28,6 +32,7 @@ export function AppShell({
         walletAddress={walletAddress}
         onConnect={onConnect}
         onDisconnect={onDisconnect}
+        onLogoClick={onLogoClick}
       />
       <main
         className="grid flex-1 min-h-0 items-stretch"
@@ -49,8 +54,7 @@ export function AppShell({
           <div
             className="grid min-h-0"
             style={{
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
               gap: "calc(20px * var(--density))",
             }}
           >

@@ -4,6 +4,11 @@ import type { HookName } from "./use-create-pool.ts";
 
 const STORAGE_KEY = "mantua.localPositions.v1";
 
+/** Which wallet minted this position. Optional for back-compat with
+ *  pre-2026-05-05 entries that didn't carry the field — readers
+ *  treat missing as "user". */
+export type PositionOwner = "user" | "agent";
+
 export interface LocalPosition {
   /** PositionManager ERC721 token id minted at add-liquidity time. */
   tokenId: string;
@@ -18,6 +23,9 @@ export interface LocalPosition {
   txHash: string;
   /** ms epoch — used to sort newest first. */
   createdAt: number;
+  /** Which wallet held the mint (user-side or agent-managed CDP).
+   *  Defaults to "user" for legacy entries. */
+  owner?: PositionOwner;
 }
 
 /**
@@ -45,6 +53,17 @@ export function getLocalPositions(): LocalPosition[] {
   } catch {
     return [];
   }
+}
+
+/** Positions held by the user's connected wallet. Legacy entries
+ *  without an `owner` field are treated as user-owned. */
+export function getUserLocalPositions(): LocalPosition[] {
+  return getLocalPositions().filter((p) => (p.owner ?? "user") === "user");
+}
+
+/** Positions minted by the agent's CDP-managed wallet. */
+export function getAgentLocalPositions(): LocalPosition[] {
+  return getLocalPositions().filter((p) => p.owner === "agent");
 }
 
 export function rememberLocalPosition(entry: Omit<LocalPosition, "createdAt">) {

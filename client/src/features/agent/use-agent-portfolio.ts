@@ -1,0 +1,117 @@
+import { useEffect, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
+import { ApiError, api } from "@/lib/api.ts";
+import type { TokenSymbol } from "@/lib/tokens.ts";
+
+interface AgentBalance {
+  symbol: TokenSymbol;
+  address: `0x${string}`;
+  decimals: number;
+  balanceRaw: string;
+  usdValue: number;
+}
+
+interface AgentTransaction {
+  id: string;
+  walletAddress: string;
+  txHash: string | null;
+  kind: string;
+  status: string;
+  createdAt: string;
+}
+
+interface AgentPortfolioResponse {
+  address: string;
+  balances: AgentBalance[];
+  transactions: AgentTransaction[];
+}
+
+export interface AgentPortfolioState {
+  /** Agent CDP address, or null until the wallet has been provisioned. */
+  agentAddress: string | null;
+  balances: AgentBalance[];
+  loading: boolean;
+  /** True when the user has no agent wallet yet — distinct from a hard
+   *  error so the UI can offer "Create agent wallet" instead of red text. */
+  notProvisioned: boolean;
+  error: string | null;
+}
+
+const POLL_MS = 30_000;
+
+/**
+ * Live agent-wallet portfolio polling. Mirrors `usePortfolio` but hits
+ * `/api/agent/portfolio`, which 404s with code `AGENT_WALLET_NOT_FOUND`
+ * for users who haven't provisioned an agent CDP wallet yet.
+ */
+export function useAgentPortfolio(): AgentPortfolioState {
+  const { authenticated, ready } = usePrivy();
+  const [state, setState] = useState<AgentPortfolioState>({
+    agentAddress: null,
+    balances: [],
+    loading: false,
+    notProvisioned: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!ready || !authenticated) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = async () => {
+      try {
+        const data = await api.get<AgentPortfolioResponse>("/api/agent/portfolio");
+        if (cancelled) return;
+        setState({
+          agentAddress: data.address,
+          balances: data.balances,
+          loading: false,
+          notProvisioned: false,
+          error: null,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.code === "AGENT_WALLET_NOT_FOUND") {
+          setState({
+            agentAddress: null,
+            balances: [],
+            loading: false,
+            notProvisioned: true,
+            error: null,
+          });
+          return;
+        }
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
+        setState((s) => ({ ...s, loading: false, error: message }));
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void tick(), POLL_MS);
+      }
+    };
+
+    void tick();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [authenticated, ready]);
+
+  if (!ready || !authenticated) {
+    return {
+      agentAddress: null,
+      balances: [],
+      loading: false,
+      notProvisioned: false,
+      error: null,
+    };
+  }
+
+  return state;
+}
