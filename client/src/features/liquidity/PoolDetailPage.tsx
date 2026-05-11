@@ -1,17 +1,20 @@
-import { useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { BASESCAN_URL } from "@/lib/tokens.ts";
+import { BASESCAN_URL, TOKENS } from "@/lib/tokens.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
 import { usePoolState } from "./use-pool-state.ts";
+import { usePositions } from "./use-positions.ts";
+import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { ChartRange } from "./types.ts";
+import type { Position } from "./positions-types.ts";
 
 const BASESCAN = BASESCAN_URL;
 
@@ -25,7 +28,9 @@ interface Props {
 export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Props) {
   const [range, setRange] = useState<ChartRange>("30D");
   const [metric, setMetric] = useState<Metric>("tvl");
+  const [removing, setRemoving] = useState<Position | null>(null);
   const { data, error, loading } = usePool(poolId, range);
+  const positions = usePositions();
 
   const derived = data ? tryDeriveAddCtx(data.pool) : null;
   const poolState = usePoolState(
@@ -34,6 +39,23 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
     derived?.fee ?? null,
   );
   const addStatus = computeAddStatus(derived, poolState);
+
+  // Match the user's open positions against this pool by token addresses
+  // (canonical order-independent) + fee tier. Positions from the
+  // `/api/positions` endpoint carry on-chain `token0`/`token1` addresses
+  // and the integer fee in hundredths-of-a-bp.
+  const matchingPositions = useMemo<Position[]>(() => {
+    if (!derived || !positions.data) return [];
+    const addrA = TOKENS[derived.tokenA].address.toLowerCase();
+    const addrB = TOKENS[derived.tokenB].address.toLowerCase();
+    return positions.data.filter((p) => {
+      if (p.status !== "open") return false;
+      if (p.fee !== derived.fee) return false;
+      const t0 = p.token0.toLowerCase();
+      const t1 = p.token1.toLowerCase();
+      return (t0 === addrA && t1 === addrB) || (t0 === addrB && t1 === addrA);
+    });
+  }, [positions.data, derived]);
 
   return (
     <>
@@ -84,6 +106,46 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
               <p className="text-[11px] text-text-mute text-center">{addStatus.hint}</p>
             )}
           </div>
+
+          {matchingPositions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider text-text-mute">
+                Your positions in this pool
+              </p>
+              {matchingPositions.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-sm border border-border-soft bg-bg-elev"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-mono">token #{p.tokenId ?? "—"}</div>
+                    <div className="text-[11px] text-text-dim">liquidity {p.liquidity}</div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={p.tokenId === null}
+                    onClick={() => {
+                      setRemoving(p);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" /> Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <RemoveLiquidityModal
+            position={removing}
+            onClose={() => {
+              setRemoving(null);
+            }}
+            onSuccess={() => {
+              setRemoving(null);
+              positions.reload();
+            }}
+          />
 
           {data.pool.underlyingTokens.length > 0 && (
             <div className="text-xs text-text-mute space-y-1">
