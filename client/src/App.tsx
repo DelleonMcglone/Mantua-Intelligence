@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
@@ -52,6 +52,19 @@ export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
   const [route, setRoute] = useState<Route>({ kind: "landing" });
 
+  // PanelHeader's "New chat" button (rendered inside every panel)
+  // falls back to this event when no `onNewChat` prop is wired —
+  // letting any panel reset to the home menu without prop-drilling.
+  useEffect(() => {
+    const handler = () => {
+      setRoute({ kind: "home" });
+    };
+    window.addEventListener("mantua:new-chat", handler);
+    return () => {
+      window.removeEventListener("mantua:new-chat", handler);
+    };
+  }, []);
+
   if (!ready) {
     return (
       <main className="min-h-screen bg-bg text-text flex items-center justify-center">
@@ -91,17 +104,21 @@ export default function App() {
       onLogoClick={() => {
         setRoute({ kind: "landing" });
       }}
-      left={<LeftColumn />}
+      left={<LeftColumn setRoute={setRoute} />}
       right={<RightColumn route={route} setRoute={setRoute} />}
     />
   );
 }
 
-function LeftColumn() {
+function LeftColumn({ setRoute }: { setRoute: (r: Route) => void }) {
   return (
     <>
       <PortfolioCard />
-      <AssetsCard />
+      <AssetsCard
+        onSelectPool={(id) => {
+          setRoute({ kind: "pool", id });
+        }}
+      />
     </>
   );
 }

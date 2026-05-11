@@ -7,6 +7,7 @@ import {
   getUserLocalPositions,
   type LocalPosition,
 } from "@/features/liquidity/local-positions.ts";
+import { localPoolKey } from "@/features/liquidity/local-pools.ts";
 import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
@@ -23,6 +24,10 @@ interface PortfolioPosition {
   up: boolean;
   source: "mantua" | "external";
   hook: HookName;
+  /** Original LocalPosition for testnet rows — present iff the row
+   *  came from `localPositions.map(localPositionToRow)`. Used to
+   *  derive the `local:*` pool id for the click-through nav. */
+  src?: LocalPosition;
 }
 
 const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
@@ -120,10 +125,18 @@ function localPositionToRow(p: LocalPosition): PortfolioPosition {
     up: true,
     source: "mantua",
     hook: localHookLabel(p.hook),
+    src: p,
   };
 }
 
-export function AssetsCard() {
+interface AssetsCardProps {
+  /** Navigate to the PoolDetailPage for the clicked LP position.
+   *  Called with a `local:` pool id derived from the position's
+   *  token pair + fee tier + hook. */
+  onSelectPool?: (poolId: string) => void;
+}
+
+export function AssetsCard({ onSelectPool }: AssetsCardProps = {}) {
   const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
@@ -406,9 +419,30 @@ export function AssetsCard() {
             {portfolio.walletAddress &&
               visiblePositions.map((p, i) => {
                 const tint = HOOK_TINT[p.hook];
+                const handleClick = p.src
+                  ? () => {
+                      const src = p.src;
+                      if (!src) return;
+                      const key = localPoolKey(src.tokenA, src.tokenB, src.fee, src.hook);
+                      onSelectPool?.(`local:${key}`);
+                    }
+                  : undefined;
                 return (
                   <div
                     key={i}
+                    onClick={handleClick}
+                    role={handleClick ? "button" : undefined}
+                    tabIndex={handleClick ? 0 : undefined}
+                    onKeyDown={
+                      handleClick
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleClick();
+                            }
+                          }
+                        : undefined
+                    }
                     className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
                   >
                     <div className="flex flex-shrink-0">
