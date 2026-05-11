@@ -11,13 +11,29 @@ interface PortfolioBalance {
   usdValue: number;
 }
 
+export interface PortfolioTransaction {
+  id: string;
+  action: string;
+  txHash: string;
+  chainId: number;
+  /** Action-specific shape (tokenIn/tokenOut for swap, tokenA/tokenB
+   *  for liquidity, token for send_tokens, etc.). Treated as opaque
+   *  by most consumers; AssetDetailPanel walks it to filter by symbol. */
+  params: Record<string, unknown>;
+  outcome: string;
+  usdValue: string | null;
+  createdAt: string;
+}
+
 interface PortfolioResponse {
   address: string;
   balances: PortfolioBalance[];
+  transactions?: PortfolioTransaction[];
 }
 
 interface PortfolioState {
   balances: PortfolioBalance[];
+  transactions: PortfolioTransaction[];
   loading: boolean;
   error: string | null;
   walletAddress: string | null;
@@ -36,6 +52,7 @@ export function usePortfolio(): PortfolioState {
   const wallet = user?.wallet?.address ?? null;
   const [state, setState] = useState<PortfolioState>({
     balances: [],
+    transactions: [],
     loading: false,
     error: null,
     walletAddress: null,
@@ -54,7 +71,13 @@ export function usePortfolio(): PortfolioState {
 
   useEffect(() => {
     if (!ready || !authenticated || !wallet) {
-      setState({ balances: [], loading: false, error: null, walletAddress: null });
+      setState({
+        balances: [],
+        transactions: [],
+        loading: false,
+        error: null,
+        walletAddress: null,
+      });
       return;
     }
 
@@ -67,6 +90,7 @@ export function usePortfolio(): PortfolioState {
         if (cancelled) return;
         setState({
           balances: data.balances,
+          transactions: data.transactions ?? [],
           loading: false,
           error: null,
           walletAddress: data.address,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import { IS_MAINNET } from "@/lib/tokens.ts";
+import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
   getAgentLocalPositions,
@@ -134,9 +134,11 @@ interface AssetsCardProps {
    *  Called with a `local:` pool id derived from the position's
    *  token pair + fee tier + hook. */
   onSelectPool?: (poolId: string) => void;
+  /** Navigate to the AssetDetailPanel for the clicked balance row. */
+  onSelectAsset?: (symbol: TokenSymbol) => void;
 }
 
-export function AssetsCard({ onSelectPool }: AssetsCardProps = {}) {
+export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}) {
   const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
@@ -341,6 +343,25 @@ export function AssetsCard({ onSelectPool }: AssetsCardProps = {}) {
             {filtered.map((a) => (
               <div
                 key={a.symbol}
+                onClick={
+                  onSelectAsset
+                    ? () => {
+                        onSelectAsset(a.symbol);
+                      }
+                    : undefined
+                }
+                role={onSelectAsset ? "button" : undefined}
+                tabIndex={onSelectAsset ? 0 : undefined}
+                onKeyDown={
+                  onSelectAsset
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelectAsset(a.symbol);
+                        }
+                      }
+                    : undefined
+                }
                 className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
               >
                 <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">

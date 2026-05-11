@@ -11,6 +11,7 @@ import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
+import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
@@ -39,6 +40,7 @@ type Route =
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
   | { kind: "positions" }
+  | { kind: "asset"; symbol: TokenSymbol }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
@@ -117,6 +119,9 @@ function LeftColumn({ setRoute }: { setRoute: (r: Route) => void }) {
       <AssetsCard
         onSelectPool={(id) => {
           setRoute({ kind: "pool", id });
+        }}
+        onSelectAsset={(symbol) => {
+          setRoute({ kind: "asset", symbol });
         }}
       />
     </>
@@ -206,6 +211,16 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "positions":
       return (
         <PositionsList
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "asset":
+      return (
+        <AssetDetailPanel
+          key={route.symbol}
+          symbol={route.symbol}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
