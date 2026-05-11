@@ -3,12 +3,13 @@ import { ExternalLink, Trash2 } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { BASESCAN_URL, TOKENS } from "@/lib/tokens.ts";
+import { BASESCAN_URL, IS_MAINNET, TOKENS, ZERO_ADDRESS } from "@/lib/tokens.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
 import { usePoolState } from "./use-pool-state.ts";
 import { usePositions } from "./use-positions.ts";
+import { getUserLocalPositions } from "./local-positions.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
@@ -41,20 +42,58 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
   const addStatus = computeAddStatus(derived, poolState);
 
   // Match the user's open positions against this pool by token addresses
-  // (canonical order-independent) + fee tier. Positions from the
-  // `/api/positions` endpoint carry on-chain `token0`/`token1` addresses
-  // and the integer fee in hundredths-of-a-bp.
+  // (canonical order-independent) + fee tier. Two sources:
+  //   1. `/api/positions` — Mantua-tracked DB rows + subgraph-discovered
+  //      (mainnet only). Carries on-chain `token0`/`token1` addresses
+  //      and the integer fee.
+  //   2. `getUserLocalPositions()` — localStorage breadcrumb of testnet
+  //      mints whose server-side row never landed. Synthesized into a
+  //      `Position`-shaped record with `id: ""`; the modal/calldata
+  //      flow detects the empty id and falls back to the `tokenId`
+  //      remove path on the server.
   const matchingPositions = useMemo<Position[]>(() => {
-    if (!derived || !positions.data) return [];
+    if (!derived) return [];
     const addrA = TOKENS[derived.tokenA].address.toLowerCase();
     const addrB = TOKENS[derived.tokenB].address.toLowerCase();
-    return positions.data.filter((p) => {
+    const fromApi = (positions.data ?? []).filter((p) => {
       if (p.status !== "open") return false;
       if (p.fee !== derived.fee) return false;
       const t0 = p.token0.toLowerCase();
       const t1 = p.token1.toLowerCase();
       return (t0 === addrA && t1 === addrB) || (t0 === addrB && t1 === addrA);
     });
+    if (IS_MAINNET) return fromApi;
+
+    const knownTokenIds = new Set(
+      fromApi.map((p) => p.tokenId).filter((id): id is string => id !== null),
+    );
+    const fromLocal: Position[] = getUserLocalPositions()
+      .filter((lp) => {
+        if (lp.fee !== derived.fee) return false;
+        return (
+          (lp.tokenA === derived.tokenA && lp.tokenB === derived.tokenB) ||
+          (lp.tokenA === derived.tokenB && lp.tokenB === derived.tokenA)
+        );
+      })
+      .filter((lp) => !knownTokenIds.has(lp.tokenId))
+      .map((lp) => ({
+        id: "",
+        tokenId: lp.tokenId,
+        tickLower: 0,
+        tickUpper: 0,
+        liquidity: "0",
+        status: "open" as const,
+        openedTx: lp.txHash,
+        closedTx: null,
+        createdAt: new Date(lp.createdAt).toISOString(),
+        poolKeyHash: "",
+        token0: TOKENS[lp.tokenA].address.toLowerCase(),
+        token1: TOKENS[lp.tokenB].address.toLowerCase(),
+        fee: lp.fee,
+        tickSpacing: 0,
+        hookAddress: lp.hook ? null : ZERO_ADDRESS,
+      }));
+    return [...fromApi, ...fromLocal];
   }, [positions.data, derived]);
 
   return (

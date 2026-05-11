@@ -366,6 +366,13 @@ export const POSITION_MANAGER_MULTICALL_ABI = [
 export const POSITION_MANAGER_VIEW_ABI = [
   {
     type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "tokenId" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
     name: "getPoolAndPositionInfo",
     stateMutability: "view",
     inputs: [{ type: "uint256", name: "tokenId" }],
