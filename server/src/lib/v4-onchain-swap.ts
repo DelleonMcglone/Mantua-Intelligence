@@ -1,5 +1,6 @@
 import { encodeFunctionData, type Address } from "viem";
 import { buildPoolKey, type PoolKey } from "./pool-key.ts";
+import { logger } from "./logger.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import {
@@ -91,13 +92,18 @@ export async function findMaxQuotableInputV4(
   if (upperBound === 0n) return 0n;
 
   // Direct probe at the full upper bound — if it works, the pool can
-  // absorb the user's whole balance and no cap is needed.
-  try {
-    await quoteExactInputV4({ ...rest, amountInRaw: upperBound });
-    return upperBound;
-  } catch {
-    // Fall through to binary search.
-  }
+  // absorb the user's whole balance and no cap is needed. Returns the
+  // revert message on failure so we can log it if every later probe
+  // also reverts.
+  const firstRevertMessage = await (async (): Promise<string | null> => {
+    try {
+      await quoteExactInputV4({ ...rest, amountInRaw: upperBound });
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "non-Error throw";
+    }
+  })();
+  if (firstRevertMessage === null) return upperBound;
 
   let lo = 0n;
   let hi = upperBound;
@@ -111,6 +117,23 @@ export async function findMaxQuotableInputV4(
     } catch {
       hi = mid;
     }
+  }
+  if (lo === 0n) {
+    // Every probe reverted — the pool may be missing, the hook may be
+    // rejecting, or liquidity may be out of range. Log the upper-bound
+    // revert reason verbatim so the user-visible "no pool found" sign
+    // doesn't hide what V4Quoter actually told us.
+    logger.warn(
+      {
+        tokenIn: args.tokenIn,
+        tokenOut: args.tokenOut,
+        fee: args.fee,
+        hook: args.hook,
+        upperBound: upperBound.toString(),
+        revert: firstRevertMessage.slice(0, 800),
+      },
+      "v4 max-input: every probe reverted",
+    );
   }
   return lo;
 }
