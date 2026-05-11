@@ -1,4 +1,4 @@
-import { encodeFunctionData, type Address } from "viem";
+import { BaseError, decodeAbiParameters, decodeErrorResult, encodeFunctionData, type Address } from "viem";
 import { buildPoolKey, type PoolKey } from "./pool-key.ts";
 import { logger } from "./logger.ts";
 import { baseRpcClient } from "./rpc-client.ts";
@@ -13,6 +13,93 @@ import {
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
+
+/**
+ * Walk a viem error tree to find the raw revert data hex string
+ * (`0x<selector><payload>`). Returns null when no contract revert
+ * data is attached (e.g. RPC transport error, not a revert).
+ */
+function extractRevertHex(err: unknown): `0x${string}` | null {
+  if (!(err instanceof BaseError)) return null;
+  const found = err.walk(
+    (e): e is BaseError & { data?: unknown; cause?: unknown } => {
+      const candidate = e as { data?: unknown };
+      return typeof candidate.data === "string" && candidate.data.startsWith("0x");
+    },
+  ) as (BaseError & { data?: `0x${string}` }) | null;
+  return found?.data ?? null;
+}
+
+interface DecodedQuoterRevert {
+  outerHex: `0x${string}` | null;
+  innerHex: `0x${string}` | null;
+  innerSelector: `0x${string}` | null;
+  decoded: string | null;
+}
+
+/**
+ * Decode the inner revert payload from V4Quoter's
+ * `UnexpectedRevertBytes(bytes)` (selector `0x6190b2b0`). Returns the
+ * inner selector + best-effort decoded reason so the caller can log
+ * what V4Quoter is actually masking.
+ */
+function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
+  const outerHex = extractRevertHex(err);
+  if (!outerHex) return { outerHex: null, innerHex: null, innerSelector: null, decoded: null };
+
+  // UnexpectedRevertBytes(bytes) — selector 0x6190b2b0.
+  if (!outerHex.toLowerCase().startsWith("0x6190b2b0")) {
+    return {
+      outerHex,
+      innerHex: null,
+      innerSelector: outerHex.slice(0, 10).toLowerCase() as `0x${string}`,
+      decoded: null,
+    };
+  }
+  let innerHex: `0x${string}`;
+  try {
+    const payload = ("0x" + outerHex.slice(10)) as `0x${string}`;
+    const [bytes] = decodeAbiParameters([{ type: "bytes" }], payload);
+    innerHex = bytes;
+  } catch {
+    return { outerHex, innerHex: null, innerSelector: null, decoded: "unwrap failed" };
+  }
+  if (innerHex.length < 10) {
+    return { outerHex, innerHex, innerSelector: null, decoded: "empty inner payload" };
+  }
+  const innerSelector = innerHex.slice(0, 10).toLowerCase() as `0x${string}`;
+
+  // Try standard Error(string) and Panic(uint256). Custom errors
+  // (e.g. from the Stable Protection hook) fall through with just
+  // selector + raw hex so we can match them against the hook ABI.
+  try {
+    const decoded = decodeErrorResult({
+      abi: [
+        { type: "error", name: "Error", inputs: [{ type: "string", name: "message" }] },
+        { type: "error", name: "Panic", inputs: [{ type: "uint256", name: "code" }] },
+      ],
+      data: innerHex,
+    });
+    if (decoded.errorName === "Error") {
+      const message = decoded.args[0];
+      return {
+        outerHex,
+        innerHex,
+        innerSelector,
+        decoded: `Error: ${typeof message === "string" ? message : "(non-string)"}`,
+      };
+    }
+    const code = decoded.args[0];
+    return {
+      outerHex,
+      innerHex,
+      innerSelector,
+      decoded: `Panic(0x${typeof code === "bigint" ? code.toString(16) : "?"})`,
+    };
+  } catch {
+    return { outerHex, innerHex, innerSelector, decoded: null };
+  }
+}
 
 /**
  * v4 sqrt price limits. Anything inside `MIN_SQRT_PRICE_LIMIT <
@@ -59,10 +146,11 @@ function friendlyQuoterError(err: unknown): Error {
   if (/0x6190b2b0|UnexpectedRevertBytes/i.test(msg)) {
     return new Error(
       "Quote failed — pool may be missing liquidity, the hook rejected the swap, or the requested amount is larger than the pool can support. Try a smaller amount.",
+      { cause: err },
     );
   }
   if (/PoolNotInitialized|0x[0-9a-f]+ not initialized/i.test(msg)) {
-    return new Error("Pool not initialized for this pair + fee + hook combination.");
+    return new Error("Pool not initialized for this pair + fee + hook combination.", { cause: err });
   }
   if (err instanceof Error) return err;
   return new Error("Quote failed");
@@ -92,18 +180,19 @@ export async function findMaxQuotableInputV4(
   if (upperBound === 0n) return 0n;
 
   // Direct probe at the full upper bound — if it works, the pool can
-  // absorb the user's whole balance and no cap is needed. Returns the
-  // revert message on failure so we can log it if every later probe
-  // also reverts.
-  const firstRevertMessage = await (async (): Promise<string | null> => {
+  // absorb the user's whole balance and no cap is needed. On failure
+  // we hold onto the raw viem error so we can decode V4Quoter's
+  // `UnexpectedRevertBytes` wrapper and surface the actual inner
+  // revert reason when every later probe also reverts.
+  const firstError = await (async (): Promise<unknown> => {
     try {
       await quoteExactInputV4({ ...rest, amountInRaw: upperBound });
       return null;
     } catch (err) {
-      return err instanceof Error ? err.message : "non-Error throw";
+      return err;
     }
   })();
-  if (firstRevertMessage === null) return upperBound;
+  if (firstError === null) return upperBound;
 
   let lo = 0n;
   let hi = upperBound;
@@ -120,9 +209,14 @@ export async function findMaxQuotableInputV4(
   }
   if (lo === 0n) {
     // Every probe reverted — the pool may be missing, the hook may be
-    // rejecting, or liquidity may be out of range. Log the upper-bound
-    // revert reason verbatim so the user-visible "no pool found" sign
-    // doesn't hide what V4Quoter actually told us.
+    // rejecting, or liquidity may be out of range. Decode V4Quoter's
+    // `UnexpectedRevertBytes` wrapper from the upper-bound probe to
+    // surface the actual inner selector + reason. Walks the original
+    // viem error chained via `cause` from `friendlyQuoterError`.
+    const cause =
+      firstError instanceof Error && firstError.cause ? firstError.cause : firstError;
+    const { outerHex, innerHex, innerSelector, decoded } = decodeQuoterRevert(cause);
+    const friendlyMessage = firstError instanceof Error ? firstError.message : "non-Error throw";
     logger.warn(
       {
         tokenIn: args.tokenIn,
@@ -130,7 +224,11 @@ export async function findMaxQuotableInputV4(
         fee: args.fee,
         hook: args.hook,
         upperBound: upperBound.toString(),
-        revert: firstRevertMessage.slice(0, 800),
+        friendly: friendlyMessage.slice(0, 200),
+        outerHex: outerHex ? outerHex.slice(0, 80) : null,
+        innerSelector,
+        innerHex: innerHex ? innerHex.slice(0, 200) : null,
+        decoded,
       },
       "v4 max-input: every probe reverted",
     );
