@@ -1,18 +1,22 @@
-import { z } from "zod";
-import { listBasePools } from "./defillama.ts";
+import { listBasePools, getTokenPrices, getTokenChangePercents } from "./defillama.ts";
 import { logger } from "./logger.ts";
+import { z } from "zod";
 
 /**
  * POC analyze engine. Each topic is a one-shot fetcher that turns
- * external data (CoinGecko, DefiLlama, plus a sprinkling of static
- * content for the educational topic) into a generic
- * `AnalyzeResponse` so the client can render it without per-topic
- * branching. Bigger plans (full agentic research, charts, etc.) live
- * downstream — this is the "answer the suggestion buttons with real
- * data" pass the user explicitly asked for.
+ * external data (DefiLlama Coins for spot/change, DefiLlama Yields for
+ * pool stats, plus a sprinkling of static content for the educational
+ * topic) into a generic `AnalyzeResponse` so the client can render it
+ * without per-topic branching. Bigger plans (full agentic research,
+ * charts, etc.) live downstream — this is the "answer the suggestion
+ * buttons with real data" pass the user explicitly asked for.
+ *
+ * Spot prices route through DefiLlama Coins (`coins.llama.fi`) — the
+ * free tier is open and rate-limit-friendly, vs. CoinGecko's anonymous
+ * free tier which throttles at ~5–15 req/min per source IP. DefiLlama
+ * keys the same prices we want by `coingecko:<id>`, so the existing
+ * alias map drives both sources.
  */
-
-const COINGECKO = "https://api.coingecko.com/api/v3";
 
 export const TOPICS = [
   "eth-price",
@@ -94,50 +98,44 @@ function fmtPct(n: number, dp = 2): string {
   return `${sign}${n.toFixed(dp)}%`;
 }
 
-const ethPriceSchema = z.object({
-  ethereum: z.object({
-    usd: z.number(),
-    usd_24h_change: z.number().optional(),
-  }),
-});
-
 async function ethPrice(): Promise<AnalyzeResponse> {
-  const url = `${COINGECKO}/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error(`CoinGecko ${String(res.status)}`);
-  const json = ethPriceSchema.parse(await res.json());
-  const change = json.ethereum.usd_24h_change ?? 0;
+  const [prices, changes] = await Promise.all([
+    getTokenPrices(["coingecko:ethereum"]),
+    getTokenChangePercents(["coingecko:ethereum"]),
+  ]);
+  const price = prices["coingecko:ethereum"]?.price;
+  if (price === undefined) throw new Error("DefiLlama: ETH price unavailable");
+  const change = changes["coingecko:ethereum"] ?? 0;
   return {
     topic: "eth-price",
     title: "ETH spot price",
-    summary: `Ethereum is trading at ${fmtUsd(json.ethereum.usd)} per ETH${
+    summary: `Ethereum is trading at ${fmtUsd(price)} per ETH${
       Number.isFinite(change) ? `, ${fmtPct(change)} in the last 24h` : ""
     }.`,
     metrics: [
-      { label: "Price", value: fmtUsd(json.ethereum.usd) },
+      { label: "Price", value: fmtUsd(price) },
       { label: "24h change", value: fmtPct(change) },
     ],
-    sources: [{ name: "CoinGecko", url: "https://www.coingecko.com/en/coins/ethereum" }],
+    sources: [{ name: "DefiLlama", url: "https://defillama.com/coins/coingecko:ethereum" }],
   };
 }
 
-const eurcDualSchema = z.object({
-  "euro-coin": z.object({ usd: z.number(), eur: z.number().optional() }),
-});
-
 async function eurcPeg(): Promise<AnalyzeResponse> {
-  // Pull EURC priced in BOTH usd and eur from CoinGecko. EURC's
-  // intended peg is 1:1 EURC↔EUR fiat (Circle's mint contract). The
-  // EUR-denominated price tells us the peg directly without needing a
-  // hardcoded EUR/USD reference: a healthy peg is `eur ≈ 1.0`. The
-  // USD-denominated price is shown for context.
-  const url = `${COINGECKO}/simple/price?ids=euro-coin&vs_currencies=usd,eur`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error(`CoinGecko ${String(res.status)}`);
-  const json = eurcDualSchema.parse(await res.json());
-  const usd = json["euro-coin"].usd;
-  const eur = json["euro-coin"].eur ?? 1;
-  const dev = (eur - 1) * 100;
+  // DefiLlama's price API returns USD only (no `vs_currency=eur`
+  // equivalent), so the EUR reference for peg-deviation comes from
+  // agEUR — another EUR-pegged stablecoin (`coingecko:ageur`). Cross
+  // both USD prices to get an implied EURC/EUR rate without an FX feed.
+  //   peg_ratio  = EURC_usd / agEUR_usd   (should be ≈ 1.0 on-peg)
+  //   deviation% = (peg_ratio - 1) * 100
+  // Tether-EURT was rejected as a reference (price ≈ $0.07, broken).
+  const prices = await getTokenPrices(["coingecko:euro-coin", "coingecko:ageur"]);
+  const eurcUsd = prices["coingecko:euro-coin"]?.price;
+  const eurRef = prices["coingecko:ageur"]?.price;
+  if (eurcUsd === undefined || eurRef === undefined || eurRef === 0) {
+    throw new Error("DefiLlama: EURC or agEUR price unavailable");
+  }
+  const pegRatio = eurcUsd / eurRef;
+  const dev = (pegRatio - 1) * 100;
   let zone: "ON_PEG" | "WARN" | "STRESS";
   if (Math.abs(dev) < 0.5) zone = "ON_PEG";
   else if (Math.abs(dev) < 2) zone = "WARN";
@@ -147,18 +145,20 @@ async function eurcPeg(): Promise<AnalyzeResponse> {
     title: "EURC peg status",
     summary:
       zone === "ON_PEG"
-        ? `EURC is trading at €${eur.toFixed(4)} — within ±0.5% of its 1:1 EUR peg (currently $${usd.toFixed(4)} per EURC).`
+        ? `EURC is trading at $${eurcUsd.toFixed(4)} vs the EUR reference of $${eurRef.toFixed(4)} (agEUR). Within ±0.5% of the 1:1 EUR peg.`
         : zone === "WARN"
-          ? `EURC is at €${eur.toFixed(4)} (${fmtPct(dev)} off peg). Slightly outside the tight ±0.5% band; worth keeping an eye on. USD spot: $${usd.toFixed(4)}.`
-          : `EURC is at €${eur.toFixed(4)} (${fmtPct(dev)} off peg). Outside the ±2% band — Stable Protection would flag this as STRESS. USD spot: $${usd.toFixed(4)}.`,
+          ? `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (agEUR) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Slightly outside the tight ±0.5% band.`
+          : `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (agEUR) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Outside the ±2% band; Stable Protection would flag STRESS.`,
     metrics: [
-      { label: "EURC vs EUR", value: `€${eur.toFixed(4)}` },
-      { label: "EURC vs USD", value: `$${usd.toFixed(4)}` },
+      { label: "EURC (USD)", value: `$${eurcUsd.toFixed(4)}` },
+      { label: "EUR reference (agEUR)", value: `$${eurRef.toFixed(4)}` },
+      { label: "Implied peg", value: pegRatio.toFixed(4) },
       { label: "Peg deviation", value: fmtPct(dev) },
       { label: "Zone", value: zone },
     ],
     sources: [
-      { name: "CoinGecko", url: "https://www.coingecko.com/en/coins/euro-coin" },
+      { name: "DefiLlama (EURC)", url: "https://defillama.com/coins/coingecko:euro-coin" },
+      { name: "DefiLlama (agEUR)", url: "https://defillama.com/coins/coingecko:ageur" },
       { name: "Circle EURC", url: "https://www.circle.com/eurc" },
     ],
   };
@@ -247,26 +247,18 @@ const RWA_LIST: { symbol: string; name: string; coingeckoId: string; venue: stri
   { symbol: "POLYX", name: "Polymesh", coingeckoId: "polymesh", venue: "Polymesh" },
 ];
 
-const rwaPriceSchema = z.record(
-  z.string(),
-  z.object({
-    usd: z.number().optional(),
-    usd_24h_change: z.number().optional(),
-  }),
-);
-
 async function topRwaTokens(): Promise<AnalyzeResponse> {
-  const ids = RWA_LIST.map((t) => t.coingeckoId).join(",");
-  const url = `${COINGECKO}/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error(`CoinGecko ${String(res.status)}`);
-  const json = rwaPriceSchema.parse(await res.json());
+  const keys = RWA_LIST.map((t) => `coingecko:${t.coingeckoId}`);
+  const [prices, changes] = await Promise.all([
+    getTokenPrices(keys),
+    getTokenChangePercents(keys),
+  ]);
   const rows = RWA_LIST.map((t) => {
-    const p = json[t.coingeckoId];
+    const k = `coingecko:${t.coingeckoId}`;
     return {
       ...t,
-      price: p?.usd ?? 0,
-      change: p?.usd_24h_change ?? 0,
+      price: prices[k]?.price ?? 0,
+      change: changes[k] ?? 0,
     };
   })
     .filter((r) => r.price > 0)
@@ -275,9 +267,8 @@ async function topRwaTokens(): Promise<AnalyzeResponse> {
     return {
       topic: "top-rwa-tokens",
       title: "Top RWA tokens",
-      summary:
-        "Couldn't pull live prices right now (CoinGecko rate limit). Try again in a minute.",
-      sources: [{ name: "CoinGecko" }],
+      summary: "Couldn't pull live prices right now. Try again in a minute.",
+      sources: [{ name: "DefiLlama" }],
     };
   }
   const winner = rows[0]!;
@@ -289,17 +280,9 @@ async function topRwaTokens(): Promise<AnalyzeResponse> {
       label: `${r.symbol} (${r.venue})`,
       value: `${fmtUsd(r.price)} · ${fmtPct(r.change)}`,
     })),
-    sources: [{ name: "CoinGecko", url: "https://www.coingecko.com/en/categories/real-world-assets-rwa" }],
+    sources: [{ name: "DefiLlama", url: "https://defillama.com/coins" }],
   };
 }
-
-const tokenPriceSchema = z.record(
-  z.string(),
-  z.object({
-    usd: z.number().optional(),
-    usd_24h_change: z.number().optional(),
-  }),
-);
 
 async function tokenPrice(symbol: string): Promise<AnalyzeResponse> {
   const alias = resolveTokenAlias(symbol);
@@ -310,31 +293,32 @@ async function tokenPrice(symbol: string): Promise<AnalyzeResponse> {
       summary: `I don't have ${symbol} in my alias map yet. Known names: bitcoin, ethereum, cbBTC, USDC, USDT, EURC, WETH, MKR, PENDLE, ONDO, CFG, SOL.`,
     };
   }
-  const url = `${COINGECKO}/simple/price?ids=${alias.coingeckoId}&vs_currencies=usd&include_24hr_change=true`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error(`CoinGecko ${String(res.status)}`);
-  const json = tokenPriceSchema.parse(await res.json());
-  const entry = json[alias.coingeckoId];
-  if (!entry?.usd) {
+  const key = `coingecko:${alias.coingeckoId}`;
+  const [prices, changes] = await Promise.all([
+    getTokenPrices([key]),
+    getTokenChangePercents([key]),
+  ]);
+  const price = prices[key]?.price;
+  if (price === undefined) {
     return {
       topic: "token-price",
       title: `${alias.label} (${alias.symbol})`,
-      summary: `CoinGecko didn't return a price for ${alias.label} just now. Try again in a moment.`,
+      summary: `DefiLlama didn't return a price for ${alias.label} just now. Try again in a moment.`,
     };
   }
-  const change = entry.usd_24h_change ?? 0;
+  const change = changes[key] ?? 0;
   return {
     topic: "token-price",
     title: `${alias.label} (${alias.symbol}) spot price`,
-    summary: `${alias.label} (${alias.symbol}) is trading at ${fmtUsd(entry.usd)}${
+    summary: `${alias.label} (${alias.symbol}) is trading at ${fmtUsd(price)}${
       Number.isFinite(change) ? `, ${fmtPct(change)} in the last 24h` : ""
     }.`,
     metrics: [
-      { label: "Price", value: fmtUsd(entry.usd) },
+      { label: "Price", value: fmtUsd(price) },
       { label: "24h change", value: fmtPct(change) },
     ],
     sources: [
-      { name: "CoinGecko", url: `https://www.coingecko.com/en/coins/${alias.coingeckoId}` },
+      { name: "DefiLlama", url: `https://defillama.com/coins/coingecko:${alias.coingeckoId}` },
     ],
   };
 }
