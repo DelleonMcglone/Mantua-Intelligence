@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { IS_MAINNET } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
-  getLocalPositions,
+  getAgentLocalPositions,
+  getUserLocalPositions,
   type LocalPosition,
 } from "@/features/liquidity/local-positions.ts";
+import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
@@ -122,29 +124,38 @@ function localPositionToRow(p: LocalPosition): PortfolioPosition {
 }
 
 export function AssetsCard() {
-  const [tab, setTab] = useState<"assets" | "positions">("assets");
+  const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
   const [posSource, setPosSource] = useState<"all" | "mantua">("all");
-  const [localPositions, setLocalPositions] = useState<LocalPosition[]>(() =>
-    IS_MAINNET ? [] : getLocalPositions(),
+  // Re-read localStorage on each tab change so a fresh mint shows up
+  // without a manual page refresh.
+  const localPositions = useMemo<LocalPosition[]>(
+    () => (IS_MAINNET ? [] : getUserLocalPositions()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab],
+  );
+  const agentPositions = useMemo<LocalPosition[]>(
+    () => (IS_MAINNET ? [] : getAgentLocalPositions()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab],
   );
 
-  // Re-read localStorage when the component mounts and when the user
-  // switches into the Positions tab so a fresh mint shows up without
-  // a manual page refresh.
-  useEffect(() => {
-    if (IS_MAINNET) return;
-    if (tab !== "positions") return;
-    setLocalPositions(getLocalPositions());
-  }, [tab]);
-
   const portfolio = usePortfolio();
+  const agent = useAgentPortfolio();
   const assets = useMemo<DisplayAsset[]>(() => {
     if (!portfolio.walletAddress) return [];
     return toDisplayAssets(portfolio.balances);
   }, [portfolio.walletAddress, portfolio.balances]);
+  const agentAssets = useMemo<DisplayAsset[]>(() => {
+    if (!agent.agentAddress) return [];
+    return toDisplayAssets(agent.balances);
+  }, [agent.agentAddress, agent.balances]);
+  const agentPositionRows = useMemo<PortfolioPosition[]>(
+    () => (IS_MAINNET ? [] : agentPositions.map(localPositionToRow)),
+    [agentPositions],
+  );
 
   const numVal = (s: string) => Number(s.replace(/[^\d.-]/g, "")) || 0;
   const filtered = assets
@@ -179,6 +190,11 @@ export function AssetsCard() {
   const tabs = [
     { k: "assets" as const, label: "Assets", count: assets.length },
     { k: "positions" as const, label: "Positions", count: positionsAvailable.length },
+    {
+      k: "agent" as const,
+      label: "Agent",
+      count: agentAssets.length + agentPositionRows.length,
+    },
   ];
 
   return (
@@ -436,8 +452,141 @@ export function AssetsCard() {
           </div>
         </>
       )}
+
+      {tab === "agent" && (
+        <AgentTabBody
+          agent={agent}
+          agentAssets={agentAssets}
+          agentPositionRows={agentPositionRows}
+        />
+      )}
     </div>
   );
+}
+
+function AgentTabBody({
+  agent,
+  agentAssets,
+  agentPositionRows,
+}: {
+  agent: ReturnType<typeof useAgentPortfolio>;
+  agentAssets: DisplayAsset[];
+  agentPositionRows: PortfolioPosition[];
+}) {
+  if (!agent.agentAddress && agent.loading) {
+    return (
+      <div className="px-4 py-8 text-center text-[12px] text-text-dim">Loading agent wallet…</div>
+    );
+  }
+  if (agent.notProvisioned) {
+    return (
+      <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+        No agent wallet yet. Open the Agent panel to create one.
+      </div>
+    );
+  }
+  if (agent.error) {
+    return <div className="px-4 py-8 text-center text-[12px] text-red">{agent.error}</div>;
+  }
+  if (!agent.agentAddress) {
+    return (
+      <div className="px-4 py-8 text-center text-[12px] text-text-dim">
+        Connect a wallet to view your agent.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="px-4 py-3 border-b border-border-soft">
+        <div className="text-[11px] text-text-mute">Agent wallet</div>
+        <div className="font-mono text-[12px] mt-0.5">{shortenAddress(agent.agentAddress)}</div>
+      </div>
+
+      <div className="px-3.5 pt-3 pb-1.5 text-[11px] text-text-mute uppercase tracking-wide">
+        Balances
+      </div>
+      {agentAssets.length === 0 ? (
+        <div className="px-4 py-6 text-center text-[12px] text-text-dim">
+          Agent has no balances yet. Send testnet funds to the address above.
+        </div>
+      ) : (
+        agentAssets.map((a) => (
+          <div
+            key={a.symbol}
+            className="flex items-center gap-3 px-4 py-3 border-b border-border-soft"
+          >
+            <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">
+              <AssetRowIcon symbol={a.symbol} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-[14px]">{a.name}</div>
+              <div className="text-[12px] text-text-dim mt-0.5">
+                {a.symbol} · {a.price}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[14px] font-medium font-mono">{a.qty}</div>
+              <div className="text-[12px] text-text-dim font-mono">{a.val}</div>
+            </div>
+          </div>
+        ))
+      )}
+
+      <div className="px-3.5 pt-4 pb-1.5 text-[11px] text-text-mute uppercase tracking-wide">
+        LP Positions
+      </div>
+      {agentPositionRows.length === 0 ? (
+        <div className="px-4 py-6 text-center text-[12px] text-text-dim">
+          Agent has no LP positions yet.
+        </div>
+      ) : (
+        agentPositionRows.map((p, i) => {
+          const tint = HOOK_TINT[p.hook];
+          return (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border-soft">
+              <div className="flex flex-shrink-0">
+                <AssetIcon symbol={p.a} size={26} />
+                <div className="-ml-2">
+                  <AssetIcon symbol={p.b} size={26} />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-medium text-[14px]">
+                    {p.a} / {p.b}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip text-text-mute border border-border-soft font-mono">
+                    {p.fee}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded font-medium tracking-[0.02em] inline-block"
+                    style={{
+                      background: tint.bg,
+                      color: tint.fg,
+                      border: `1px solid ${tint.bd}`,
+                    }}
+                  >
+                    {p.hook}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[14px] font-medium font-mono">{p.value}</div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </>
+  );
+}
+
+function shortenAddress(addr: string): string {
+  if (addr.length <= 10) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC"];

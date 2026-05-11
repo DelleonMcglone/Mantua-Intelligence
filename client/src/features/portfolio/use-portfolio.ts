@@ -40,6 +40,17 @@ export function usePortfolio(): PortfolioState {
     error: null,
     walletAddress: null,
   });
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  useEffect(() => {
+    const handler = () => {
+      setRefreshNonce((n) => n + 1);
+    };
+    window.addEventListener("mantua:refresh-portfolio", handler);
+    return () => {
+      window.removeEventListener("mantua:refresh-portfolio", handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!ready || !authenticated || !wallet) {
@@ -77,7 +88,7 @@ export function usePortfolio(): PortfolioState {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, ready, wallet]);
+  }, [authenticated, ready, wallet, refreshNonce]);
 
   return state;
 }

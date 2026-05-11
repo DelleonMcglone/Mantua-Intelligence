@@ -2,6 +2,7 @@ import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
+import { LandingPage } from "./components/landing/LandingPage.tsx";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
 import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
@@ -27,6 +28,7 @@ type AnalyzeTopic =
   | "token-price";
 
 type Route =
+  | { kind: "landing" }
   | { kind: "home" }
   | {
       kind: "swap";
@@ -48,13 +50,26 @@ type Route =
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
-  const [route, setRoute] = useState<Route>({ kind: "home" });
+  const [route, setRoute] = useState<Route>({ kind: "landing" });
 
   if (!ready) {
     return (
       <main className="min-h-screen bg-bg text-text flex items-center justify-center">
         <p className="text-sm text-text-dim">Loading…</p>
       </main>
+    );
+  }
+
+  // Landing page is the default surface — public marketing copy with
+  // no Privy auth attached. "Launch Demo" buttons hand off to the
+  // existing in-app shell by flipping the route to `home`.
+  if (route.kind === "landing") {
+    return (
+      <LandingPage
+        onLaunch={() => {
+          setRoute({ kind: "home" });
+        }}
+      />
     );
   }
 
@@ -73,6 +88,9 @@ export default function App() {
       walletAddress={walletAddress}
       onConnect={authenticated ? undefined : handleConnect}
       onDisconnect={authenticated ? handleDisconnect : undefined}
+      onLogoClick={() => {
+        setRoute({ kind: "landing" });
+      }}
       left={<LeftColumn />}
       right={<RightColumn route={route} setRoute={setRoute} />}
     />
@@ -226,7 +244,7 @@ function promptToRoute(id: HomePromptId): Route {
 function detectIntent(text: string): Route | null {
   const intent: Intent | null = detectIntentImpl(text);
   if (!intent) return null;
-  return intent as Route;
+  return intent;
 }
 
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
