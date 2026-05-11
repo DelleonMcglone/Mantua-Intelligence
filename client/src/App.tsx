@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
@@ -11,6 +11,7 @@ import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
+import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
@@ -39,6 +40,7 @@ type Route =
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
   | { kind: "positions" }
+  | { kind: "asset"; symbol: TokenSymbol }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
@@ -51,6 +53,19 @@ type Route =
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
   const [route, setRoute] = useState<Route>({ kind: "landing" });
+
+  // PanelHeader's "New chat" button (rendered inside every panel)
+  // falls back to this event when no `onNewChat` prop is wired —
+  // letting any panel reset to the home menu without prop-drilling.
+  useEffect(() => {
+    const handler = () => {
+      setRoute({ kind: "home" });
+    };
+    window.addEventListener("mantua:new-chat", handler);
+    return () => {
+      window.removeEventListener("mantua:new-chat", handler);
+    };
+  }, []);
 
   if (!ready) {
     return (
@@ -91,17 +106,24 @@ export default function App() {
       onLogoClick={() => {
         setRoute({ kind: "landing" });
       }}
-      left={<LeftColumn />}
+      left={<LeftColumn setRoute={setRoute} />}
       right={<RightColumn route={route} setRoute={setRoute} />}
     />
   );
 }
 
-function LeftColumn() {
+function LeftColumn({ setRoute }: { setRoute: (r: Route) => void }) {
   return (
     <>
       <PortfolioCard />
-      <AssetsCard />
+      <AssetsCard
+        onSelectPool={(id) => {
+          setRoute({ kind: "pool", id });
+        }}
+        onSelectAsset={(symbol) => {
+          setRoute({ kind: "asset", symbol });
+        }}
+      />
     </>
   );
 }
@@ -189,6 +211,16 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "positions":
       return (
         <PositionsList
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "asset":
+      return (
+        <AssetDetailPanel
+          key={route.symbol}
+          symbol={route.symbol}
           onClose={() => {
             setRoute({ kind: "home" });
           }}

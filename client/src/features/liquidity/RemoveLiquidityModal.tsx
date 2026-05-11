@@ -45,8 +45,11 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
       confirmLabel: isFull ? "Burn position" : "Remove",
     });
     if (!ok) return;
+    // Positions without a server-side DB row (e.g. testnet positions
+    // where pool/position writes never landed) carry `id === ""` —
+    // route those through the tokenId path on the calldata endpoint.
     await remove.execute({
-      positionId: position.id,
+      ...(position.id ? { positionId: position.id } : { tokenId: position.tokenId ?? "" }),
       percentage,
       slippageBps,
     });

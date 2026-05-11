@@ -11,7 +11,11 @@ const baseRpcUrl: string =
 const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
 
 export interface RemoveArgs {
-  positionId: string;
+  /** Either the DB UUID (Mantua-tracked) … */
+  positionId?: string;
+  /** … or the on-chain PositionManager ERC721 id (testnet positions
+   *  whose DB row never landed). Exactly one must be set. */
+  tokenId?: string;
   percentage: number;
   slippageBps: number;
 }
@@ -74,7 +78,8 @@ export function useRemoveLiquidity() {
 
       void api.post("/api/liquidity/remove/record", {
         txHash,
-        positionId: args.positionId,
+        ...(args.positionId ? { positionId: args.positionId } : {}),
+        ...(args.tokenId ? { tokenId: args.tokenId } : {}),
         liquidityRemoved: calldata.liquidityToRemove,
         isFullExit: calldata.isFullExit,
         outcome,
