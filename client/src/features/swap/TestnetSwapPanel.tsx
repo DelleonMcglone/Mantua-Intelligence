@@ -13,7 +13,11 @@ import {
 } from "@/features/liquidity/fee-tiers.ts";
 import { FeeTierPicker } from "@/features/liquidity/FeeTierPicker.tsx";
 import { isStable } from "@/features/liquidity/create-helpers.ts";
-import { recommendedHookForPair, HOOK_LABELS } from "@/features/liquidity/hook-recommendations.ts";
+import {
+  HOOK_LABELS,
+  hookCompatibilityError,
+  recommendedHookForPair,
+} from "@/features/liquidity/hook-recommendations.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { formatTokenAmount, parseTokenAmount } from "./format.ts";
@@ -136,14 +140,19 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
     setAmount(formatTokenAmount(tokenIn, raw));
   }
 
+  const hookName: HookName | null = hook === "none" ? null : hook;
+  const hookIncompatible = hookCompatibilityError(tokenIn, tokenOut, hookName);
+
   const amountInRaw = safeParse(tokenIn, amount);
   const quote = useTestnetQuote({
     tokenIn,
     tokenOut,
     fee,
-    hook: hook === "none" ? null : hook,
+    hook: hookName,
     amountInRaw,
-    enabled: amountInRaw !== "0",
+    // Skip the quote round-trip when we already know the hook will
+    // reject the pair on-chain — surfaces the inline reason instead.
+    enabled: amountInRaw !== "0" && hookIncompatible === null,
   });
 
   const expectedOut = quote.data ? formatTokenAmount(tokenOut, quote.data.amountOut) : "";
@@ -312,13 +321,21 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
           </select>
         </div>
 
-        {quote.loading && <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>}
-        {quote.error && <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>}
+        {hookIncompatible && (
+          <p className="text-xs text-amber text-center mt-3">{hookIncompatible}</p>
+        )}
+        {!hookIncompatible && quote.loading && (
+          <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>
+        )}
+        {!hookIncompatible && quote.error && (
+          <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>
+        )}
 
         <Button
           variant="primary"
           size="lg"
           disabled={
+            hookIncompatible !== null ||
             !quote.data ||
             !amountEntered ||
             swap.state.status === "quoting" ||
@@ -332,7 +349,11 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
           }}
           className="w-full mt-5"
         >
-          {amountEntered ? ctaLabel(swap.state.status) : "Enter amount"}
+          {hookIncompatible
+            ? "Hook unavailable for this pair"
+            : amountEntered
+              ? ctaLabel(swap.state.status)
+              : "Enter amount"}
         </Button>
 
         {swap.state.message && swap.state.status !== "idle" && swap.state.status !== "error" && (

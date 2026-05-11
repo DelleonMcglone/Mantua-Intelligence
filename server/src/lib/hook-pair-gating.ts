@@ -3,14 +3,18 @@
  *
  * Originally, Stable Protection's peg-zone logic only behaved correctly
  * on pegged-asset pairs (stable/stable, stable/euro), so pool creation
- * gated on an explicit allowlist. For the proof-of-concept build, the
- * allowlist is empty — every hook accepts every pair, and the hook
- * contract itself is the single source of truth on what it'll do at
- * `beforeInitialize` / `beforeSwap` etc. If the hook reverts, the
- * existing `POOL_CREATE_INVALID` / wallet error path still surfaces it.
+ * gated on an explicit allowlist. The proof-of-concept temporarily
+ * dropped the gate while wiring everything else up.
  *
- * Hooks not present in HOOK_ALLOWED_SYMBOL_PAIRS (i.e. every hook
- * today) impose no pair restriction at this layer.
+ * The gate is back on for `stable-protection`: the deployed hook at
+ * `0xe5e6…20C0` hard-codes a 1:1 peg in `PegMonitor.classifyZone`
+ * (`deviation = |r0 − r1| / avg`), so any non-1:1 pair lands in
+ * CRITICAL zone on every swap and the circuit breaker reverts.
+ * Base Sepolia's testnet token set has no true 1:1 pair → empty
+ * allowlist → pool creation and quoting reject `stable-protection`
+ * across the board. Re-add entries here when the hook is upgraded to
+ * accept a `targetRatio` (or when a 1:1 testnet pair like USDC/USDT
+ * lands). Other hooks impose no pair restriction at this layer.
  */
 
 import { TOKENS, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
@@ -18,7 +22,9 @@ import { getHookAddress, type HookName } from "./v4-contracts.ts";
 
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
 
-const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {};
+const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {
+  "stable-protection": [],
+};
 
 function lookupSymbol(addr: string): TokenSymbol | null {
   const lower = addr.toLowerCase();
@@ -53,15 +59,27 @@ export function isHookPairAllowed(
   return allow.some((p) => pairsMatch(p, [sym0, sym1]));
 }
 
+/**
+ * Reason string surfaced to users when a hook rejects a pair. Hook-
+ * specific so the UI can explain *why* (the 1:1 peg assumption for
+ * stable-protection, etc.) rather than the bare allow/deny outcome.
+ */
+function hookIncompatibilityReason(hook: HookName): string {
+  switch (hook) {
+    case "stable-protection":
+      return "Stable Protection only supports 1:1-pegged stable pairs (USDC/USDT, DAI/USDC). No such pair is available on Base Sepolia yet — pick a different hook.";
+    default:
+      return `Hook "${hook}" does not support this pair on the active network.`;
+  }
+}
+
 export class HookPairNotAllowedError extends Error {
   constructor(
     public readonly hook: HookName,
     public readonly token0Address: string,
     public readonly token1Address: string,
   ) {
-    super(
-      `Hook "${hook}" does not allow pair ${token0Address}/${token1Address} on the active network`,
-    );
+    super(hookIncompatibilityReason(hook));
     this.name = "HookPairNotAllowedError";
   }
 }
@@ -73,6 +91,35 @@ export function assertHookPairAllowed(
 ): void {
   if (!isHookPairAllowed(hook, token0Address, token1Address)) {
     throw new HookPairNotAllowedError(hook, token0Address, token1Address);
+  }
+}
+
+/**
+ * Symbol-based variant of `isHookPairAllowed` for callers that already
+ * have the token symbols (e.g. the swap quote path). Avoids the
+ * address→symbol lookup step.
+ */
+export function isHookPairAllowedBySymbol(
+  hook: HookName,
+  symbolA: TokenSymbol,
+  symbolB: TokenSymbol,
+): boolean {
+  const allow = HOOK_ALLOWED_SYMBOL_PAIRS[hook];
+  if (!allow) return true;
+  return allow.some((p) => pairsMatch(p, [symbolA, symbolB]));
+}
+
+export function assertHookPairAllowedBySymbol(
+  hook: HookName,
+  symbolA: TokenSymbol,
+  symbolB: TokenSymbol,
+): void {
+  if (!isHookPairAllowedBySymbol(hook, symbolA, symbolB)) {
+    throw new HookPairNotAllowedError(
+      hook,
+      TOKENS[symbolA].address,
+      TOKENS[symbolB].address,
+    );
   }
 }
 

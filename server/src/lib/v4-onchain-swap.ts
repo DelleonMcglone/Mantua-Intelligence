@@ -13,6 +13,7 @@ import {
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
+import { assertHookPairAllowedBySymbol } from "./hook-pair-gating.ts";
 
 /**
  * Walk a viem error tree to find the raw revert data hex string
@@ -35,13 +36,67 @@ interface DecodedQuoterRevert {
   innerHex: `0x${string}` | null;
   innerSelector: `0x${string}` | null;
   decoded: string | null;
+  /** When inner is v4-core's `WrappedError(address,bytes4,bytes,bytes)`,
+   *  the unwrapped hook-side revert reason + best-effort decoding. */
+  hookTarget?: `0x${string}`;
+  hookFnSelector?: `0x${string}`;
+  hookReasonHex?: `0x${string}`;
+  hookReasonSelector?: `0x${string}`;
+  hookReasonDecoded?: string;
+}
+
+/**
+ * Known stable-protection-hook custom errors. Mirror of the on-chain
+ * ABI for `0xe5e6a9...20C0` — used to translate `0x<selector>` bytes
+ * coming back through `WrappedError` into a readable name.
+ */
+const STABLE_PROTECTION_HOOK_ERRORS = [
+  { type: "error", name: "CircuitBreakerTripped", inputs: [{ type: "uint8", name: "zone" }, { type: "uint256", name: "deviationBps" }] },
+  { type: "error", name: "InvalidConfiguration", inputs: [{ type: "string", name: "reason" }] },
+  { type: "error", name: "NotPoolManager", inputs: [] },
+  { type: "error", name: "AlreadyInitialized", inputs: [] },
+] as const;
+
+/**
+ * Decode `0x<selector><payload>` into a readable string. Handles
+ * `Error(string)`, `Panic(uint256)`, and any custom error in
+ * `STABLE_PROTECTION_HOOK_ERRORS`. Returns null when nothing matches.
+ */
+function decodeRevertBytes(hex: `0x${string}`): string | null {
+  if (hex.length < 10) return null;
+  try {
+    const decoded = decodeErrorResult({
+      abi: [
+        { type: "error", name: "Error", inputs: [{ type: "string", name: "message" }] },
+        { type: "error", name: "Panic", inputs: [{ type: "uint256", name: "code" }] },
+        ...STABLE_PROTECTION_HOOK_ERRORS,
+      ],
+      data: hex,
+    });
+    if (decoded.errorName === "Error") {
+      const message = decoded.args[0];
+      return `Error: ${typeof message === "string" ? message : "(non-string)"}`;
+    }
+    if (decoded.errorName === "Panic") {
+      const code = decoded.args[0];
+      return `Panic(0x${typeof code === "bigint" ? code.toString(16) : "?"})`;
+    }
+    const argsStr = (decoded.args as readonly unknown[])
+      .map((a) => (typeof a === "bigint" ? a.toString() : JSON.stringify(a)))
+      .join(", ");
+    return `${decoded.errorName}(${argsStr})`;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Decode the inner revert payload from V4Quoter's
- * `UnexpectedRevertBytes(bytes)` (selector `0x6190b2b0`). Returns the
- * inner selector + best-effort decoded reason so the caller can log
- * what V4Quoter is actually masking.
+ * `UnexpectedRevertBytes(bytes)` (selector `0x6190b2b0`). When that
+ * inner payload is v4-core's `WrappedError(address,bytes4,bytes,bytes)`
+ * (selector `0x90bfb865`) — which is how PoolManager wraps any hook
+ * revert — peel that wrapper too and surface the actual hook-side
+ * revert reason. Otherwise return whatever we could decode.
  */
 function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
   const outerHex = extractRevertHex(err);
@@ -53,7 +108,7 @@ function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
       outerHex,
       innerHex: null,
       innerSelector: outerHex.slice(0, 10).toLowerCase() as `0x${string}`,
-      decoded: null,
+      decoded: decodeRevertBytes(outerHex),
     };
   }
   let innerHex: `0x${string}`;
@@ -69,36 +124,51 @@ function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
   }
   const innerSelector = innerHex.slice(0, 10).toLowerCase() as `0x${string}`;
 
-  // Try standard Error(string) and Panic(uint256). Custom errors
-  // (e.g. from the Stable Protection hook) fall through with just
-  // selector + raw hex so we can match them against the hook ABI.
-  try {
-    const decoded = decodeErrorResult({
-      abi: [
-        { type: "error", name: "Error", inputs: [{ type: "string", name: "message" }] },
-        { type: "error", name: "Panic", inputs: [{ type: "uint256", name: "code" }] },
-      ],
-      data: innerHex,
-    });
-    if (decoded.errorName === "Error") {
-      const message = decoded.args[0];
+  // v4-core's WrappedError(address,bytes4,bytes,bytes) — selector 0x90bfb865.
+  // PoolManager uses this whenever a hook callback reverts. Peel it
+  // to surface the hook's actual revert reason.
+  if (innerSelector === "0x90bfb865") {
+    try {
+      const payload = ("0x" + innerHex.slice(10)) as `0x${string}`;
+      const [target, fnSelector, reason] = decodeAbiParameters(
+        [
+          { type: "address", name: "target" },
+          { type: "bytes4", name: "selector" },
+          { type: "bytes", name: "reason" },
+          { type: "bytes", name: "details" },
+        ],
+        payload,
+      ) as unknown as [`0x${string}`, `0x${string}`, `0x${string}`, `0x${string}`];
+      const reasonSelector =
+        reason.length >= 10 ? (reason.slice(0, 10).toLowerCase() as `0x${string}`) : undefined;
+      const reasonDecoded = decodeRevertBytes(reason);
       return {
         outerHex,
         innerHex,
         innerSelector,
-        decoded: `Error: ${typeof message === "string" ? message : "(non-string)"}`,
+        decoded: reasonDecoded ?? `WrappedError(hook=${target}, fn=${fnSelector}, reason=${reason})`,
+        hookTarget: target,
+        hookFnSelector: fnSelector,
+        hookReasonHex: reason,
+        ...(reasonSelector ? { hookReasonSelector: reasonSelector } : {}),
+        ...(reasonDecoded ? { hookReasonDecoded: reasonDecoded } : {}),
+      };
+    } catch {
+      return {
+        outerHex,
+        innerHex,
+        innerSelector,
+        decoded: "WrappedError unwrap failed",
       };
     }
-    const code = decoded.args[0];
-    return {
-      outerHex,
-      innerHex,
-      innerSelector,
-      decoded: `Panic(0x${typeof code === "bigint" ? code.toString(16) : "?"})`,
-    };
-  } catch {
-    return { outerHex, innerHex, innerSelector, decoded: null };
   }
+
+  return {
+    outerHex,
+    innerHex,
+    innerSelector,
+    decoded: decodeRevertBytes(innerHex),
+  };
 }
 
 /**
@@ -178,6 +248,12 @@ export async function findMaxQuotableInputV4(
 ): Promise<bigint> {
   const { upperBound, ...rest } = args;
   if (upperBound === 0n) return 0n;
+  // Skip the 25 wasted `eth_call`s when the hook×pair combo is
+  // already known to be disallowed — surfaces the same maxInput=0
+  // outcome the binary search would converge on.
+  if (rest.hook) {
+    assertHookPairAllowedBySymbol(rest.hook, rest.tokenIn, rest.tokenOut);
+  }
 
   // Direct probe at the full upper bound — if it works, the pool can
   // absorb the user's whole balance and no cap is needed. On failure
@@ -215,7 +291,7 @@ export async function findMaxQuotableInputV4(
     // viem error chained via `cause` from `friendlyQuoterError`.
     const cause =
       firstError instanceof Error && firstError.cause ? firstError.cause : firstError;
-    const { outerHex, innerHex, innerSelector, decoded } = decodeQuoterRevert(cause);
+    const decodedRevert = decodeQuoterRevert(cause);
     const friendlyMessage = firstError instanceof Error ? firstError.message : "non-Error throw";
     logger.warn(
       {
@@ -225,10 +301,17 @@ export async function findMaxQuotableInputV4(
         hook: args.hook,
         upperBound: upperBound.toString(),
         friendly: friendlyMessage.slice(0, 200),
-        outerHex: outerHex ? outerHex.slice(0, 80) : null,
-        innerSelector,
-        innerHex: innerHex ? innerHex.slice(0, 200) : null,
-        decoded,
+        outerHex: decodedRevert.outerHex ? decodedRevert.outerHex.slice(0, 80) : null,
+        innerSelector: decodedRevert.innerSelector,
+        innerHex: decodedRevert.innerHex ? decodedRevert.innerHex.slice(0, 600) : null,
+        decoded: decodedRevert.decoded,
+        hookTarget: decodedRevert.hookTarget,
+        hookFnSelector: decodedRevert.hookFnSelector,
+        hookReasonSelector: decodedRevert.hookReasonSelector,
+        hookReasonHex: decodedRevert.hookReasonHex
+          ? decodedRevert.hookReasonHex.slice(0, 400)
+          : undefined,
+        hookReasonDecoded: decodedRevert.hookReasonDecoded,
       },
       "v4 max-input: every probe reverted",
     );
@@ -244,6 +327,12 @@ export async function findMaxQuotableInputV4(
 export async function quoteExactInputV4(
   args: OnchainQuoteArgs,
 ): Promise<OnchainQuoteResult> {
+  // Reject hook/pair combos the hook is known to reject on-chain
+  // before burning an `eth_call`. Surfaces a clean reason instead of
+  // V4Quoter's wrapped revert.
+  if (args.hook) {
+    assertHookPairAllowedBySymbol(args.hook, args.tokenIn, args.tokenOut);
+  }
   const hookAddress = resolveHookAddress(args.hook);
   const { key } = buildPoolKey(args.tokenIn, args.tokenOut, args.fee, hookAddress, args.hook);
 

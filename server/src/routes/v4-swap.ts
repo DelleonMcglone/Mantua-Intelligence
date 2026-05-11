@@ -8,6 +8,7 @@ import {
   quoteExactInputV4,
 } from "../lib/v4-onchain-swap.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
+import { HookPairNotAllowedError } from "../lib/hook-pair-gating.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 
@@ -60,6 +61,10 @@ v4SwapRouter.post(
       });
       res.json(quote);
     } catch (err) {
+      if (err instanceof HookPairNotAllowedError) {
+        res.status(400).json({ error: err.message, code: "HOOK_PAIR_NOT_ALLOWED" });
+        return;
+      }
       logger.warn({ err, tokenIn, tokenOut, hook }, "v4 onchain quote failed");
       const message = err instanceof Error ? err.message : "Quote failed";
       res.status(502).json({ error: message, code: "V4_QUOTE_FAILED" });
@@ -184,6 +189,10 @@ v4SwapRouter.post(
         },
       });
     } catch (err) {
+      if (err instanceof HookPairNotAllowedError) {
+        res.status(400).json({ error: err.message, code: "HOOK_PAIR_NOT_ALLOWED" });
+        return;
+      }
       logger.warn({ err, tokenIn, tokenOut, hook }, "v4 swap calldata failed");
       const message = err instanceof Error ? err.message : "Swap calldata failed";
       res.status(502).json({ error: message, code: "V4_SWAP_FAILED" });
