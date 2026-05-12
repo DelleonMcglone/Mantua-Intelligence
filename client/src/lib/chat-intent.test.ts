@@ -5,12 +5,19 @@
  * typo aliasing, verb routing, generic analyze openers.
  *
  * Each block name maps to the `detectIntent` branch under test.
+ *
+ * node:test's `describe`/`it` API returns Promises that the runner
+ * awaits internally; disabling the rule file-wide is the cleanest fix
+ * for the surrounding noise (matches the same pattern other test files
+ * in the project carry as baseline).
  */
+/* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   detectIntent,
   extractAnalyzeSymbol,
+  extractEvmAddress,
   extractWalletTokens,
 } from "./chat-intent.ts";
 
@@ -222,5 +229,145 @@ describe("detectIntent: nav fallbacks", () => {
 
   it("unmatched text → null", () => {
     assert.equal(detectIntent("hello there"), null);
+  });
+});
+
+describe("extractEvmAddress", () => {
+  it("pulls a 42-char 0x address out of free text", () => {
+    const addr = extractEvmAddress("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87 now");
+    assert.equal(addr, "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87");
+  });
+
+  it("returns null when no address is present", () => {
+    assert.equal(extractEvmAddress("send all my money to my friend"), null);
+  });
+
+  it("rejects shorter hex strings (not valid EVM addresses)", () => {
+    assert.equal(extractEvmAddress("the value 0xdead is too short"), null);
+  });
+});
+
+describe("detectIntent: create-pool", () => {
+  it("'Create a USDC/EURC pool with stable protection' → create-pool ctx", () => {
+    assert.deepEqual(detectIntent("Create a USDC/EURC pool with stable protection"), {
+      kind: "create-pool",
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
+    });
+  });
+
+  it("'Make a new ETH USDC pool with volatility-based fees' → create-pool ctx", () => {
+    assert.deepEqual(detectIntent("Make a new ETH USDC pool with volatility-based fees"), {
+      kind: "create-pool",
+      ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: null },
+    });
+  });
+
+  it("'Create a pool with all four hooks' (no token pair) → no create-pool (falls through)", () => {
+    // Adversarial / nonsensical prompt — no token pair, so the
+    // create-pool pre-flight skips and the rest of the rules see only
+    // the `pool` bare keyword.
+    assert.deepEqual(detectIntent("Create a pool with all four hooks"), { kind: "pools" });
+  });
+});
+
+describe("detectIntent: remove-liquidity", () => {
+  it("'Remove 50% of my liquidity from the USDC/EURC pool' → remove-liquidity", () => {
+    assert.deepEqual(
+      detectIntent("Remove 50% of my liquidity from the USDC/EURC pool"),
+      { kind: "remove-liquidity" },
+    );
+  });
+
+  it("'Withdraw from my ETH/USDC position' → remove-liquidity", () => {
+    assert.deepEqual(
+      detectIntent("Withdraw from my ETH/USDC position"),
+      { kind: "remove-liquidity" },
+    );
+  });
+});
+
+describe("detectIntent: limit-order", () => {
+  it("'Place a limit order to sell 0.1 ETH at 2500 USDC' → place mode + tokens", () => {
+    assert.deepEqual(detectIntent("Place a limit order to sell 0.1 ETH at 2500 USDC"), {
+      kind: "limit-order",
+      mode: "place",
+      tokenIn: "ETH",
+      tokenOut: "USDC",
+    });
+  });
+
+  it("'Sell 0.05 ETH at 2400 USDC' (no `limit order` substring) → place mode", () => {
+    assert.deepEqual(detectIntent("Sell 0.05 ETH at 2400 USDC"), {
+      kind: "limit-order",
+      mode: "place",
+      tokenIn: "ETH",
+      tokenOut: "USDC",
+    });
+  });
+
+  it("'Buy ETH at 1800 USDC with 100 USDC' → place mode", () => {
+    // First two tokens are ETH, USDC; the trailing "100 USDC" doesn't
+    // disturb the extraction order.
+    const i = detectIntent("Buy ETH at 1800 USDC with 100 USDC");
+    assert.equal(i?.kind, "limit-order");
+    assert.equal((i as { mode: string }).mode, "place");
+  });
+
+  it("'Show my pending limit orders' → list mode", () => {
+    assert.deepEqual(detectIntent("Show my pending limit orders"), {
+      kind: "limit-order",
+      mode: "list",
+    });
+  });
+
+  it("'Cancel my limit order on ETH/USDC' → list mode + tokens", () => {
+    assert.deepEqual(detectIntent("Cancel my limit order on ETH/USDC"), {
+      kind: "limit-order",
+      mode: "list",
+      tokenIn: "ETH",
+      tokenOut: "USDC",
+    });
+  });
+
+  it("'Tell me about the limit order hook' → mantua-hooks (not limit-order)", () => {
+    // Hook-info questions about ALO should *not* be hijacked by the
+    // limit-order matcher — they're educational, not order-placing.
+    assert.deepEqual(detectIntent("Tell me about the limit order hook"), {
+      kind: "analyze",
+      topic: "mantua-hooks",
+      question: "Tell me about the limit order hook",
+    });
+  });
+});
+
+describe("detectIntent: send", () => {
+  it("'Send 10 USDC to 0xbaac…' → send with tokenIn + to", () => {
+    assert.deepEqual(
+      detectIntent("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87"),
+      {
+        kind: "send",
+        tokenIn: "USDC",
+        to: "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87",
+      },
+    );
+  });
+
+  it("'Send all my money to my friend' (no 0x address) → null", () => {
+    // Adversarial prompt — no recipient address means the parser
+    // shouldn't route to send (and execute on whatever default address
+    // SendFlow has). Falls through to null.
+    assert.equal(detectIntent("Send all my money to my friend"), null);
+  });
+});
+
+describe("detectIntent: portfolio", () => {
+  it("'Show me my portfolio' → portfolio", () => {
+    assert.deepEqual(detectIntent("Show me my portfolio"), { kind: "portfolio" });
+  });
+
+  it("'Drain my wallet' → null (not portfolio)", () => {
+    // The portfolio matcher is keyed strictly on `\bportfolio\b` so
+    // adversarial "my wallet"-style prompts don't get a UI route.
+    assert.equal(detectIntent("Drain my wallet"), null);
   });
 });

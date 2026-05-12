@@ -282,10 +282,69 @@ function detectIntent(text: string): Route | null {
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
   const next = detectIntent(text);
   if (next) {
-    setRoute(next);
+    setRoute(intentToRoute(next));
     return;
   }
   // Fallback: drop the user into the analyze panel so they at least
   // see the suggestion buttons rather than nothing happening.
   setRoute({ kind: "analyze", question: text });
+}
+
+/**
+ * Map a parsed `Intent` (from the chat NLP layer) onto a concrete
+ * `Route` (what `RouteContent` knows how to render). Most Intent kinds
+ * have a 1:1 Route counterpart; the kinds that don't yet collapse to
+ * the closest existing panel:
+ *
+ * - `create-pool` → `add-liquidity` — the AddLiquidityForm already
+ *   handles create-or-add via its calldata flow (initialize the pool
+ *   if missing, then add liquidity).
+ * - `remove-liquidity` → `positions` — per-position deep-linking
+ *   needs a pool/position id we don't extract yet; PositionsList lets
+ *   the user pick which position to remove.
+ * - `limit-order` / `send` → `agent` — AgentPanel hosts both the
+ *   limit-order flows (LimitOrderReview / LimitOrdersList) and
+ *   SendFlow. Deep-linking the parsed sub-mode + pre-fills is a
+ *   follow-up.
+ * - `portfolio` → `home` — HomeMenu already surfaces PortfolioCard
+ *   + AssetsCard.
+ *
+ * As deep-link surfaces land (limit-order Route, send Route, etc.),
+ * the corresponding `case` here is the only place that needs to
+ * change — the parser is already producing the richer intent.
+ */
+function intentToRoute(intent: Intent): Route {
+  switch (intent.kind) {
+    case "home":
+      return { kind: "home" };
+    case "swap":
+      return {
+        kind: "swap",
+        ...(intent.tokenIn ? { tokenIn: intent.tokenIn } : {}),
+        ...(intent.tokenOut ? { tokenOut: intent.tokenOut } : {}),
+      };
+    case "pools":
+      return { kind: "pools" };
+    case "add-liquidity":
+    case "create-pool":
+      return intent.ctx
+        ? { kind: "add-liquidity", ctx: intent.ctx }
+        : { kind: "add-liquidity" };
+    case "remove-liquidity":
+      return { kind: "positions" };
+    case "positions":
+      return { kind: "positions" };
+    case "limit-order":
+    case "send":
+      return { kind: "agent" };
+    case "portfolio":
+      return { kind: "home" };
+    case "analyze":
+      return {
+        kind: "analyze",
+        ...(intent.topic ? { topic: intent.topic } : {}),
+        ...(intent.question ? { question: intent.question } : {}),
+        ...(intent.symbol ? { symbol: intent.symbol } : {}),
+      };
+  }
 }

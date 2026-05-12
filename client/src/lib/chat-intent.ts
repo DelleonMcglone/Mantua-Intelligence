@@ -37,7 +37,19 @@ export type Intent =
   | { kind: "swap"; tokenIn?: TokenSymbol; tokenOut?: TokenSymbol }
   | { kind: "pools" }
   | { kind: "add-liquidity"; ctx?: PoolKeyCtx }
+  | { kind: "create-pool"; ctx?: PoolKeyCtx }
+  | { kind: "remove-liquidity" }
   | { kind: "positions" }
+  | {
+      kind: "limit-order";
+      /** `place` → user is creating an order; `list` → user wants to
+       *  view or cancel existing orders. */
+      mode: "place" | "list";
+      tokenIn?: TokenSymbol;
+      tokenOut?: TokenSymbol;
+    }
+  | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
+  | { kind: "portfolio" }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
@@ -101,6 +113,17 @@ function isStable(s: TokenSymbol): boolean {
 }
 
 /**
+ * Extract a 0x EVM address from free-form text. Returns the first hit
+ * (canonical-cased, not lowered) or `null`. Used by the `send` intent
+ * matcher; rejects shorter hex strings since they're never valid EVM
+ * recipients.
+ */
+export function extractEvmAddress(text: string): `0x${string}` | null {
+  const m = /\b0x[a-fA-F0-9]{40}\b/.exec(text);
+  return m ? (m[0] as `0x${string}`) : null;
+}
+
+/**
  * Action verbs whose presence signals the user wants to *do* something,
  * not ask about a topic. Used both by the pre-flight (verb + pair →
  * action) and to gate single-token analytic rules so prompts like
@@ -134,6 +157,13 @@ export function detectIntent(text: string): Intent | null {
   if (preflightTokens.length >= 2) {
     const preA = preflightTokens[0];
     const preB = preflightTokens[1];
+    if (/\b(create|make)\b.*\bpool\b/.test(t)) {
+      const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
+      return {
+        kind: "create-pool",
+        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: null },
+      };
+    }
     if (
       /\b(add|provide|deposit).*(liquidity|lp|pool)\b/.test(t) ||
       /^lp\b/.test(t)
@@ -149,6 +179,88 @@ export function detectIntent(text: string): Intent | null {
     }
   }
 
+  // Mantua-hooks info — runs before the discrete-action intents so
+  // "Tell me about the limit order hook" doesn't get grabbed by the
+  // limit-order matcher below.
+  if (
+    /\bhook(s)?\b/.test(t) &&
+    /(learn|explain|what|tell|describe|how|which)/.test(t)
+  ) {
+    return { kind: "analyze", topic: "mantua-hooks", question: text };
+  }
+
+  // Discrete action intents (no token-pair requirement). Each runs
+  // *before* the analytic-topic block since the verbs are in
+  // `ACTION_VERB_RE` — running afterwards would let them fall through
+  // to the topic gates with nothing to catch them.
+
+  // `send N TOKEN to 0x…` — requires a real EVM address so adversarial
+  // prompts like "Send all my money to my friend" (no 0x) fall through
+  // to null instead of routing as a partial send.
+  if (/^(send|transfer)\b/.test(t)) {
+    const to = extractEvmAddress(text);
+    if (to) {
+      const tokens = extractWalletTokens(text);
+      const tokenIn = tokens[0]?.sym;
+      return {
+        kind: "send",
+        ...(tokenIn ? { tokenIn } : {}),
+        to,
+      };
+    }
+  }
+
+  // `Remove N% of liquidity from POOL` / `Withdraw from PAIR`. Routes
+  // to the positions list — per-position deep-linking lives in a
+  // follow-up since the RemoveLiquidityModal is opened against a
+  // specific position id.
+  if (/\b(remove|withdraw)\b.*(liquidity|\blp\b|position|pool)\b/.test(t)) {
+    return { kind: "remove-liquidity" };
+  }
+
+  // Limit-order management — `cancel`, `show pending`, `list orders`
+  // route to the list mode; the place/buy/sell forms below route to
+  // place mode.
+  if (/\b(cancel|show|list|view)\b.*\blimit\s+orders?\b/.test(t) || /\bpending\s+limit\s+orders?\b/.test(t)) {
+    const tokens = extractWalletTokens(text);
+    const a = tokens[0]?.sym;
+    const b = tokens[1]?.sym;
+    return {
+      kind: "limit-order",
+      mode: "list",
+      ...(a ? { tokenIn: a } : {}),
+      ...(b ? { tokenOut: b } : {}),
+    };
+  }
+
+  // Limit-order placement — three phrasings:
+  //   "Place a limit order …"        → has `limit order` substring
+  //   "Sell 0.05 ETH at 2400 USDC"   → starts with sell/buy + amount, has `at <num>`
+  //   "Buy 0.001 cbBTC at 50000 USDC" → same
+  // The "at <num>" guard is what distinguishes a limit order from a
+  // bare swap intent ("sell ETH for USDC").
+  if (
+    /\blimit\s+orders?\b/.test(t) ||
+    (/^(sell|buy)\s+/.test(t) && /\bat\s+(a\s+)?\d/.test(t))
+  ) {
+    const tokens = extractWalletTokens(text);
+    const a = tokens[0]?.sym;
+    const b = tokens[1]?.sym;
+    return {
+      kind: "limit-order",
+      mode: "place",
+      ...(a ? { tokenIn: a } : {}),
+      ...(b ? { tokenOut: b } : {}),
+    };
+  }
+
+  // Portfolio surface — `show me my portfolio`. Deliberately keyed on
+  // the literal word to avoid false positives like "Drain my wallet"
+  // (adversarial) catching the broader "my wallet/assets" pattern.
+  if (/\bportfolio\b/.test(t)) {
+    return { kind: "portfolio" };
+  }
+
   // Analytic-topic rules. Each is gated on `!hasActionVerb` where the
   // topic keyword could otherwise be tripped by an action prompt that
   // happens to mention the same token (e.g. "Swap USDC for USDT" should
@@ -157,15 +269,17 @@ export function detectIntent(text: string): Intent | null {
   // "explain"/"what"/"tell"/"describe"/"how") don't need the guard.
   const hasActionVerb = ACTION_VERB_RE.test(t);
 
-  if (/\bhook(s)?\b/.test(t) && /(learn|explain|what|tell|describe|how)/.test(t)) {
-    return { kind: "analyze", topic: "mantua-hooks", question: text };
-  }
   if (!hasActionVerb && /\bcb.?btc\b/.test(t) && /(volume|trend|24h|24 ?hour)/.test(t)) {
     return { kind: "analyze", topic: "cbbtc-24h-volume", question: text };
   }
+  // `\brwa\b` not `(rwa|…)` — the bare alternation matches inside
+  // "rwagate" (hook name), routing prompts like "Use rwagate" into the
+  // RWA-tokens analytic by accident. Real RWA-topic prompts say "RWA"
+  // as a standalone word.
   if (
     !hasActionVerb &&
-    (/(rwa|real.?world.?asset)/.test(t) ||
+    (/\brwa\b/.test(t) ||
+      /real.?world.?asset/.test(t) ||
       (/(top|best|leading)/.test(t) && /(token|asset)/.test(t) && /(rwa|real)/.test(t)))
   ) {
     return { kind: "analyze", topic: "top-rwa-tokens", question: text };
