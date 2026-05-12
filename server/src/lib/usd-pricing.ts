@@ -1,8 +1,6 @@
-import { z } from "zod";
-import { logger } from "./logger.ts";
+import { getTokenPrices } from "./defillama.ts";
 import { TOKENS, type TokenSymbol, type Token } from "./tokens.ts";
 
-const COINGECKO = "https://api.coingecko.com/api/v3/simple/price";
 const TTL_MS = 60_000; // 60s — enough to dampen quote-flow chatter, fresh enough for cap math.
 
 interface CacheEntry {
@@ -12,28 +10,14 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-const responseSchema = z.record(z.string(), z.object({ usd: z.number() }));
-
-async function fetchPrices(ids: string[]): Promise<Record<string, number>> {
-  if (ids.length === 0) return {};
-  const url = `${COINGECKO}?ids=${ids.join(",")}&vs_currencies=usd`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    logger.warn({ status: res.status }, "coingecko price fetch failed");
-    return {};
-  }
-  const parsed = responseSchema.safeParse(await res.json());
-  if (!parsed.success) return {};
-  const out: Record<string, number> = {};
-  for (const [id, value] of Object.entries(parsed.data)) {
-    out[id] = value.usd;
-  }
-  return out;
-}
-
 /**
  * Resolve a USD price per unit token. Returns 0 if pricing unavailable
  * (caller should treat that as "skip USD-denominated checks", NOT "free").
+ *
+ * Routed through DefiLlama Coins (`coins.llama.fi`) — its free tier is
+ * open and doesn't rate-limit anonymous callers the way CoinGecko's
+ * does. DefiLlama exposes prices keyed by `coingecko:<id>`, so the
+ * existing `token.coingeckoId` field drives both sources unchanged.
  */
 export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
   const token = TOKENS[symbol];
@@ -43,8 +27,9 @@ export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
 async function getUsdPriceForToken(token: Token): Promise<number> {
   const cached = cache.get(token.coingeckoId);
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.usd;
-  const fresh = await fetchPrices([token.coingeckoId]);
-  const usd = fresh[token.coingeckoId] ?? cached?.usd ?? 0;
+  const key = `coingecko:${token.coingeckoId}`;
+  const fresh = await getTokenPrices([key]);
+  const usd = fresh[key]?.price ?? cached?.usd ?? 0;
   cache.set(token.coingeckoId, { usd, fetchedAt: Date.now() });
   return usd;
 }
