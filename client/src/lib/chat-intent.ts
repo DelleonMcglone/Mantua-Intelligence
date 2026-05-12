@@ -100,25 +100,80 @@ function isStable(s: TokenSymbol): boolean {
   return s === "USDC" || s === "EURC";
 }
 
+/**
+ * Action verbs whose presence signals the user wants to *do* something,
+ * not ask about a topic. Used both by the pre-flight (verb + pair →
+ * action) and to gate single-token analytic rules so prompts like
+ * "Swap 100 USDC for USDT" aren't hijacked into the `usdc-usdt-pool`
+ * analytic when USDT isn't in the alias map.
+ *
+ * Excludes `analyze`/`learn`/`tell`/`what`/`how`/`show` deliberately —
+ * those are question framings the analytic rules need to keep matching.
+ */
+const ACTION_VERB_RE = /\b(swap|exchange|trade|convert|add|provide|deposit|create|make|place|cancel|send|transfer|remove)\b/;
+
 export function detectIntent(text: string): Intent | null {
   const t = text.toLowerCase();
+
+  // Pre-flight: when an action verb is paired with two recognized tokens,
+  // short-circuit to the action intent *before* the analytic-topic rules
+  // run. Without this, prompts like "Swap 100 USDC for EURC with stable
+  // protection" get hijacked by the `eurc` + `stable` rule, and "Swap
+  // USDC for EURC with rwa gate" by the `rwa` rule — incidental keyword
+  // overlap that's a much weaker intent signal than the verb + pair.
+  //
+  // We require ≥2 tokens specifically so question-form prompts like
+  // "Is EURC trading above or below its peg?" (one token + analytic verb)
+  // still fall through to the eurc-peg matcher below.
+  //
+  // The add-liquidity branch also matches on `pool` as the noun (not just
+  // `liquidity`/`lp`) so "Add 100 USDC and 85 EURC to the X pool" — a
+  // very common phrasing in the corpus — routes correctly even without
+  // the literal word "liquidity".
+  const preflightTokens = extractWalletTokens(text);
+  if (preflightTokens.length >= 2) {
+    const preA = preflightTokens[0];
+    const preB = preflightTokens[1];
+    if (
+      /\b(add|provide|deposit).*(liquidity|lp|pool)\b/.test(t) ||
+      /^lp\b/.test(t)
+    ) {
+      const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
+      return {
+        kind: "add-liquidity",
+        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: null },
+      };
+    }
+    if (/\b(swap|exchange|trade|convert)\b/.test(t)) {
+      return { kind: "swap", tokenIn: preA.sym, tokenOut: preB.sym };
+    }
+  }
+
+  // Analytic-topic rules. Each is gated on `!hasActionVerb` where the
+  // topic keyword could otherwise be tripped by an action prompt that
+  // happens to mention the same token (e.g. "Swap USDC for USDT" should
+  // not route to the USDC/USDT pool analytic). Topic rules whose
+  // signal *is* a question framing (`mantua-hooks` keyed on "learn"/
+  // "explain"/"what"/"tell"/"describe"/"how") don't need the guard.
+  const hasActionVerb = ACTION_VERB_RE.test(t);
 
   if (/\bhook(s)?\b/.test(t) && /(learn|explain|what|tell|describe|how)/.test(t)) {
     return { kind: "analyze", topic: "mantua-hooks", question: text };
   }
-  if (/\bcb.?btc\b/.test(t) && /(volume|trend|24h|24 ?hour)/.test(t)) {
+  if (!hasActionVerb && /\bcb.?btc\b/.test(t) && /(volume|trend|24h|24 ?hour)/.test(t)) {
     return { kind: "analyze", topic: "cbbtc-24h-volume", question: text };
   }
   if (
-    /(rwa|real.?world.?asset)/.test(t) ||
-    (/(top|best|leading)/.test(t) && /(token|asset)/.test(t) && /(rwa|real)/.test(t))
+    !hasActionVerb &&
+    (/(rwa|real.?world.?asset)/.test(t) ||
+      (/(top|best|leading)/.test(t) && /(token|asset)/.test(t) && /(rwa|real)/.test(t)))
   ) {
     return { kind: "analyze", topic: "top-rwa-tokens", question: text };
   }
-  if (/\beurc\b/.test(t) && /(peg|above|below|stable|deviation)/.test(t)) {
+  if (!hasActionVerb && /\beurc\b/.test(t) && /(peg|above|below|stable|deviation)/.test(t)) {
     return { kind: "analyze", topic: "eurc-peg", question: text };
   }
-  if (/\busdc\b/.test(t) && /\busdt\b/.test(t)) {
+  if (!hasActionVerb && /\busdc\b/.test(t) && /\busdt\b/.test(t)) {
     return { kind: "analyze", topic: "usdc-usdt-pool", question: text };
   }
   if (/(price|cost|worth|trading|value|how much)/.test(t)) {
