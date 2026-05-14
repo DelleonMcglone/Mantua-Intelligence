@@ -1,8 +1,9 @@
 # Mantua AI v2 — Contracts (Foundry)
 
 Hooks for Uniswap v4 pools. Target chain at launch is Base Mainnet (8453);
-all four hooks currently live on testnets pending mainnet redeployment +
-security sign-off (see `docs/security/sign-off.md`).
+Stable Protection and Dynamic Fee currently live on Base Sepolia
+pending mainnet redeployment + security sign-off (see
+`docs/security/sign-off.md`).
 
 ## Setup
 
@@ -30,18 +31,17 @@ git submodule update --init --recursive
 - `script/` — deployment + admin scripts. Includes `verify-hooks.ts` (P5-001 deployment verification).
 - `lib/` — Foundry-managed dependencies (gitignored).
 
-## Hooks (Phase 5)
+## Hooks
 
-Each hook is vendored as a git submodule under `contracts/hooks/`. Run
-`npm run verify:hooks` from the repo root to refresh the on-chain
-verification report at `docs/security/hook-deployments.md`.
+The MVP ships two hooks: Stable Protection (gated to the USDC/EURC
+pair) and Dynamic Fee (any pair). Run `npm run verify:hooks` from the
+repo root to refresh the on-chain verification report at
+`docs/security/hook-deployments.md`.
 
 | Hook | Source | Deployment | Address | Permissions |
 | ---- | ------ | ---------- | ------- | ----------- |
 | Stable Protection | [`stableprotection-hook@1282b89`](https://github.com/DelleonMcglone/stableprotection-hook/commit/1282b899b6f68d27e28d65194dc75661f23476af) | Base Sepolia (84532) | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` | beforeInitialize, beforeSwap, afterSwap |
-| DynamicFee | [`dynamic-fee@62710d6`](https://github.com/DelleonMcglone/dynamic-fee/commit/62710d6d9b403557b073a702b5546bc10e75c0c6) | Base Sepolia (84532) | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` | beforeSwap, afterSwap |
-| RWAGate | [`RWAgate@bb41ada`](https://github.com/DelleonMcglone/RWAgate/commit/bb41ada54c9c9fb5a2bea296728321f68cf2dcc1) | Base Sepolia (84532) | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` | beforeAddLiquidity, beforeRemoveLiquidity, beforeSwap |
-| AsyncLimitOrder | [`limit-orders@89d905f`](https://github.com/DelleonMcglone/limit-orders/commit/89d905f1d39abbc3795015fc4adfb8140560194b) | Base Sepolia (84532) | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` | afterInitialize, beforeSwap, afterSwap, beforeSwapReturnsDelta |
+| Dynamic Fee | [`dynamic-fee@62710d6`](https://github.com/DelleonMcglone/dynamic-fee/commit/62710d6d9b403557b073a702b5546bc10e75c0c6) | Base Sepolia (84532) | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` | beforeSwap, afterSwap |
 
 **No hook is on Base Mainnet (8453) yet.** Re-deployment to mainnet, after security sign-off, is the launch-gating step.
 

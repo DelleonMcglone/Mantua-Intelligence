@@ -6,7 +6,7 @@ import { ApiError, api } from "@/lib/api.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 
-export type HookName = "stable-protection" | "dynamic-fee" | "rwa-gate" | "async-limit-order";
+export type HookName = "stable-protection" | "dynamic-fee";
 
 const baseRpcUrl: string =
   (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??

@@ -1,6 +1,6 @@
 # Sepolia E2E runbook (P9-008)
 
-How to run the 10+ real Base Sepolia transactions that close out
+How to run the real Base Sepolia transactions that close out
 **P9-008**. The script lives in
 [`contracts/script/SepoliaE2E.s.sol`](../contracts/script/SepoliaE2E.s.sol).
 It hits three pool configurations (no-hook, Stable Protection,
@@ -131,20 +131,11 @@ to a dedicated provider.
 
 ## Out of scope (deferred)
 
-- **RWAGate hook config** — requires the wallet to be in the
-  on-chain compliance registry first. Add an admin call to register
-  the wallet via the registry's operator before running.
-- **Async Limit Order hook config** — requires order-encoding
-  fixtures we don't have a runner for yet.
 - **Agent-side surface** — `/api/agent/swap`, `/api/agent/liquidity`
   go through the CDP-managed agent wallet. Test that path by
   provisioning the agent wallet via the in-app flow, funding it with
   Sepolia ETH, and exercising the agent panel manually. There's no
   scripted runner for the agent surface yet.
-
-These three paths together are the remaining work to fully close
-P9-008. They're all known-blocked on the docs above; not engineering
-risk, just setup time.
 
 ## Wallet sanity checklist before broadcast
 

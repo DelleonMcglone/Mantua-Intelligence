@@ -48,31 +48,6 @@ const HOOKS: HookConfig[] = [
     rpcUrl: "https://sepolia.base.org",
     expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
   },
-  {
-    name: "RWAGate",
-    repo: "DelleonMcglone/RWAgate",
-    pinnedCommit: "bb41ada54c9c9fb5a2bea296728321f68cf2dcc1",
-    address: "0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80",
-    chainId: 84532,
-    chainName: "Base Sepolia",
-    rpcUrl: "https://sepolia.base.org",
-    expectedPermissions: ["BEFORE_ADD_LIQUIDITY", "BEFORE_REMOVE_LIQUIDITY", "BEFORE_SWAP"],
-  },
-  {
-    name: "AsyncLimitOrder",
-    repo: "DelleonMcglone/limit-orders",
-    pinnedCommit: "89d905f1d39abbc3795015fc4adfb8140560194b",
-    address: "0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8",
-    chainId: 84532,
-    chainName: "Base Sepolia",
-    rpcUrl: "https://sepolia.base.org",
-    expectedPermissions: [
-      "AFTER_INITIALIZE",
-      "BEFORE_SWAP",
-      "AFTER_SWAP",
-      "BEFORE_SWAP_RETURNS_DELTA",
-    ],
-  },
 ];
 
 /** Uniswap v4 Hooks.sol permission flags (lower 14 bits of hook address). */
@@ -205,7 +180,7 @@ function renderMarkdown(results: VerifyResult[]): string {
   lines.push("## Notes");
   lines.push("");
   lines.push(
-    "All four hooks are testnet deployments. None are on Base mainnet (8453). Re-deployment to mainnet + a fresh run of this verification is a launch-gating step (separate Phase 5 ticket).",
+    "Stable Protection and Dynamic Fee are Base Sepolia testnet deployments. Neither is on Base mainnet (8453); re-deployment to mainnet + a fresh run of this verification is a launch-gating step.",
   );
   lines.push("");
   return lines.join("\n");

@@ -39,14 +39,6 @@ describe("HOOK_REQUIRES_DYNAMIC_FEE", () => {
   it("dynamic-fee requires dynamic fee", () => {
     assert.equal(HOOK_REQUIRES_DYNAMIC_FEE["dynamic-fee"], true);
   });
-
-  it("rwa-gate does not require dynamic fee", () => {
-    assert.equal(HOOK_REQUIRES_DYNAMIC_FEE["rwa-gate"], false);
-  });
-
-  it("async-limit-order does not require dynamic fee", () => {
-    assert.equal(HOOK_REQUIRES_DYNAMIC_FEE["async-limit-order"], false);
-  });
 });
 
 describe("effectivePoolFee", () => {
@@ -68,17 +60,10 @@ describe("effectivePoolFee", () => {
     assert.equal(effectivePoolFee("dynamic-fee", 500), DYNAMIC_FEE_FLAG);
   });
 
-  it("rwa-gate / async-limit-order pass static fee through", () => {
-    assert.equal(effectivePoolFee("rwa-gate", 100), 100);
-    assert.equal(effectivePoolFee("rwa-gate", 3000), 3000);
-    assert.equal(effectivePoolFee("async-limit-order", 500), 500);
-    assert.equal(effectivePoolFee("async-limit-order", 10000), 10000);
-  });
-
   it("DYNAMIC_FEE_FLAG sanity (matches v4-core LPFeeLibrary)", () => {
     // 0x800000 = 2^23. v4-core sets the high bit of uint24 fee to flag
-    // dynamic. If this constant ever drifts, every Stable Protection
-    // and Dynamic Fee pool would silently mismatch on-chain.
+    // dynamic. If this constant ever drifts, every Stable Protection /
+    // Dynamic Fee pool would silently mismatch on-chain.
     assert.equal(DYNAMIC_FEE_FLAG, 0x800000);
     assert.equal(DYNAMIC_FEE_FLAG, 8388608);
   });

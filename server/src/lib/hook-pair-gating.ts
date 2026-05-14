@@ -1,20 +1,16 @@
 /**
- * Phase 5 P5-002 — hook ↔ token-pair allowlist.
+ * Hook ↔ token-pair allowlist.
  *
- * Originally, Stable Protection's peg-zone logic only behaved correctly
- * on pegged-asset pairs (stable/stable, stable/euro), so pool creation
- * gated on an explicit allowlist. The proof-of-concept temporarily
- * dropped the gate while wiring everything else up.
- *
- * The gate is back on for `stable-protection`: the deployed hook at
- * `0xe5e6…20C0` hard-codes a 1:1 peg in `PegMonitor.classifyZone`
- * (`deviation = |r0 − r1| / avg`), so any non-1:1 pair lands in
- * CRITICAL zone on every swap and the circuit breaker reverts.
- * Base Sepolia's testnet token set has no true 1:1 pair → empty
- * allowlist → pool creation and quoting reject `stable-protection`
- * across the board. Re-add entries here when the hook is upgraded to
- * accept a `targetRatio` (or when a 1:1 testnet pair like USDC/USDT
- * lands). Other hooks impose no pair restriction at this layer.
+ * MVP scope:
+ *  - Stable Protection: USDC/EURC only (Base Sepolia). The deployed
+ *    hook at `0xe5e6…20C0` hard-codes a 1:1 peg in
+ *    `PegMonitor.classifyZone`; USDC and EURC aren't actually 1:1
+ *    but the demo treats this pair as the canonical peg-protected
+ *    pool. Broaden the allowlist when the hook is upgraded to accept
+ *    a `targetRatio`.
+ *  - Dynamic Fee: unrestricted — any pair on any supported chain.
+ *    Absence from `HOOK_ALLOWED_SYMBOL_PAIRS` below means "no
+ *    restriction" (see `listAllowedPairs`).
  */
 
 import { TOKENS, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
@@ -23,7 +19,7 @@ import { getHookAddress, type HookName } from "./v4-contracts.ts";
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
 
 const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {
-  "stable-protection": [],
+  "stable-protection": [["USDC", "EURC"]],
 };
 
 function lookupSymbol(addr: string): TokenSymbol | null {
@@ -67,7 +63,7 @@ export function isHookPairAllowed(
 function hookIncompatibilityReason(hook: HookName): string {
   switch (hook) {
     case "stable-protection":
-      return "Stable Protection only supports 1:1-pegged stable pairs (USDC/USDT, DAI/USDC). No such pair is available on Base Sepolia yet — pick a different hook.";
+      return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
     default:
       return `Hook "${hook}" does not support this pair on the active network.`;
   }

@@ -328,12 +328,10 @@ function mantuaHooks(): AnalyzeResponse {
     topic: "mantua-hooks",
     title: "Mantua hooks",
     summary:
-      "Mantua's four Liquidity Hooks plug into Uniswap v4's pool lifecycle to add behavior that vanilla pools can't: dynamic fees, peg protection, KYC gating, and async limit orders.",
+      "Mantua ships two Liquidity Hooks on Uniswap v4: Dynamic Fee (any pair) and Stable Protection (USDC/EURC). Both plug into the pool lifecycle to add behavior vanilla pools can't.",
     bullets: [
-      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow.",
-      "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs.",
-      "RWAgate — compliance-gated routing. Verifies the swapper's address is in an approved registry before allowing a swap or liquidity operation. Lets institutions plug RWA pools into permissionless DEXes safely.",
-      "Async Limit Order — off-chain order matching with on-chain settlement. Lets a relayer fill exact-output orders against the pool when the price hits, with `BEFORE_SWAP_RETURNS_DELTA` for fee parity.",
+      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Available on Base Sepolia and Unichain Sepolia, any pair.",
+      "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs. Base Sepolia, USDC/EURC only.",
     ],
     sources: [
       { name: "Uniswap v4 Hooks", url: "https://docs.uniswap.org/contracts/v4/concepts/hooks" },

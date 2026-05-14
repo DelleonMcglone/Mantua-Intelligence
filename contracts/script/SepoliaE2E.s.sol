@@ -27,7 +27,7 @@ interface IStateView {
 
 /**
  * @title  SepoliaE2E
- * @notice P9-008 — broadcasts 10+ real Base Sepolia transactions across
+ * @notice P9-008 — broadcasts real Base Sepolia transactions across
  *         pool create / add / swap / remove for three hook configurations
  *         (no-hook, Stable Protection, Dynamic Fee).
  *
@@ -48,12 +48,6 @@ interface IStateView {
  *   - Uses small amounts (1 USDC + 1 EURC per add, 0.1 USDC per swap)
  *     so the user's wallet balance and the pool depth aren't dented.
  *   - Logs every tx-firing call with a one-line summary.
- *
- * Skipped here (require additional setup, tracked under TD-005):
- *   - RWAGate hook flows — caller must be in the on-chain compliance
- *     registry.
- *   - Async Limit Order hook flows — requires order-encoding
- *     fixtures.
  *
  * The agent-side surface (`/api/agent/{swap,liquidity}`) is a
  * separate harness — see `docs/sepolia-e2e-runbook.md` for that path.
