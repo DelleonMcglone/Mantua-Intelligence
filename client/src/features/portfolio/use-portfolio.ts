@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { ApiError, api } from "@/lib/api.ts";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
+import type { SupportedTestnetChainId } from "@/lib/chains.ts";
 
 interface PortfolioBalance {
   symbol: TokenSymbol;
@@ -49,6 +51,7 @@ const POLL_MS = 15_000;
  */
 export function usePortfolio(): PortfolioState {
   const { authenticated, ready, user } = usePrivy();
+  const chainId = useCurrentChainId();
   const wallet = user?.wallet?.address ?? null;
   const [state, setState] = useState<PortfolioState>({
     balances: [],
@@ -86,7 +89,9 @@ export function usePortfolio(): PortfolioState {
 
     const tick = async () => {
       try {
-        const data = await api.get<PortfolioResponse>("/api/portfolio");
+        const data = await api.get<PortfolioResponse>(
+          `/api/portfolio?chainId=${String(chainId)}`,
+        );
         if (cancelled) return;
         setState({
           balances: data.balances,
@@ -112,7 +117,7 @@ export function usePortfolio(): PortfolioState {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, ready, wallet, refreshNonce]);
+  }, [authenticated, ready, wallet, refreshNonce, chainId]);
 
   return state;
 }
@@ -133,11 +138,15 @@ export interface DisplayAsset {
   decimals: number;
 }
 
-export function toDisplayAssets(balances: PortfolioBalance[]): DisplayAsset[] {
+export function toDisplayAssets(
+  balances: PortfolioBalance[],
+  chainId: SupportedTestnetChainId,
+): DisplayAsset[] {
+  const tokens = getTokens(chainId);
   return balances
     .filter((b) => b.symbol !== "WETH") // user-facing list excludes WETH
     .map((b) => {
-      const meta = TOKENS[b.symbol];
+      const meta = tokens[b.symbol];
       const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
       const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;
       return {

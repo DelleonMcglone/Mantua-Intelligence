@@ -1,31 +1,64 @@
 /**
- * Hook ↔ token-pair allowlist.
+ * Hook ↔ token-pair allowlist, chain-aware.
  *
- * MVP scope:
- *  - Stable Protection: USDC/EURC only (Base Sepolia). The deployed
- *    hook at `0xe5e6…20C0` hard-codes a 1:1 peg in
- *    `PegMonitor.classifyZone`; USDC and EURC aren't actually 1:1
- *    but the demo treats this pair as the canonical peg-protected
- *    pool. Broaden the allowlist when the hook is upgraded to accept
- *    a `targetRatio`.
- *  - Dynamic Fee: unrestricted — any pair on any supported chain.
- *    Absence from `HOOK_ALLOWED_SYMBOL_PAIRS` below means "no
- *    restriction" (see `listAllowedPairs`).
+ * MVP scope (PR #101):
+ *  - Stable Protection: USDC/EURC only AND Base Sepolia only. The
+ *    deployed hook at `0xe5e6…20C0` hard-codes a 1:1 peg in
+ *    `PegMonitor.classifyZone`; USDC and EURC aren't actually 1:1 but
+ *    the demo treats this pair as the canonical peg-protected pool.
+ *    Broaden when the hook is upgraded to accept a `targetRatio`.
+ *  - Dynamic Fee: unrestricted pair on any supported chain — but the
+ *    hook must actually be deployed (Unichain Sepolia deployment is
+ *    pending; calling there throws "hook not deployed").
  */
 
-import { TOKENS, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
-import { getHookAddress, type HookName } from "./v4-contracts.ts";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
+import {
+  DEFAULT_CHAIN_ID,
+  getHookAddress,
+  type HookName,
+} from "./v4-contracts.ts";
+import { getTokens, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
 
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
 
-const HOOK_ALLOWED_SYMBOL_PAIRS: Partial<Record<HookName, ReadonlyArray<SymbolPair>>> = {
-  "stable-protection": [["USDC", "EURC"]],
+interface ChainHookAllowlist {
+  /** `null` → no restriction (any pair). Missing entry → hook unavailable on this chain. */
+  readonly pairs: ReadonlyArray<SymbolPair> | null;
+}
+
+/**
+ * Per-chain, per-hook allowlist. A hook missing from a chain's entry
+ * means the hook is not available on that chain (e.g. Stable Protection
+ * on Unichain). `pairs: null` means any pair is allowed.
+ */
+const HOOK_ALLOWLIST: Record<
+  SupportedTestnetChainId,
+  Partial<Record<HookName, ChainHookAllowlist>>
+> = {
+  [BASE_SEPOLIA_CHAIN_ID]: {
+    "stable-protection": { pairs: [["USDC", "EURC"]] },
+    "dynamic-fee": { pairs: null },
+  },
+  [1301]: {
+    // Stable Protection intentionally absent on Unichain Sepolia
+    // (deployed bytecode lives only on Base Sepolia, and the pair
+    // semantics don't fit Unichain's testnet token set).
+    "dynamic-fee": { pairs: null },
+  },
 };
 
-function lookupSymbol(addr: string): TokenSymbol | null {
+function lookupSymbol(
+  addr: string,
+  chainId: SupportedTestnetChainId,
+): TokenSymbol | null {
   const lower = addr.toLowerCase();
-  for (const symbol of Object.keys(TOKENS) as TokenSymbol[]) {
-    if (TOKENS[symbol].address.toLowerCase() === lower) return symbol;
+  const tokens = getTokens(chainId);
+  for (const symbol of Object.keys(tokens) as TokenSymbol[]) {
+    if (tokens[symbol].address.toLowerCase() === lower) return symbol;
   }
   return null;
 }
@@ -35,47 +68,58 @@ function pairsMatch(a: SymbolPair, b: SymbolPair): boolean {
 }
 
 /**
- * `null` → no restriction (any pair allowed).
- * `[]`  → hook has zero allowed pairs on the active network.
+ * `null` → no restriction. `[]` → hook has zero allowed pairs. `undefined`
+ * → hook is not available on this chain (caller should refuse).
  */
-export function listAllowedPairs(hook: HookName): ReadonlyArray<SymbolPair> | null {
-  return HOOK_ALLOWED_SYMBOL_PAIRS[hook] ?? null;
+export function listAllowedPairs(
+  hook: HookName,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
+): ReadonlyArray<SymbolPair> | null | undefined {
+  const chainEntry = HOOK_ALLOWLIST[chainId];
+  if (!chainEntry[hook]) return undefined;
+  return chainEntry[hook].pairs;
 }
 
 export function isHookPairAllowed(
   hook: HookName,
   token0Address: string,
   token1Address: string,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): boolean {
-  const allow = HOOK_ALLOWED_SYMBOL_PAIRS[hook];
-  if (!allow) return true;
-  const sym0 = lookupSymbol(token0Address);
-  const sym1 = lookupSymbol(token1Address);
+  const allow = listAllowedPairs(hook, chainId);
+  if (allow === undefined) return false; // hook not on this chain
+  if (allow === null) return true; // unrestricted
+  const sym0 = lookupSymbol(token0Address, chainId);
+  const sym1 = lookupSymbol(token1Address, chainId);
   if (!sym0 || !sym1) return false;
   return allow.some((p) => pairsMatch(p, [sym0, sym1]));
 }
 
-/**
- * Reason string surfaced to users when a hook rejects a pair. Hook-
- * specific so the UI can explain *why* (the 1:1 peg assumption for
- * stable-protection, etc.) rather than the bare allow/deny outcome.
- */
-function hookIncompatibilityReason(hook: HookName): string {
-  switch (hook) {
-    case "stable-protection":
-      return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
-    default:
-      return `Hook "${hook}" does not support this pair on the active network.`;
+function hookIncompatibilityReason(
+  hook: HookName,
+  chainId: SupportedTestnetChainId,
+): string {
+  const allow = listAllowedPairs(hook, chainId);
+  if (allow === undefined) {
+    if (hook === "stable-protection") {
+      return "Stable Protection is only available on Base Sepolia (USDC/EURC). Switch to Base Sepolia or pick a different hook.";
+    }
+    return `Hook "${hook}" is not deployed on chain ${String(chainId)} yet. Pick a different hook or switch chains.`;
   }
+  if (hook === "stable-protection") {
+    return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
+  }
+  return `Hook "${hook}" does not support this pair on chain ${String(chainId)}.`;
 }
 
 export class HookPairNotAllowedError extends Error {
   constructor(
     public readonly hook: HookName,
+    public readonly chainId: SupportedTestnetChainId,
     public readonly token0Address: string,
     public readonly token1Address: string,
   ) {
-    super(hookIncompatibilityReason(hook));
+    super(hookIncompatibilityReason(hook, chainId));
     this.name = "HookPairNotAllowedError";
   }
 }
@@ -84,24 +128,22 @@ export function assertHookPairAllowed(
   hook: HookName,
   token0Address: string,
   token1Address: string,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): void {
-  if (!isHookPairAllowed(hook, token0Address, token1Address)) {
-    throw new HookPairNotAllowedError(hook, token0Address, token1Address);
+  if (!isHookPairAllowed(hook, token0Address, token1Address, chainId)) {
+    throw new HookPairNotAllowedError(hook, chainId, token0Address, token1Address);
   }
 }
 
-/**
- * Symbol-based variant of `isHookPairAllowed` for callers that already
- * have the token symbols (e.g. the swap quote path). Avoids the
- * address→symbol lookup step.
- */
 export function isHookPairAllowedBySymbol(
   hook: HookName,
   symbolA: TokenSymbol,
   symbolB: TokenSymbol,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): boolean {
-  const allow = HOOK_ALLOWED_SYMBOL_PAIRS[hook];
-  if (!allow) return true;
+  const allow = listAllowedPairs(hook, chainId);
+  if (allow === undefined) return false;
+  if (allow === null) return true;
   return allow.some((p) => pairsMatch(p, [symbolA, symbolB]));
 }
 
@@ -109,32 +151,38 @@ export function assertHookPairAllowedBySymbol(
   hook: HookName,
   symbolA: TokenSymbol,
   symbolB: TokenSymbol,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): void {
-  if (!isHookPairAllowedBySymbol(hook, symbolA, symbolB)) {
+  if (!isHookPairAllowedBySymbol(hook, symbolA, symbolB, chainId)) {
+    const tokens = getTokens(chainId);
     throw new HookPairNotAllowedError(
       hook,
-      TOKENS[symbolA].address,
-      TOKENS[symbolB].address,
+      chainId,
+      tokens[symbolA]?.address ?? ZERO_ADDRESS,
+      tokens[symbolB]?.address ?? ZERO_ADDRESS,
     );
   }
 }
 
 /**
- * Resolve a hook name to its on-chain address on the active network and
+ * Resolve a hook name to its on-chain address on the given chain and
  * gate the pair-against-hook combination. Returns `ZERO_ADDRESS` for a
- * no-hook pool. Throws when the hook is unavailable on this network or
+ * no-hook pool. Throws when the hook is unavailable on this chain or
  * the pair is disallowed for the hook.
  */
 export function resolveHookForPool(
   hook: HookName | null | undefined,
   token0Address: string,
   token1Address: string,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): `0x${string}` {
   if (!hook) return ZERO_ADDRESS;
-  const addr = getHookAddress(hook);
+  const addr = getHookAddress(hook, chainId);
   if (!addr) {
-    throw new Error(`Hook "${hook}" is not deployed on the active network`);
+    throw new Error(
+      `Hook "${hook}" is not deployed on chain ${String(chainId)} yet.`,
+    );
   }
-  assertHookPairAllowed(hook, token0Address, token1Address);
+  assertHookPairAllowed(hook, token0Address, token1Address, chainId);
   return addr;
 }

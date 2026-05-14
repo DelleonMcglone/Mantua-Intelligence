@@ -8,6 +8,13 @@
       "when": 1777933924341,
       "tag": "0000_narrow_azazel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778822400000,
+      "tag": "0001_add_pools_chain_id",
+      "breakpoints": true
     }
   ]
 }

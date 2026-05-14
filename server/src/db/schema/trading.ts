@@ -13,6 +13,9 @@ import { users } from "./users.ts";
 
 export const pools = pgTable("pools", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  /** Chain the pool lives on. Legacy rows (no chainId column before
+   *  PR #101) default to Base Sepolia (84532). */
+  chainId: integer("chain_id").notNull().default(84532),
   poolKeyHash: varchar("pool_key_hash", { length: 66 }).notNull().unique(),
   token0: varchar("token0", { length: 42 }).notNull(),
   token1: varchar("token1", { length: 42 }).notNull(),

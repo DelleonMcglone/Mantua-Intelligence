@@ -4,7 +4,9 @@ import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import { BASESCAN_TX, type TokenSymbol } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerTxUrl } from "@/lib/chains.ts";
+import { type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
 import { DEFAULT_FEE_TIER_FOR_PAIR, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { FeeTierPicker } from "./FeeTierPicker.tsx";
@@ -91,6 +93,7 @@ type ChartRange = (typeof CHART_RANGES)[number];
  * change is presentational; calldata + approvals path is unchanged.
  */
 export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
+  const chainId = useCurrentChainId();
   const locked = ctx?.locked === true;
   const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? DEFAULT_TOKEN_A);
   const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? DEFAULT_TOKEN_B);
@@ -443,7 +446,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
 
         {add.state.poolInitTx && (
           <a
-            href={`${BASESCAN_TX}${add.state.poolInitTx}`}
+            href={`${getExplorerTxUrl(chainId, add.state.poolInitTx)}`}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
@@ -453,7 +456,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
         )}
         {add.state.approvalTx && (
           <a
-            href={`${BASESCAN_TX}${add.state.approvalTx}`}
+            href={getExplorerTxUrl(chainId, add.state.approvalTx)}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
@@ -463,12 +466,12 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
         )}
         {add.state.txHash && (
           <a
-            href={`${BASESCAN_TX}${add.state.txHash}`}
+            href={getExplorerTxUrl(chainId, add.state.txHash)}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-3 w-full"
           >
-            View on BaseScan <ExternalLink className="h-3 w-3" />
+            View transaction <ExternalLink className="h-3 w-3" />
           </a>
         )}
         {add.state.status === "success" && (

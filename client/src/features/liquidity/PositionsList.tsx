@@ -3,7 +3,8 @@ import { ExternalLink, Trash2 } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { BASESCAN_TX } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerTxUrl } from "@/lib/chains.ts";
 import { FEE_TIER_LABELS } from "./fee-tiers.ts";
 import { isFeeTier } from "./fee-tiers-helpers.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
@@ -71,6 +72,7 @@ function PositionRow({
   position: Position;
   onRemove: (p: Position) => void;
 }) {
+  const chainId = useCurrentChainId();
   const sym = `${tokenLabelByAddress(position.token0)}/${tokenLabelByAddress(position.token1)}`;
   const feeLabel = isFeeTier(position.fee) ? FEE_TIER_LABELS[position.fee] : `${String(position.fee / 10_000)}%`;
   return (
@@ -82,7 +84,7 @@ function PositionRow({
         </div>
         {position.openedTx && (
           <a
-            href={`${BASESCAN_TX}${position.openedTx}`}
+            href={getExplorerTxUrl(chainId, position.openedTx)}
             target="_blank"
             rel="noreferrer"
             className="text-[10px] text-text-mute hover:text-accent inline-flex items-center gap-1 mt-1"
