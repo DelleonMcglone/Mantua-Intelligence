@@ -40,14 +40,6 @@ export type Intent =
   | { kind: "create-pool"; ctx?: PoolKeyCtx }
   | { kind: "remove-liquidity" }
   | { kind: "positions" }
-  | {
-      kind: "limit-order";
-      /** `place` → user is creating an order; `list` → user wants to
-       *  view or cancel existing orders. */
-      mode: "place" | "list";
-      tokenIn?: TokenSymbol;
-      tokenOut?: TokenSymbol;
-    }
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
   | {
@@ -216,42 +208,6 @@ export function detectIntent(text: string): Intent | null {
   // specific position id.
   if (/\b(remove|withdraw)\b.*(liquidity|\blp\b|position|pool)\b/.test(t)) {
     return { kind: "remove-liquidity" };
-  }
-
-  // Limit-order management — `cancel`, `show pending`, `list orders`
-  // route to the list mode; the place/buy/sell forms below route to
-  // place mode.
-  if (/\b(cancel|show|list|view)\b.*\blimit\s+orders?\b/.test(t) || /\bpending\s+limit\s+orders?\b/.test(t)) {
-    const tokens = extractWalletTokens(text);
-    const a = tokens[0]?.sym;
-    const b = tokens[1]?.sym;
-    return {
-      kind: "limit-order",
-      mode: "list",
-      ...(a ? { tokenIn: a } : {}),
-      ...(b ? { tokenOut: b } : {}),
-    };
-  }
-
-  // Limit-order placement — three phrasings:
-  //   "Place a limit order …"        → has `limit order` substring
-  //   "Sell 0.05 ETH at 2400 USDC"   → starts with sell/buy + amount, has `at <num>`
-  //   "Buy 0.001 cbBTC at 50000 USDC" → same
-  // The "at <num>" guard is what distinguishes a limit order from a
-  // bare swap intent ("sell ETH for USDC").
-  if (
-    /\blimit\s+orders?\b/.test(t) ||
-    (/^(sell|buy)\s+/.test(t) && /\bat\s+(a\s+)?\d/.test(t))
-  ) {
-    const tokens = extractWalletTokens(text);
-    const a = tokens[0]?.sym;
-    const b = tokens[1]?.sym;
-    return {
-      kind: "limit-order",
-      mode: "place",
-      ...(a ? { tokenIn: a } : {}),
-      ...(b ? { tokenOut: b } : {}),
-    };
   }
 
   // Portfolio surface — `show me my portfolio`. Deliberately keyed on

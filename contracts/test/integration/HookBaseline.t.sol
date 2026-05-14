@@ -32,24 +32,6 @@ contract HookBaseline is BaseSepoliaFork {
         );
     }
 
-    function test_RWAGate_deployed() public view {
-        assertGt(RWA_GATE_HOOK.code.length, 0, "RWAGateHook not deployed");
-        assertEq(
-            _hookFlags(RWA_GATE_HOOK),
-            FLAG_BEFORE_ADD_LIQUIDITY | FLAG_BEFORE_REMOVE_LIQUIDITY | FLAG_BEFORE_SWAP,
-            "RWAGate: flag mismatch"
-        );
-    }
-
-    function test_AsyncLimitOrder_deployed() public view {
-        assertGt(ASYNC_LIMIT_ORDER_HOOK.code.length, 0, "AsyncLimitOrderHook not deployed");
-        assertEq(
-            _hookFlags(ASYNC_LIMIT_ORDER_HOOK),
-            FLAG_AFTER_INITIALIZE | FLAG_BEFORE_SWAP | FLAG_AFTER_SWAP | FLAG_BEFORE_SWAP_RETURNS_DELTA,
-            "AsyncLimitOrder: flag mismatch"
-        );
-    }
-
     function test_PoolManager_deployed() public view {
         assertGt(
             V4_POOL_MANAGER_BASE_SEPOLIA.code.length, 0, "Uniswap v4 PoolManager not deployed at expected address"

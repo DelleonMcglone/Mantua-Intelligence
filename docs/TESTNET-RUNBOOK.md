@@ -1,10 +1,10 @@
 # Mantua testnet end-to-end runbook (Base Sepolia)
 
-This walks one wallet through every transaction needed to confirm the
-four Mantua hooks are live on Base Sepolia and that the UI surfaces them
-correctly. Each step ends with a BaseScan Sepolia transaction link you
-should record in the PR description (or paste back into chat) so the
-flow is auditable.
+This walks one wallet through the transactions needed to confirm
+Stable Protection and Dynamic Fee are live on Base Sepolia and that
+the UI surfaces them correctly. Each step ends with a BaseScan
+Sepolia transaction link you should record in the PR description (or
+paste back into chat) so the flow is auditable.
 
 > Test wallet (used by the Mantua team for v2 verification):
 > `0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87`
@@ -40,54 +40,50 @@ mint UIs are the fastest sources for stablecoins on Base Sepolia.
 Pass criteria: ETH/USDC/EURC/cbBTC balances match
 `https://sepolia.basescan.org/address/${WALLET}#tokentxns`.
 
-## 2. Create the four design pools (one tx each)
+## 2. Create pools
 
-Each pool creates a v4 PoolKey with the listed hook attached and writes
-the pool to the local db once the receipt confirms. The Mantua-
-recommended hook auto-fills when you pick the matching pair on the
+MVP scope: every pair of {ETH, cbBTC, USDC, EURC} can be created
+without a hook or with the Dynamic Fee hook. Only the USDC/EURC pair
+can additionally be created with the Stable Protection hook. The
+Mantua-recommended hook auto-fills when you pick USDC/EURC on the
 **Create pool** screen.
 
 | # | Pair        | Fee tier  | Hook                | Hook contract |
 | - | ----------- | --------- | ------------------- | ------------- |
 | 1 | USDC/EURC   | 0.01%     | Stable Protection   | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` |
 | 2 | ETH/USDC    | 0.05%     | Dynamic Fee         | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` |
-| 3 | USDC/cbBTC  | 0.05%     | RWA Gate            | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` |
-| 4 | ETH/cbBTC   | 0.30%     | Async Limit Order   | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` |
+| 3 | ETH/cbBTC   | 0.30%     | Dynamic Fee         | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` |
+| 4 | USDC/cbBTC  | 0.30%     | None                | n/a |
 
 For each row:
 
 1. From the right panel, click the **Pool** prompt → **+ Create Pool**.
 2. Set **Token A** / **Token B** to the pair. The hook dropdown should
-   auto-suggest the row's hook (override via dropdown if needed).
+   auto-suggest Stable Protection for USDC/EURC; for every other
+   pair the default is No Hook, but you can pick Dynamic Fee from
+   the dropdown.
 3. Set the fee tier and an initial price (any sensible ratio).
 4. Click **Initialize pool** and sign in your wallet.
 5. Copy the BaseScan link from the result row and paste it into the PR.
 
-Expected BaseScan record (any of the 4):
+Expected BaseScan record:
 
 - `to: 0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408` (PoolManager)
 - Calldata starts with `0x695c5bf5` (PoolManager.initialize selector)
 - Logs include the v4 `Initialize` event with `hooks` set to the row's
-  hook contract address.
+  hook contract address (zero address for no-hook rows).
 
-Open the hook contract's BaseScan page — its `Internal Txns` /
-`Events` tab will gain a `BeforeInitialize` (Stable Protection) or
-`AfterInitialize` (ALO) event, proving the hook executed during the
-init.
+For the Stable Protection row, open the hook contract's BaseScan page
+— its `Events` tab will gain a `BeforeInitialize` event, proving the
+hook executed during the init. The Dynamic Fee hook only has
+`BeforeSwap` / `AfterSwap`, so it only logs once swaps land (step 4).
 
 | Pool | BaseScan tx | Hook BaseScan |
 | ---- | ----------- | ------------- |
 | USDC/EURC + Stable Protection | _fill in_ | <https://sepolia.basescan.org/address/0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0> |
 | ETH/USDC + Dynamic Fee        | _fill in_ | <https://sepolia.basescan.org/address/0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0> |
-| USDC/cbBTC + RWA Gate         | _fill in_ | <https://sepolia.basescan.org/address/0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80> |
-| ETH/cbBTC + ALO               | _fill in_ | <https://sepolia.basescan.org/address/0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8> |
-
-> **If `initialize` reverts on row 4 (ETH/cbBTC + ALO):** ALO is
-> registered in `v4-contracts.ts` but the deployed contract may not
-> expose v4 hook permissions in its address salt. If the receipt
-> reverts with `HookPermissionsValidationFailed`, we'll redeploy the
-> ALO hook with the correct permission flags before retrying. Capture
-> the failing tx hash in the PR.
+| ETH/cbBTC + Dynamic Fee       | _fill in_ | <https://sepolia.basescan.org/address/0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0> |
+| USDC/cbBTC no-hook            | _fill in_ | n/a |
 
 ## 3. Add liquidity to one pool (so swap routes)
 
@@ -106,14 +102,15 @@ non-zero output. Pick the pool you want to swap on (recommend
 | ---- | ---------------- |
 | ETH/USDC + Dynamic Fee | _fill in_ |
 
-## 4. Swap through the hooked pool
+## 4. Swap through the pool
 
 1. Open **Swap** from the right panel.
 2. Sell `ETH`, buy `USDC`, amount `0.0005`.
 3. Confirm the **Exchange Rate (Incl. Fees)** row populates with a real
    number (proves the quote endpoint hit a real Base Sepolia pool).
 4. Set the **Swap Hook** dropdown to **Dynamic Fee** so the warning
-   logic is visible.
+   logic is visible (or **Stable Protection** if you're swapping
+   USDC/EURC).
 5. Click **Review Swap** → sign in your wallet.
 6. Record the BaseScan link.
 
@@ -147,7 +144,5 @@ captured above is the verification we need.
 | Permit2 | `0x000000000022d473030f116ddee9f6b43ac78ba3` |
 | StableProtection hook | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` |
 | DynamicFee hook | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` |
-| RWAGate hook | `0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80` |
-| AsyncLimitOrder hook | `0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8` |
 
 (See `server/src/lib/v4-contracts.ts` for the source of truth.)

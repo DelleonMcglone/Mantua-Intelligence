@@ -25,20 +25,14 @@ abstract contract BaseSepoliaFork is Test {
 
     address internal constant STABLE_PROTECTION_HOOK = 0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0;
     address internal constant DYNAMIC_FEE_HOOK = 0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0;
-    address internal constant RWA_GATE_HOOK = 0xbba7Cf860B47E16b9b83d8185878Ec0FAD0d4a80;
-    address internal constant ASYNC_LIMIT_ORDER_HOOK = 0xb9E29F39bbf01c9D0FF6F1c72859F0eF550fD0c8;
 
     address internal constant V4_POOL_MANAGER_BASE_SEPOLIA = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
 
     /// Lower 14 bits of a hook address encode its lifecycle permissions
     /// per Uniswap v4 Hooks.sol — see also contracts/script/verify-hooks.ts.
     uint16 internal constant FLAG_BEFORE_INITIALIZE = 1 << 13;
-    uint16 internal constant FLAG_AFTER_INITIALIZE = 1 << 12;
-    uint16 internal constant FLAG_BEFORE_ADD_LIQUIDITY = 1 << 11;
-    uint16 internal constant FLAG_BEFORE_REMOVE_LIQUIDITY = 1 << 9;
     uint16 internal constant FLAG_BEFORE_SWAP = 1 << 7;
     uint16 internal constant FLAG_AFTER_SWAP = 1 << 6;
-    uint16 internal constant FLAG_BEFORE_SWAP_RETURNS_DELTA = 1 << 3;
 
     function setUp() public virtual {
         string memory rpc = _resolveRpc();

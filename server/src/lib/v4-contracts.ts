@@ -42,14 +42,16 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 /**
  * Mantua hook addresses, network-driven.
  *
- * Mainnet entries are intentionally `null` for every hook: none of the
- * four Mantua hooks are deployed on Base Mainnet yet (launch-gating
- * step, after the security suite P5-017 → P5-026 signs them off).
- * Callers that resolve a hook address must handle `null` ("hook not
+ * MVP scope (PR #100): Stable Protection (USDC/EURC only) and Dynamic
+ * Fee (any pair). RWA Gate and Async Limit Order are removed. Stable
+ * Protection only exists on Base Sepolia; Dynamic Fee exists on Base
+ * Sepolia today and a Unichain Sepolia deployment is wired in Part 2.
+ *
+ * Mainnet entries are `null`: neither hook is deployed on Base Mainnet
+ * yet (launch-gating step). Callers must handle `null` ("hook not
  * available on this network").
  *
- * Sepolia entries: all four hooks are verified live on Base Sepolia by
- * `npm run verify:hooks` (see `docs/security/hook-deployments.md`).
+ * Sepolia entries: verified live by `npm run verify:hooks`.
  */
 
 const STABLE_PROTECTION_HOOK_MAINNET = null;
@@ -57,10 +59,6 @@ const STABLE_PROTECTION_HOOK_SEPOLIA =
   "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0" as const;
 const DYNAMIC_FEE_HOOK_MAINNET = null;
 const DYNAMIC_FEE_HOOK_SEPOLIA = "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0" as const;
-const RWA_GATE_HOOK_MAINNET = null;
-const RWA_GATE_HOOK_SEPOLIA = "0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80" as const;
-const ASYNC_LIMIT_ORDER_HOOK_MAINNET = null;
-const ASYNC_LIMIT_ORDER_HOOK_SEPOLIA = "0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8" as const;
 
 export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
   ? STABLE_PROTECTION_HOOK_MAINNET
@@ -68,26 +66,13 @@ export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
 export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
   ? DYNAMIC_FEE_HOOK_MAINNET
   : DYNAMIC_FEE_HOOK_SEPOLIA;
-export const RWA_GATE_HOOK: `0x${string}` | null = IS_MAINNET
-  ? RWA_GATE_HOOK_MAINNET
-  : RWA_GATE_HOOK_SEPOLIA;
-export const ASYNC_LIMIT_ORDER_HOOK: `0x${string}` | null = IS_MAINNET
-  ? ASYNC_LIMIT_ORDER_HOOK_MAINNET
-  : ASYNC_LIMIT_ORDER_HOOK_SEPOLIA;
 
-export const HOOK_NAMES = [
-  "stable-protection",
-  "dynamic-fee",
-  "rwa-gate",
-  "async-limit-order",
-] as const;
+export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
 const HOOK_ADDRESSES: Record<HookName, `0x${string}` | null> = {
   "stable-protection": STABLE_PROTECTION_HOOK,
   "dynamic-fee": DYNAMIC_FEE_HOOK,
-  "rwa-gate": RWA_GATE_HOOK,
-  "async-limit-order": ASYNC_LIMIT_ORDER_HOOK,
 };
 
 /**
@@ -110,13 +95,6 @@ export function getHookAddress(name: HookName): `0x${string}` | null {
 export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
   "stable-protection": ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
   "dynamic-fee": ["BEFORE_SWAP", "AFTER_SWAP"],
-  "rwa-gate": ["BEFORE_ADD_LIQUIDITY", "BEFORE_REMOVE_LIQUIDITY", "BEFORE_SWAP"],
-  "async-limit-order": [
-    "AFTER_INITIALIZE",
-    "BEFORE_SWAP",
-    "AFTER_SWAP",
-    "BEFORE_SWAP_RETURNS_DELTA",
-  ],
 } as const;
 
 /**
@@ -135,8 +113,6 @@ export const DYNAMIC_FEE_FLAG = 0x800000;
 export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true,
   "dynamic-fee": true,
-  "rwa-gate": false,
-  "async-limit-order": false,
 };
 
 /**

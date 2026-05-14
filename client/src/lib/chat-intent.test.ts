@@ -286,60 +286,6 @@ describe("detectIntent: remove-liquidity", () => {
   });
 });
 
-describe("detectIntent: limit-order", () => {
-  it("'Place a limit order to sell 0.1 ETH at 2500 USDC' → place mode + tokens", () => {
-    assert.deepEqual(detectIntent("Place a limit order to sell 0.1 ETH at 2500 USDC"), {
-      kind: "limit-order",
-      mode: "place",
-      tokenIn: "ETH",
-      tokenOut: "USDC",
-    });
-  });
-
-  it("'Sell 0.05 ETH at 2400 USDC' (no `limit order` substring) → place mode", () => {
-    assert.deepEqual(detectIntent("Sell 0.05 ETH at 2400 USDC"), {
-      kind: "limit-order",
-      mode: "place",
-      tokenIn: "ETH",
-      tokenOut: "USDC",
-    });
-  });
-
-  it("'Buy ETH at 1800 USDC with 100 USDC' → place mode", () => {
-    // First two tokens are ETH, USDC; the trailing "100 USDC" doesn't
-    // disturb the extraction order.
-    const i = detectIntent("Buy ETH at 1800 USDC with 100 USDC");
-    assert.equal(i?.kind, "limit-order");
-    assert.equal((i as { mode: string }).mode, "place");
-  });
-
-  it("'Show my pending limit orders' → list mode", () => {
-    assert.deepEqual(detectIntent("Show my pending limit orders"), {
-      kind: "limit-order",
-      mode: "list",
-    });
-  });
-
-  it("'Cancel my limit order on ETH/USDC' → list mode + tokens", () => {
-    assert.deepEqual(detectIntent("Cancel my limit order on ETH/USDC"), {
-      kind: "limit-order",
-      mode: "list",
-      tokenIn: "ETH",
-      tokenOut: "USDC",
-    });
-  });
-
-  it("'Tell me about the limit order hook' → mantua-hooks (not limit-order)", () => {
-    // Hook-info questions about ALO should *not* be hijacked by the
-    // limit-order matcher — they're educational, not order-placing.
-    assert.deepEqual(detectIntent("Tell me about the limit order hook"), {
-      kind: "analyze",
-      topic: "mantua-hooks",
-      question: "Tell me about the limit order hook",
-    });
-  });
-});
-
 describe("detectIntent: send", () => {
   it("'Send 10 USDC to 0xbaac…' → send with tokenIn + to", () => {
     assert.deepEqual(

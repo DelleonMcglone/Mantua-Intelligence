@@ -12,7 +12,7 @@ import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
-type HookName = "Dynamic Fee" | "Stable Protection" | "RWAgate" | "Vanilla";
+type HookName = "Stable Protection" | "Dynamic Fee" | "Vanilla";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -33,7 +33,6 @@ interface PortfolioPosition {
 const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
   "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
   "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
-  RWAgate: { bg: "rgba(139,108,240,0.12)", fg: "var(--accent)", bd: "rgba(139,108,240,0.35)" },
   Vanilla: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
 };
 
@@ -58,7 +57,7 @@ const POSITIONS: PortfolioPosition[] = [
     pct: "+1.28%",
     up: true,
     source: "mantua",
-    hook: "RWAgate",
+    hook: "Dynamic Fee",
   },
   {
     a: "USDC",
@@ -80,7 +79,7 @@ const POSITIONS: PortfolioPosition[] = [
     pct: "+1.58%",
     up: true,
     source: "external",
-    hook: "Stable Protection",
+    hook: "Dynamic Fee",
   },
 ];
 
@@ -100,16 +99,12 @@ type Sort = (typeof SORTS)[number];
  *  unchanged when we render local positions. */
 function localHookLabel(h: LocalPosition["hook"]): HookName {
   if (!h) return "Vanilla";
-  switch (h) {
-    case "stable-protection":
-      return "Stable Protection";
-    case "dynamic-fee":
-      return "Dynamic Fee";
-    case "rwa-gate":
-      return "RWAgate";
-    case "async-limit-order":
-      return "Vanilla"; // no design-source palette entry yet
-  }
+  if (h === "stable-protection") return "Stable Protection";
+  if (h === "dynamic-fee") return "Dynamic Fee";
+  // Legacy local-storage rows from removed hooks (rwa-gate,
+  // async-limit-order) render as Vanilla — the hook isn't deployed
+  // anymore so the position behaves as no-hook.
+  return "Vanilla";
 }
 
 function localPositionToRow(p: LocalPosition): PortfolioPosition {

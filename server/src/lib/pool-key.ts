@@ -26,12 +26,12 @@ const NO_HOOK = ZERO_ADDRESS;
  * ETH (zero address) sorts before any ERC-20.
  *
  * `hookName` is optional but should be passed any time the caller
- * knows which Mantua hook is bound to the pool. Hooks like
- * `stable-protection` and `dynamic-fee` require the v4 dynamic-fee
- * flag (`0x800000`) in `key.fee`, regardless of which static tier
- * the user picked — `effectivePoolFee` makes the swap. The static
- * tier still drives `tickSpacing`, so the user's choice of "0.01%"
- * still means tick spacing 1 even when fee is overridden.
+ * knows which Mantua hook is bound to the pool. Stable Protection
+ * and Dynamic Fee both require the v4 dynamic-fee flag (`0x800000`)
+ * in `key.fee`, regardless of which static tier the user picked —
+ * `effectivePoolFee` makes the swap. The static tier still drives
+ * `tickSpacing`, so the user's choice of "0.01%" still means tick
+ * spacing 1 even when fee is overridden.
  */
 export function buildPoolKey(
   symA: TokenSymbol,

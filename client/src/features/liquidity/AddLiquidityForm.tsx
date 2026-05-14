@@ -51,8 +51,6 @@ const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] =
   { value: "none", name: "No Hook", desc: "Standard execution" },
   { value: "stable-protection", name: HOOK_LABELS["stable-protection"], desc: HOOK_DESCRIPTIONS["stable-protection"] },
   { value: "dynamic-fee", name: HOOK_LABELS["dynamic-fee"], desc: HOOK_DESCRIPTIONS["dynamic-fee"] },
-  { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
-  { value: "async-limit-order", name: HOOK_LABELS["async-limit-order"], desc: HOOK_DESCRIPTIONS["async-limit-order"] },
 ];
 
 const DEFAULT_TOKEN_A: TokenSymbol = "USDC";
@@ -65,8 +63,6 @@ function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
 const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true,
   "dynamic-fee": true,
-  "rwa-gate": false,
-  "async-limit-order": false,
 };
 
 function formatMirror(value: number): string {

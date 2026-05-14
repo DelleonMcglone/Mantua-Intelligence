@@ -101,28 +101,6 @@ describe("buildPoolKey: hook-aware effective fee", () => {
     assert.equal(r.key.tickSpacing, 10);
   });
 
-  it("rwa-gate → key.fee passes through static tier", () => {
-    const r = buildPoolKey(
-      "USDC",
-      "EURC",
-      100,
-      "0xbba7cf860b47e16b9b83d8185878ec0fad0d4a80",
-      "rwa-gate",
-    );
-    assert.equal(r.key.fee, 100);
-  });
-
-  it("async-limit-order → key.fee passes through static tier", () => {
-    const r = buildPoolKey(
-      "ETH",
-      "USDC",
-      3000,
-      "0xb9e29f39bbf01c9d0ff6f1c72859f0ef550fd0c8",
-      "async-limit-order",
-    );
-    assert.equal(r.key.fee, 3000);
-  });
-
   it("hook address is encoded into key.hooks verbatim", () => {
     const hook = "0xe5e6a9e09ad1e536788f0c142ad5bc69e8b020c0";
     const r = buildPoolKey("USDC", "EURC", 100, hook, "stable-protection");

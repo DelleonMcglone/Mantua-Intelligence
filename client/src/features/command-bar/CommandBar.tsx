@@ -35,7 +35,7 @@ import { IntentCard } from "@/features/agent/IntentCard.tsx";
 /* ───────────────────────── Phase N intent shape (mirror) ───────────── */
 
 type FeeTier = 100 | 500 | 3000 | 10_000;
-type HookType = "stable_protection" | "dynamic_fee" | "rwa_gate" | "alo" | "none";
+type HookType = "stable_protection" | "dynamic_fee" | "none";
 
 export type CommandIntent =
   | { action: "swap"; tokenIn: string; tokenOut: string; amountIn: string; confidence: number }

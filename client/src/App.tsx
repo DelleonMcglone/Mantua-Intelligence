@@ -266,17 +266,14 @@ function promptToRoute(id: HomePromptId): Route {
 }
 
 /**
- * Thin adapter from the pure intent matcher (`lib/chat-intent.ts`)
- * to the App's `Route` discriminated union. Lives here because
- * `Route` references `PoolKeyContext` from the AddLiquidityForm,
- * which would pull React types into the otherwise-pure intent
- * module if we collapsed them. The shapes line up byte-for-byte —
- * this is just a re-cast.
+ * Re-export of the pure intent matcher from `lib/chat-intent.ts`.
+ * The returned `Intent` goes through `intentToRoute()` below to land
+ * on a concrete `Route` — the two unions don't line up shape-for-
+ * shape (Intent has create-pool / remove-liquidity / send / portfolio
+ * kinds that collapse into a smaller Route set).
  */
-function detectIntent(text: string): Route | null {
-  const intent: Intent | null = detectIntentImpl(text);
-  if (!intent) return null;
-  return intent;
+function detectIntent(text: string): Intent | null {
+  return detectIntentImpl(text);
 }
 
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
@@ -302,16 +299,13 @@ function handleChatCommand(text: string, setRoute: (r: Route) => void) {
  * - `remove-liquidity` → `positions` — per-position deep-linking
  *   needs a pool/position id we don't extract yet; PositionsList lets
  *   the user pick which position to remove.
- * - `limit-order` / `send` → `agent` — AgentPanel hosts both the
- *   limit-order flows (LimitOrderReview / LimitOrdersList) and
- *   SendFlow. Deep-linking the parsed sub-mode + pre-fills is a
- *   follow-up.
+ * - `send` → `agent` — AgentPanel hosts SendFlow.
  * - `portfolio` → `home` — HomeMenu already surfaces PortfolioCard
  *   + AssetsCard.
  *
- * As deep-link surfaces land (limit-order Route, send Route, etc.),
- * the corresponding `case` here is the only place that needs to
- * change — the parser is already producing the richer intent.
+ * As deep-link surfaces land (send Route, etc.), the corresponding
+ * `case` here is the only place that needs to change — the parser
+ * is already producing the richer intent.
  */
 function intentToRoute(intent: Intent): Route {
   switch (intent.kind) {
@@ -334,7 +328,6 @@ function intentToRoute(intent: Intent): Route {
       return { kind: "positions" };
     case "positions":
       return { kind: "positions" };
-    case "limit-order":
     case "send":
       return { kind: "agent" };
     case "portfolio":

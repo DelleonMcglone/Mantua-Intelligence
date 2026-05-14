@@ -20,9 +20,9 @@ interface Props {
   onClose?: () => void;
 }
 
-type Category = "All" | "Stables" | "Majors" | "RWAs" | "Async Limit Order";
+type Category = "All" | "Stables" | "Majors" | "RWAs";
 
-const CATEGORIES: Category[] = ["All", "Stables", "Majors", "RWAs", "Async Limit Order"];
+const CATEGORIES: Category[] = ["All", "Stables", "Majors", "RWAs"];
 const STABLES = new Set(["USDC", "USDT", "DAI", "USDP", "FRAX", "TUSD"]);
 const MAJORS = new Set(["ETH", "WETH", "cbBTC", "WBTC", "BTC"]);
 const RWAS = new Set(["EURC", "EURS", "AGEUR"]);
@@ -193,7 +193,6 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
       Stables: 0,
       Majors: 0,
       RWAs: 0,
-      "Async Limit Order": 0,
     };
     for (const p of enriched) c[p.category] += 1;
     return c;

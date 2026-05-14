@@ -51,11 +51,12 @@ export function setAnthropicForTesting(client: Anthropic | null): void {
 const FEE_TIER = z.union([z.literal(100), z.literal(500), z.literal(3000), z.literal(10_000)]);
 
 /**
- * Hook types the parser can recognize. Mirrors the four Phase 5 hooks.
- * The parser itself doesn't validate against deployed addresses —
- * that's the executor's job.
+ * Hook types the parser can recognize. MVP scope: Stable Protection
+ * (USDC/EURC only) + Dynamic Fee (any pair) + the no-hook option.
+ * The parser itself doesn't validate against deployed addresses or
+ * pair compatibility — that's the executor's job.
  */
-const HOOK_TYPE = z.enum(["stable_protection", "dynamic_fee", "rwa_gate", "alo", "none"]);
+const HOOK_TYPE = z.enum(["stable_protection", "dynamic_fee", "none"]);
 
 const swapIntent = z.object({
   action: z.literal("swap"),
@@ -185,7 +186,7 @@ Supported tokens (case-sensitive symbols): ${TOKEN_SYMBOLS.join(", ")}.
 Notes:
 - Amounts are decimal strings in human-readable units (e.g. "1.5" for 1.5 ETH; never atomic / wei).
 - Fee tiers are 100 / 500 / 3000 / 10000 (basis points × 100). When the user names a percentage like "0.30%", convert it (3000).
-- Hooks: stable_protection, dynamic_fee, rwa_gate, alo, none. Only set when the user explicitly names a hook.
+- Hooks: stable_protection (USDC/EURC pair only), dynamic_fee (any pair), or none. Only set when the user explicitly names a hook.
 - Recipients can be 0x-prefixed 40-hex addresses or .eth ENS names. Pass through as-is; the executor resolves ENS.
 - For \`remove_liquidity\`, \`poolId\` is whatever the user references (a pair name like "USDC/EURC", a tokenId, or "the pool I just opened") — the caller resolves it. Don't fabricate UUIDs.
 - For \`add_liquidity\`, both \`amount0\` and \`amount1\` are optional. The user may name only one ("add 100 USDC liquidity to USDC/EURC") and the caller derives the other from the pool's current price.
@@ -226,7 +227,7 @@ const TOOLS: Anthropic.Tool[] = [
         feeTier: { type: "integer", enum: [100, 500, 3000, 10_000] },
         hook: {
           type: "string",
-          enum: ["stable_protection", "dynamic_fee", "rwa_gate", "alo", "none"],
+          enum: ["stable_protection", "dynamic_fee", "none"],
         },
       },
       required: ["token0", "token1"],
@@ -258,7 +259,7 @@ const TOOLS: Anthropic.Tool[] = [
         feeTier: { type: "integer", enum: [100, 500, 3000, 10_000] },
         hook: {
           type: "string",
-          enum: ["stable_protection", "dynamic_fee", "rwa_gate", "alo", "none"],
+          enum: ["stable_protection", "dynamic_fee", "none"],
         },
       },
       required: ["token0", "token1", "feeTier"],
