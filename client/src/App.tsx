@@ -266,17 +266,14 @@ function promptToRoute(id: HomePromptId): Route {
 }
 
 /**
- * Thin adapter from the pure intent matcher (`lib/chat-intent.ts`)
- * to the App's `Route` discriminated union. Lives here because
- * `Route` references `PoolKeyContext` from the AddLiquidityForm,
- * which would pull React types into the otherwise-pure intent
- * module if we collapsed them. The shapes line up byte-for-byte —
- * this is just a re-cast.
+ * Re-export of the pure intent matcher from `lib/chat-intent.ts`.
+ * The returned `Intent` goes through `intentToRoute()` below to land
+ * on a concrete `Route` — the two unions don't line up shape-for-
+ * shape (Intent has create-pool / remove-liquidity / send / portfolio
+ * kinds that collapse into a smaller Route set).
  */
-function detectIntent(text: string): Route | null {
-  const intent: Intent | null = detectIntentImpl(text);
-  if (!intent) return null;
-  return intent;
+function detectIntent(text: string): Intent | null {
+  return detectIntentImpl(text);
 }
 
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
