@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { CHAIN_INFO } from "@/lib/chains.ts";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  CHAIN_INFO,
+  UNICHAIN_SEPOLIA_CHAIN_ID,
+} from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
@@ -14,7 +18,7 @@ import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
-type HookName = "Stable Protection" | "Dynamic Fee" | "Vanilla";
+type HookName = "Stable Protection" | "Dynamic Fee" | "Volatile";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -35,7 +39,7 @@ interface PortfolioPosition {
 const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
   "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
   "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
-  Vanilla: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
+  Volatile: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
 };
 
 const POSITIONS: PortfolioPosition[] = [
@@ -92,7 +96,7 @@ type Sort = (typeof SORTS)[number];
  * Assets card — matches prototype `AssetsCard` in shell.jsx: tabbed
  * Assets / Positions surface. Assets sub-view: search, network + sort
  * filter chips, PnL header, token rows. Positions sub-view (P4e-003):
- * source filter strip ("All wallet positions" / "Opened in Mantua") +
+ * chain filter strip ("All Base positions" / "All Unichain positions") +
  * `external` pill on rows whose source !== "mantua". Real balances /
  * positions arrive in Phase 8.
  */
@@ -100,13 +104,9 @@ type Sort = (typeof SORTS)[number];
  *  display label so the existing HOOK_TINT palette keeps working
  *  unchanged when we render local positions. */
 function localHookLabel(h: LocalPosition["hook"]): HookName {
-  if (!h) return "Vanilla";
+  if (!h) return "Volatile";
   if (h === "stable-protection") return "Stable Protection";
-  if (h === "dynamic-fee") return "Dynamic Fee";
-  // Legacy local-storage rows from removed hooks (rwa-gate,
-  // async-limit-order) render as Vanilla — the hook isn't deployed
-  // anymore so the position behaves as no-hook.
-  return "Vanilla";
+  return "Dynamic Fee";
 }
 
 function localPositionToRow(p: LocalPosition): PortfolioPosition {
@@ -142,7 +142,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
-  const [posSource, setPosSource] = useState<"all" | "mantua">("all");
+  const [posSource, setPosSource] = useState<"base" | "unichain">("base");
   // Re-read localStorage on each tab change so a fresh mint shows up
   // without a manual page refresh.
   const localPositions = useMemo<LocalPosition[]>(
@@ -195,11 +195,20 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
     : IS_MAINNET
       ? POSITIONS
       : localPositions.map(localPositionToRow);
-  const visiblePositions =
-    posSource === "mantua"
-      ? positionsAvailable.filter((p) => p.source === "mantua")
-      : positionsAvailable;
-  const mantuaCount = positionsAvailable.filter((p) => p.source === "mantua").length;
+  // Chain-based filter: Base Sepolia vs Unichain Sepolia. Rows without
+  // an attached `src` (mainnet mock POSITIONS) bucket under "base" so
+  // the IS_MAINNET design preview still renders.
+  const baseCount = positionsAvailable.filter(
+    (p) => !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
+  ).length;
+  const unichainCount = positionsAvailable.filter(
+    (p) => p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID,
+  ).length;
+  const visiblePositions = positionsAvailable.filter((p) =>
+    posSource === "unichain"
+      ? p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID
+      : !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
+  );
 
   const tabs = [
     { k: "assets" as const, label: "Assets", count: assets.length },
@@ -391,8 +400,8 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
             <span className="text-[11px] text-text-mute mr-0.5">Show</span>
             {(
               [
-                { k: "all", label: "All wallet positions", count: positionsAvailable.length },
-                { k: "mantua", label: "Opened in Mantua", count: mantuaCount },
+                { k: "base", label: "All Base positions", count: baseCount },
+                { k: "unichain", label: "All Unichain positions", count: unichainCount },
               ] as const
             ).map((o) => {
               const active = posSource === o.k;
@@ -415,15 +424,6 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
               );
             })}
           </div>
-
-          {posSource === "mantua" && (
-            <div className="px-3.5 py-2 text-[11px] text-text-mute border-b border-border-soft flex items-center gap-1.5">
-              Showing positions opened in Mantua.
-              <span className="border-b border-dotted border-text-mute cursor-pointer">
-                External positions coming soon
-              </span>
-            </div>
-          )}
 
           <div className="max-h-[360px] overflow-auto">
             {!portfolio.walletAddress && (

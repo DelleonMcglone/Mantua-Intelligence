@@ -1,7 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger.ts";
-import { isTokenSymbol, type TokenSymbol } from "../lib/tokens.ts";
+import {
+  DEFAULT_CHAIN_ID,
+  isSupportedTestnetChainId,
+  type SupportedTestnetChainId,
+} from "../lib/chains.ts";
+import { isTokenSymbol } from "../lib/tokens.ts";
 import {
   buildPoolSwapTestCalldata,
   findMaxQuotableInputV4,
@@ -14,7 +19,27 @@ import { writeRateLimiter } from "../middleware/rate-limit.ts";
 
 export const v4SwapRouter = Router();
 
+/**
+ * Demo mode — when true, swap routes ignore the `hook` field on the
+ * request body and always build the on-chain PoolKey with `hooks=0x0`.
+ * This routes quotes / calldata to the no-hook variant of the pool
+ * so the Stable Protection / Dynamic Fee hooks can't revert (their
+ * oracle-dependent guards behave poorly on testnet without price
+ * feeds). The UI still surfaces the user's hook selection visually;
+ * only the on-chain query is detoured.
+ *
+ * Flip to `false` once the production hooks have working oracles
+ * and we want swaps to go through the actual hook-gated pools.
+ */
+const BYPASS_HOOK_FOR_DEMO = true;
+
 const hookSchema = z.enum(HOOK_NAMES);
+const chainIdSchema = z
+  .number()
+  .int()
+  .refine(isSupportedTestnetChainId, "Unsupported chainId")
+  .optional()
+  .transform((v): SupportedTestnetChainId => v ?? DEFAULT_CHAIN_ID);
 
 const baseSwapSchema = z.object({
   tokenIn: z.string().refine(isTokenSymbol, "Unknown tokenIn"),
@@ -22,6 +47,7 @@ const baseSwapSchema = z.object({
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
   hook: hookSchema.nullable().optional(),
   amountInRaw: z.string().regex(/^\d+$/, "amountInRaw must be a uint string"),
+  chainId: chainIdSchema,
 });
 
 /**
@@ -46,18 +72,21 @@ v4SwapRouter.post(
       });
       return;
     }
-    const { tokenIn, tokenOut, fee, hook, amountInRaw } = parsed.data;
+    const { tokenIn, tokenOut, fee, hook, amountInRaw, chainId } = parsed.data;
     if (tokenIn === tokenOut) {
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
+    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
     try {
       const quote = await quoteExactInputV4({
-        tokenIn: tokenIn as TokenSymbol,
-        tokenOut: tokenOut as TokenSymbol,
+        tokenIn,
+        tokenOut,
         fee,
-        hook: hook ?? null,
+        hook: effectiveHook,
         amountInRaw: BigInt(amountInRaw),
+        chainId,
       });
       res.json(quote);
     } catch (err) {
@@ -65,7 +94,7 @@ v4SwapRouter.post(
         res.status(400).json({ error: err.message, code: "HOOK_PAIR_NOT_ALLOWED" });
         return;
       }
-      logger.warn({ err, tokenIn, tokenOut, hook }, "v4 onchain quote failed");
+      logger.warn({ err, tokenIn, tokenOut, hook, chainId }, "v4 onchain quote failed");
       const message = err instanceof Error ? err.message : "Quote failed";
       res.status(502).json({ error: message, code: "V4_QUOTE_FAILED" });
     }
@@ -81,6 +110,7 @@ const maxInputSchema = z.object({
    *  caps at this value — anything bigger isn't useful since the user
    *  can't spend it anyway. */
   upperBoundRaw: z.string().regex(/^\d+$/, "upperBoundRaw must be a uint string"),
+  chainId: chainIdSchema,
 });
 
 /**
@@ -106,23 +136,27 @@ v4SwapRouter.post(
       });
       return;
     }
-    const { tokenIn, tokenOut, fee, hook, upperBoundRaw } = parsed.data;
+    const { tokenIn, tokenOut, fee, hook, upperBoundRaw, chainId } = parsed.data;
     if (tokenIn === tokenOut) {
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
+    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
     try {
-      const max = await findMaxQuotableInputV4({
-        tokenIn: tokenIn as TokenSymbol,
-        tokenOut: tokenOut as TokenSymbol,
+      const { maxInput, reason } = await findMaxQuotableInputV4({
+        tokenIn,
+        tokenOut,
         fee,
-        hook: hook ?? null,
+        hook: effectiveHook,
         upperBound: BigInt(upperBoundRaw),
+        chainId,
       });
-      res.json({ maxInputRaw: max.toString() });
+      res.json({ maxInputRaw: maxInput.toString(), reason });
     } catch (err) {
-      logger.warn({ err, tokenIn, tokenOut, hook }, "v4 max-input search failed");
-      res.json({ maxInputRaw: "0" });
+      logger.warn({ err, tokenIn, tokenOut, hook, chainId }, "v4 max-input search failed");
+      const reason = err instanceof Error ? err.message : null;
+      res.json({ maxInputRaw: "0", reason });
     }
   },
 );
@@ -155,23 +189,27 @@ v4SwapRouter.post(
       });
       return;
     }
-    const { tokenIn, tokenOut, fee, hook, amountInRaw, slippageBps } = parsed.data;
+    const { tokenIn, tokenOut, fee, hook, amountInRaw, slippageBps, chainId } = parsed.data;
     if (tokenIn === tokenOut) {
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
+    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
     try {
       const quote = await quoteExactInputV4({
-        tokenIn: tokenIn as TokenSymbol,
-        tokenOut: tokenOut as TokenSymbol,
+        tokenIn,
+        tokenOut,
         fee,
-        hook: hook ?? null,
+        hook: effectiveHook,
         amountInRaw: BigInt(amountInRaw),
+        chainId,
       });
       const swap = buildPoolSwapTestCalldata({
         poolKey: quote.poolKey,
         zeroForOne: quote.zeroForOne,
         amountInRaw: BigInt(amountInRaw),
+        chainId,
       });
       // amountOutMinimum: amountOut * (1 - slippage)
       const slippageDenom = 10_000n;
@@ -193,7 +231,7 @@ v4SwapRouter.post(
         res.status(400).json({ error: err.message, code: "HOOK_PAIR_NOT_ALLOWED" });
         return;
       }
-      logger.warn({ err, tokenIn, tokenOut, hook }, "v4 swap calldata failed");
+      logger.warn({ err, tokenIn, tokenOut, hook, chainId }, "v4 swap calldata failed");
       const message = err instanceof Error ? err.message : "Swap calldata failed";
       res.status(502).json({ error: message, code: "V4_SWAP_FAILED" });
     }

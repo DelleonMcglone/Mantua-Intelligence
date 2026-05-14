@@ -45,6 +45,22 @@ function safeParse(symbol: TokenSymbol, input: string): string {
   }
 }
 
+/**
+ * Turn a decoded on-chain revert (e.g. `CircuitBreakerTripped(4, …)`)
+ * into a sentence a user can act on. Falls back to the raw decoded
+ * string when no specific match is found so we never hide info.
+ */
+function humanizeRevertReason(decoded: string): string {
+  if (/^CircuitBreakerTripped/.test(decoded)) {
+    return "Stable Protection hook detected a depeg and tripped its circuit breaker. Try again later or use a different hook.";
+  }
+  if (/Stable Protection is only available on the USDC\/EURC pair/.test(decoded)) {
+    return "Stable Protection works only on USDC/EURC. Pick that pair or choose a different hook.";
+  }
+  if (/^Error:/.test(decoded)) return decoded.replace(/^Error:\s*/, "");
+  return decoded;
+}
+
 function ctaLabel(status: ReturnType<typeof useTestnetSwap>["state"]["status"]): string {
   switch (status) {
     case "quoting":
@@ -205,8 +221,9 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
           </div>
           {cappedMax !== null && cappedMax === 0n && (
             <div className="text-[11px] text-amber mt-1.5">
-              No pool found for {tokenIn}/{tokenOut} at this fee tier and hook. Try a different fee
-              tier, hook, or pair.
+              {poolMax.reason
+                ? `Swap rejected by hook: ${humanizeRevertReason(poolMax.reason)}`
+                : `No pool found for ${tokenIn}/${tokenOut} at this fee tier and hook. Try a different fee tier, hook, or pair.`}
             </div>
           )}
           {cappedMax !== null && cappedMax > 0n && cappedMax < balanceIn && (

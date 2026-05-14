@@ -7,6 +7,10 @@ import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerTxUrl } from "@/lib/chains.ts";
 import { type TokenSymbol } from "@/lib/tokens.ts";
+import {
+  UNICHAIN_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "@/lib/chains.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
 import { DEFAULT_FEE_TIER_FOR_PAIR, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { FeeTierPicker } from "./FeeTierPicker.tsx";
@@ -55,8 +59,14 @@ const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] =
   { value: "dynamic-fee", name: HOOK_LABELS["dynamic-fee"], desc: HOOK_DESCRIPTIONS["dynamic-fee"] },
 ];
 
-const DEFAULT_TOKEN_A: TokenSymbol = "USDC";
-const DEFAULT_TOKEN_B: TokenSymbol = "EURC";
+function defaultPairForChain(
+  chainId: SupportedTestnetChainId,
+): [TokenSymbol, TokenSymbol] {
+  if (chainId === UNICHAIN_SEPOLIA_CHAIN_ID) return ["ETH", "USDC"];
+  // Base Sepolia (and the mainnet fallback path) keeps the original
+  // USDC/EURC default so the Stable Protection recommendation lights up.
+  return ["USDC", "EURC"];
+}
 
 function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
   return h ?? "none";
@@ -95,20 +105,32 @@ type ChartRange = (typeof CHART_RANGES)[number];
 export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const chainId = useCurrentChainId();
   const locked = ctx?.locked === true;
-  const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? DEFAULT_TOKEN_A);
-  const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? DEFAULT_TOKEN_B);
+  const [defaultA, defaultB] = defaultPairForChain(chainId);
+  const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? defaultA);
+  const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? defaultB);
   const [fee, setFee] = useState<FeeTier>(
     ctx?.fee ??
       DEFAULT_FEE_TIER_FOR_PAIR(
-        isStable(ctx?.tokenA ?? DEFAULT_TOKEN_A),
-        isStable(ctx?.tokenB ?? DEFAULT_TOKEN_B),
+        isStable(ctx?.tokenA ?? defaultA),
+        isStable(ctx?.tokenB ?? defaultB),
       ),
   );
   const [hook, setHook] = useState<HookName | "none">(() => {
     if (ctx?.hook !== undefined) return hookFromCtx(ctx.hook);
-    return recommendedHookForPair(DEFAULT_TOKEN_A, DEFAULT_TOKEN_B) ?? "none";
+    return recommendedHookForPair(defaultA, defaultB) ?? "none";
   });
-  const [hookTouched, setHookTouched] = useState(false);
+
+  // Chain-switch handling lives in the parent: App.tsx keys this
+  // component on `chainId`, so a network change remounts the form and
+  // useState initializers re-run with `defaultPairForChain(chainId)`.
+  // That's cleaner than a sync-via-effect (which would trip
+  // react-hooks/set-state-in-effect).
+
+  // When ctx pre-specifies the hook (e.g. from a chat intent like "with
+  // dynamic fee"), treat it as user intent — otherwise the
+  // pair-recommendation effect below would immediately reset the hook
+  // back to `recommendedHookForPair(...)` on mount.
+  const [hookTouched, setHookTouched] = useState(ctx?.hook !== undefined);
   const [amountA, setAmountA] = useState("0.0");
   const [amountB, setAmountB] = useState("0.0");
   const [chartRange, setChartRange] = useState<ChartRange>("7D");
@@ -300,6 +322,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             onAmountChange={onAmountAChange}
             onSymbolChange={locked ? () => undefined : setTokenA}
             disabledSymbol={tokenB}
+            usdPrice={tokenPrices.prices[tokenA]}
           />
           <button
             type="button"
@@ -316,6 +339,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             onAmountChange={onAmountBChange}
             onSymbolChange={locked ? () => undefined : setTokenB}
             disabledSymbol={tokenA}
+            usdPrice={tokenPrices.prices[tokenB]}
           />
         </div>
 
@@ -508,6 +532,19 @@ interface TokenInputCardProps {
   onAmountChange: (s: string) => void;
   onSymbolChange: (s: TokenSymbol) => void;
   disabledSymbol: TokenSymbol;
+  /** USD spot price for `sym`. Undefined / 0 when unknown — card
+   *  falls back to `≈ $0.00`. */
+  usdPrice?: number;
+}
+
+function formatUsdApprox(amount: string, price: number | undefined): string {
+  const n = parseFloat(amount);
+  if (!price || !Number.isFinite(n) || n <= 0) return "≈ $0.00";
+  const usd = n * price;
+  const formatted = usd >= 1
+    ? usd.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+    : usd.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 });
+  return `≈ $${formatted}`;
 }
 
 function TokenInputCard({
@@ -517,6 +554,7 @@ function TokenInputCard({
   onAmountChange,
   onSymbolChange,
   disabledSymbol,
+  usdPrice,
 }: TokenInputCardProps) {
   return (
     <div className="bg-bg-elev border border-border-soft rounded-md px-3.5 py-3">
@@ -536,7 +574,7 @@ function TokenInputCard({
         />
         <TokenSelector value={sym} onChange={onSymbolChange} disabledSymbol={disabledSymbol} />
       </div>
-      <div className="text-[11px] text-text-mute mt-0.5">≈ $0.00</div>
+      <div className="text-[11px] text-text-mute mt-0.5">{formatUsdApprox(amount, usdPrice)}</div>
       <div className="border-t border-dashed border-border-soft mt-2.5 pt-2 flex justify-between text-[11px] text-text-dim">
         <span>Current Price</span>
         <span className="font-mono">$—</span>
