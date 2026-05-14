@@ -52,6 +52,42 @@ jobs:
       - name: Show Foundry versions
         run: forge --version
 
+      # `contracts/lib/` is gitignored — local devs run these install
+      # commands once (see `contracts/README.md`). The CI workflow was
+      # missing the step, so every previous run failed with "Source not
+      # found" on `v4-core/`, `forge-std/`, `solmate/`, etc. The same
+      # install has to be re-run inside each hook submodule because
+      # submodules also gitignore their own `lib/` and the parent build
+      # pulls submodule source in via the
+      # `hooks/stable-protection/:` remapping.
+      - name: Install Foundry deps (parent)
+        run: |
+          forge install foundry-rs/forge-std --no-git --no-commit
+          forge install OpenZeppelin/openzeppelin-contracts --no-git --no-commit
+          forge install Uniswap/v4-core --no-git --no-commit
+          forge install Uniswap/v4-periphery --no-git --no-commit
+          forge install transmissions11/solmate --no-git --no-commit
+
+      - name: Install Foundry deps (stable-protection submodule)
+        working-directory: contracts/hooks/stable-protection
+        run: |
+          if [ -f foundry.toml ]; then
+            forge install foundry-rs/forge-std --no-git --no-commit || true
+            forge install Uniswap/v4-core --no-git --no-commit || true
+            forge install Uniswap/v4-periphery --no-git --no-commit || true
+            forge install transmissions11/solmate --no-git --no-commit || true
+          fi
+
+      - name: Install Foundry deps (dynamic-fee submodule)
+        working-directory: contracts/hooks/dynamic-fee
+        run: |
+          if [ -f foundry.toml ]; then
+            forge install foundry-rs/forge-std --no-git --no-commit || true
+            forge install Uniswap/v4-core --no-git --no-commit || true
+            forge install Uniswap/v4-periphery --no-git --no-commit || true
+            forge install transmissions11/solmate --no-git --no-commit || true
+          fi
+
       - name: Build contracts
         run: forge build --sizes
 
@@ -80,15 +116,14 @@ jobs:
           done
           exit 1
 
-      # The remaining per-hook E2Es depend on stale Base Sepolia state
-      # (RWAGate compliance registry, DynamicFee TWAP warmup, etc.) and
-      # can flake or fail on registry drift. Run them as advisory so
-      # they surface in logs without blocking the PR. Promote to gating
-      # once the underlying state issues land their fixes (tracked
-      # under TD-005).
+      # The remaining per-hook E2Es depend on Base Sepolia state
+      # (DynamicFee TWAP warmup, etc.) and can flake on chain drift.
+      # Run them as advisory so they surface in logs without blocking
+      # the PR. RWAGate / AsyncLimitOrder tests were removed in PR
+      # #100 (MVP scope-down); only the two retained hooks remain.
       - name: Run advisory per-hook fork tests
         continue-on-error: true
         run: |
           forge test \
-            --match-contract "StableProtectionE2E|DynamicFeeE2E|RWAGateE2E|AsyncLimitOrderE2E" \
+            --match-contract "StableProtectionE2E|DynamicFeeE2E" \
             -vv
