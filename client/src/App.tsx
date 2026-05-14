@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
@@ -144,6 +145,7 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
 }
 
 function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
+  const chainId = useCurrentChainId();
   switch (route.kind) {
     case "home":
       return (
@@ -197,8 +199,12 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "add-liquidity":
+      // Key on chainId so a network switch remounts the form and the
+      // useState initializers re-pick chain-aware defaults (Unichain
+      // has no EURC, etc.).
       return (
         <AddLiquidityForm
+          key={chainId}
           {...(route.ctx ? { ctx: route.ctx } : {})}
           onBack={() => {
             setRoute({ kind: "pools" });

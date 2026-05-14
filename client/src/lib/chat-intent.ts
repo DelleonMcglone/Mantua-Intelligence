@@ -104,6 +104,12 @@ function isStable(s: TokenSymbol): boolean {
   return s === "USDC" || s === "EURC";
 }
 
+function detectHookKeyword(t: string): HookName | null {
+  if (/\bdynamic[\s-]?fees?\b/.test(t)) return "dynamic-fee";
+  if (/\bstable[\s-]?protection\b/.test(t)) return "stable-protection";
+  return null;
+}
+
 /**
  * Extract a 0x EVM address from free-form text. Returns the first hit
  * (canonical-cased, not lowered) or `null`. Used by the `send` intent
@@ -153,7 +159,7 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
       return {
         kind: "create-pool",
-        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: null },
+        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: detectHookKeyword(t) },
       };
     }
     if (
@@ -163,7 +169,7 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: null },
+        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: detectHookKeyword(t) },
       };
     }
     if (/\b(swap|exchange|trade|convert)\b/.test(t)) {
@@ -266,7 +272,7 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(a!.sym) && isStable(b!.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: null },
+        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: detectHookKeyword(t) },
       };
     }
     return { kind: "pools" };

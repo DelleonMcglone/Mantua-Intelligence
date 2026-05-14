@@ -10,7 +10,7 @@
  * For mainnet the existing `useSwap` is still the path; this is
  * proof-of-concept-only and stays scoped to testnet via SwapPanel.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import {
   createPublicClient,
@@ -19,9 +19,10 @@ import {
   http,
   parseAbi,
 } from "viem";
-import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getChainInfo, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { getToken, type TokenSymbol } from "@/lib/tokens.ts";
 import { type FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 
@@ -32,10 +33,6 @@ const erc20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
 ]);
-
-const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ?? "https://sepolia.base.org";
-const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
 
 interface QuoteRes {
   amountOut: string;
@@ -88,6 +85,10 @@ interface MaxInputState {
    *  for the current pool. */
   maxInputRaw: bigint | null;
   loading: boolean;
+  /** Human-readable reason when the cap is 0 — surfaces hook-side
+   *  reverts (e.g. `CircuitBreakerTripped`) so the UI can show the
+   *  actual cause instead of a misleading "no pool found". */
+  reason: string | null;
 }
 
 /**
@@ -108,41 +109,48 @@ export function useTestnetMaxInput(args: {
   balanceRaw: bigint;
   enabled: boolean;
 }): MaxInputState {
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<MaxInputState>({
     maxInputRaw: null,
     loading: false,
+    reason: null,
   });
 
   useEffect(() => {
     if (!args.enabled || args.balanceRaw === 0n || args.tokenIn === args.tokenOut) {
-      setState({ maxInputRaw: null, loading: false });
+      setState({ maxInputRaw: null, loading: false, reason: null });
       return;
     }
     let cancelled = false;
-    setState((s) => ({ ...s, loading: true }));
+    setState((s) => ({ ...s, loading: true, reason: null }));
     api
-      .post<{ maxInputRaw: string }>("/api/v4/swap/max-input", {
+      .post<{ maxInputRaw: string; reason: string | null }>("/api/v4/swap/max-input", {
         tokenIn: args.tokenIn,
         tokenOut: args.tokenOut,
         fee: args.fee,
         hook: args.hook,
         upperBoundRaw: args.balanceRaw.toString(),
+        chainId,
       })
       .then((data) => {
         if (cancelled) return;
-        setState({ maxInputRaw: BigInt(data.maxInputRaw), loading: false });
+        setState({
+          maxInputRaw: BigInt(data.maxInputRaw),
+          loading: false,
+          reason: data.reason ?? null,
+        });
       })
       .catch(() => {
         if (cancelled) return;
         // On failure, return null so the caller falls back to the
         // raw wallet balance — the existing quote-failure path will
         // surface a clear error then.
-        setState({ maxInputRaw: null, loading: false });
+        setState({ maxInputRaw: null, loading: false, reason: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.balanceRaw, args.enabled]);
+  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.balanceRaw, args.enabled, chainId]);
 
   return state;
 }
@@ -155,6 +163,7 @@ export function useTestnetQuote(args: {
   amountInRaw: string;
   enabled: boolean;
 }): QuoteState {
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<QuoteState>({ data: null, loading: false, error: null });
 
   useEffect(() => {
@@ -171,6 +180,7 @@ export function useTestnetQuote(args: {
         fee: args.fee,
         hook: args.hook,
         amountInRaw: args.amountInRaw,
+        chainId,
       })
       .then((data) => {
         if (cancelled) return;
@@ -184,33 +194,49 @@ export function useTestnetQuote(args: {
     return () => {
       cancelled = true;
     };
-  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.amountInRaw, args.enabled]);
+  }, [args.tokenIn, args.tokenOut, args.fee, args.hook, args.amountInRaw, args.enabled, chainId]);
 
   return state;
 }
 
 export function useTestnetSwap() {
   const { wallets } = useWallets();
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<State>({ status: "idle" });
+
+  // Memoize the public client by chain so we don't re-create it every
+  // render — viem clients are cheap but the RPC connection isn't free.
+  const publicClient = useMemo(
+    () =>
+      createPublicClient({
+        chain: getChainInfo(chainId).viemChain,
+        transport: http(getRpcUrl(chainId)),
+      }),
+    [chainId],
+  );
 
   async function execute(args: TestnetSwapArgs): Promise<`0x${string}` | null> {
     try {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
-        await wallet.switchChain(ACTIVE_CHAIN_ID);
+      const viemChain = getChainInfo(chainId).viemChain;
+      if (wallet.chainId !== `eip155:${String(chainId)}`) {
+        await wallet.switchChain(chainId);
       }
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: owner,
-        chain: ACTIVE_CHAIN,
+        chain: viemChain,
         transport: custom(provider),
       }) as any;
 
       setState({ status: "quoting", message: "Building swap…" });
-      const calldata = await api.post<CalldataRes>("/api/v4/swap/calldata", args);
+      const calldata = await api.post<CalldataRes>("/api/v4/swap/calldata", {
+        ...args,
+        chainId,
+      });
 
       setState({
         status: "quoting",
@@ -219,8 +245,9 @@ export function useTestnetSwap() {
       });
 
       // Approve input ERC-20 if needed (skip for native ETH input).
-      if (calldata.approvalTarget && !TOKENS[args.tokenIn].native) {
-        const tokenAddr = TOKENS[args.tokenIn].address;
+      const tokenIn = getToken(args.tokenIn, chainId);
+      if (calldata.approvalTarget && !tokenIn.native) {
+        const tokenAddr = tokenIn.address;
         const allowance = (await publicClient.readContract({
           address: tokenAddr,
           abi: erc20,
@@ -239,7 +266,7 @@ export function useTestnetSwap() {
             functionName: "approve",
             args: [calldata.approvalTarget, MAX_UINT],
             account: owner,
-            chain: ACTIVE_CHAIN,
+            chain: viemChain,
           });
           await publicClient.waitForTransactionReceipt({ hash: approvalTx });
           setState({
@@ -258,7 +285,7 @@ export function useTestnetSwap() {
       });
       const txHash: `0x${string}` = await walletClient.sendTransaction({
         account: owner,
-        chain: ACTIVE_CHAIN,
+        chain: viemChain,
         to: calldata.to,
         data: calldata.data,
         value: BigInt(calldata.value),

@@ -216,6 +216,16 @@ describe("detectIntent: add-liquidity", () => {
   it("'add liquidity' with no token pair → pools fallback", () => {
     assert.deepEqual(detectIntent("add liquidity"), { kind: "pools" });
   });
+
+  it("'add liquidity to a ETH USDC pool with a dynamic fee' → carries hook", () => {
+    assert.deepEqual(
+      detectIntent("add liquidity to a ETH USDC pool with a dynamic fee"),
+      {
+        kind: "add-liquidity",
+        ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: "dynamic-fee" },
+      },
+    );
+  });
 });
 
 describe("detectIntent: nav fallbacks", () => {
@@ -251,7 +261,7 @@ describe("detectIntent: create-pool", () => {
   it("'Create a USDC/EURC pool with stable protection' → create-pool ctx", () => {
     assert.deepEqual(detectIntent("Create a USDC/EURC pool with stable protection"), {
       kind: "create-pool",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: "stable-protection" },
     });
   });
 

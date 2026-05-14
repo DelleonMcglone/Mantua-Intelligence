@@ -1,15 +1,19 @@
-import { BaseError, decodeAbiParameters, decodeErrorResult, encodeFunctionData, type Address } from "viem";
+import { BaseError, decodeAbiParameters, decodeErrorResult, encodeFunctionData } from "viem";
 import { buildPoolKey, type PoolKey } from "./pool-key.ts";
 import { logger } from "./logger.ts";
-import { baseRpcClient } from "./rpc-client.ts";
+import { getRpcClient } from "./rpc-client.ts";
+import {
+  DEFAULT_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import {
   HOOK_NAMES,
-  POOL_SWAP_TEST,
   POOL_SWAP_TEST_ABI,
-  V4_QUOTER,
   V4_QUOTER_ABI,
   getHookAddress,
+  getPoolSwapTest,
+  getV4Quoter,
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
@@ -187,6 +191,9 @@ export interface OnchainQuoteArgs {
   fee: FeeTier;
   hook: HookName | null;
   amountInRaw: bigint;
+  /** Target chain for the on-chain quote. Defaults to Base Sepolia
+   *  for legacy callers that haven't been threaded yet. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface OnchainQuoteResult {
@@ -197,10 +204,13 @@ export interface OnchainQuoteResult {
   gasEstimate: string;
 }
 
-function resolveHookAddress(hook: HookName | null): `0x${string}` {
+function resolveHookAddress(
+  hook: HookName | null,
+  chainId: SupportedTestnetChainId,
+): `0x${string}` {
   if (!hook) return "0x0000000000000000000000000000000000000000";
   if (!HOOK_NAMES.includes(hook)) return "0x0000000000000000000000000000000000000000";
-  return getHookAddress(hook) ?? "0x0000000000000000000000000000000000000000";
+  return getHookAddress(hook, chainId) ?? "0x0000000000000000000000000000000000000000";
 }
 
 /**
@@ -243,11 +253,19 @@ function friendlyQuoterError(err: unknown): Error {
  * + 24 search steps), only fired when the user actually clicks
  * a percent chip.
  */
+export interface MaxQuotableResult {
+  maxInput: bigint;
+  /** When every probe reverted, a human-readable reason derived from
+   *  the upper-bound probe's revert data. Null when the pool absorbed
+   *  the swap or when no decode was possible. */
+  reason: string | null;
+}
+
 export async function findMaxQuotableInputV4(
   args: Omit<OnchainQuoteArgs, "amountInRaw"> & { upperBound: bigint },
-): Promise<bigint> {
+): Promise<MaxQuotableResult> {
   const { upperBound, ...rest } = args;
-  if (upperBound === 0n) return 0n;
+  if (upperBound === 0n) return { maxInput: 0n, reason: null };
   // Skip the 25 wasted `eth_call`s when the hook×pair combo is
   // already known to be disallowed — surfaces the same maxInput=0
   // outcome the binary search would converge on.
@@ -268,7 +286,7 @@ export async function findMaxQuotableInputV4(
       return err;
     }
   })();
-  if (firstError === null) return upperBound;
+  if (firstError === null) return { maxInput: upperBound, reason: null };
 
   let lo = 0n;
   let hi = upperBound;
@@ -283,6 +301,7 @@ export async function findMaxQuotableInputV4(
       hi = mid;
     }
   }
+  let reason: string | null = null;
   if (lo === 0n) {
     // Every probe reverted — the pool may be missing, the hook may be
     // rejecting, or liquidity may be out of range. Decode V4Quoter's
@@ -293,6 +312,8 @@ export async function findMaxQuotableInputV4(
       firstError instanceof Error && firstError.cause ? firstError.cause : firstError;
     const decodedRevert = decodeQuoterRevert(cause);
     const friendlyMessage = firstError instanceof Error ? firstError.message : "non-Error throw";
+    reason =
+      decodedRevert.hookReasonDecoded ?? decodedRevert.decoded ?? friendlyMessage;
     logger.warn(
       {
         tokenIn: args.tokenIn,
@@ -316,7 +337,7 @@ export async function findMaxQuotableInputV4(
       "v4 max-input: every probe reverted",
     );
   }
-  return lo;
+  return { maxInput: lo, reason };
 }
 
 /**
@@ -333,17 +354,25 @@ export async function quoteExactInputV4(
   if (args.hook) {
     assertHookPairAllowedBySymbol(args.hook, args.tokenIn, args.tokenOut);
   }
-  const hookAddress = resolveHookAddress(args.hook);
-  const { key } = buildPoolKey(args.tokenIn, args.tokenOut, args.fee, hookAddress, args.hook);
+  const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
+  const hookAddress = resolveHookAddress(args.hook, chainId);
+  const { key } = buildPoolKey(
+    args.tokenIn,
+    args.tokenOut,
+    args.fee,
+    hookAddress,
+    args.hook,
+    chainId,
+  );
 
-  const tokenInAddr = getToken(args.tokenIn).native
+  const tokenInAddr = getToken(args.tokenIn, chainId).native
     ? "0x0000000000000000000000000000000000000000"
-    : getToken(args.tokenIn).address;
+    : getToken(args.tokenIn, chainId).address;
   const zeroForOne = tokenInAddr.toLowerCase() === key.currency0.toLowerCase();
 
   try {
-    const { result } = await baseRpcClient.simulateContract({
-      address: V4_QUOTER,
+    const { result } = await getRpcClient(chainId).simulateContract({
+      address: getV4Quoter(chainId),
       abi: V4_QUOTER_ABI,
       functionName: "quoteExactInputSingle",
       args: [
@@ -378,6 +407,8 @@ export interface SwapCalldataArgs {
   poolKey: PoolKey;
   zeroForOne: boolean;
   amountInRaw: bigint;
+  /** Target chain — picks the right PoolSwapTest deployment. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface SwapCalldataResult {
@@ -400,7 +431,9 @@ export interface SwapCalldataResult {
  * checking is on the caller).
  */
 export function buildPoolSwapTestCalldata(args: SwapCalldataArgs): SwapCalldataResult {
-  if (!POOL_SWAP_TEST) {
+  const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
+  const poolSwapTest = getPoolSwapTest(chainId);
+  if (!poolSwapTest) {
     throw new Error("PoolSwapTest is not deployed on this network");
   }
   const sqrtPriceLimit = args.zeroForOne ? MIN_SQRT_PRICE_LIMIT : MAX_SQRT_PRICE_LIMIT;
@@ -435,9 +468,9 @@ export function buildPoolSwapTestCalldata(args: SwapCalldataArgs): SwapCalldataR
     inputCurrency.toLowerCase() === "0x0000000000000000000000000000000000000000";
 
   return {
-    to: POOL_SWAP_TEST,
+    to: poolSwapTest,
     data,
     value: isNativeIn ? args.amountInRaw.toString() : "0",
-    approvalTarget: isNativeIn ? null : (POOL_SWAP_TEST as Address),
+    approvalTarget: isNativeIn ? null : poolSwapTest,
   };
 }
