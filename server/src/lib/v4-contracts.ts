@@ -1,90 +1,150 @@
 /**
- * Uniswap v4 contract addresses, network-driven by `MANTUA_NETWORK`.
- * Mainnet addresses verified bytecode-present 2026-04-26; Sepolia
+ * Uniswap v4 contract addresses, per chain.
+ *
+ * MVP scope (PR #101): runtime multi-chain. Addresses are keyed by
+ * chainId; callers pass `chainId` explicitly. Legacy single-chain
+ * exports (V4_POOL_MANAGER, etc.) default to Base Sepolia for code
+ * paths not yet migrated — new code MUST use the per-chain getters.
+ *
+ * Mainnet addresses verified bytecode-present 2026-04-26; Base Sepolia
  * addresses sourced from developers.uniswap.org/contracts/v4/deployments
- * 2026-04-28.
+ * 2026-04-28; Unichain Sepolia addresses sourced from the same page
+ * 2026-05-14.
  */
+import {
+  BASE_MAINNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  DEFAULT_CHAIN_ID,
+  UNICHAIN_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { IS_MAINNET } from "./constants.ts";
 
-const V4_POOL_MANAGER_MAINNET = "0x498581ff718922c3f8e6a244956af099b2652b2b" as const;
-const V4_POOL_MANAGER_SEPOLIA = "0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408" as const;
-const V4_POSITION_MANAGER_MAINNET = "0x7c5f5a4bbd8fd63184577525326123b519429bdc" as const;
-const V4_POSITION_MANAGER_SEPOLIA = "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80" as const;
-const V4_STATE_VIEW_MAINNET = "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71" as const;
-const V4_STATE_VIEW_SEPOLIA = "0x571291b572ed32ce6751a2cb2486ebee8defb9b4" as const;
-const V4_QUOTER_MAINNET = "0x0d5e0f971ed27fbff6c2837bf31316121532048d" as const;
-const V4_QUOTER_SEPOLIA = "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba" as const;
-/**
- * v4-core's `PoolSwapTest` helper — wraps `PoolManager.unlock` +
- * `swap` + settle in a single call, pulling the input via standard
- * ERC-20 transferFrom. We only have an address on Sepolia (the v4
- * deployment broadcast records); on mainnet the production swap path
- * remains the Uniswap Trading API. Used for the POC testnet swap flow
- * since the Trading API doesn't index Sepolia.
- */
-const POOL_SWAP_TEST_SEPOLIA = "0x8b5bcc363dde2614281ad875bad385e0a785d3b9" as const;
+interface V4Addresses {
+  poolManager: `0x${string}`;
+  positionManager: `0x${string}`;
+  stateView: `0x${string}`;
+  quoter: `0x${string}`;
+  /** v4-core's PoolSwapTest helper — null when the testnet/mainnet
+   *  doesn't ship one (production routes via the Uniswap Trading API). */
+  poolSwapTest: `0x${string}` | null;
+}
 
+const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
+  [BASE_SEPOLIA_CHAIN_ID]: {
+    poolManager: "0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408",
+    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
+    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
+    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
+    poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
+  },
+  [UNICHAIN_SEPOLIA_CHAIN_ID]: {
+    poolManager: "0x00b036b58a818b1bc34d502d3fe730db729e62ac",
+    positionManager: "0xf969aee60879c54baaed9f3ed26147db216fd664",
+    stateView: "0xc199f1072a74d4e905aba1a84d9a45e2546b6222",
+    quoter: "0x56dcd40a3f2d466f48e7f48bdbe5cc9b92ae4472",
+    poolSwapTest: "0x9140a78c1a137c7ff1c151ec8231272af78a99a4",
+  },
+};
+
+const V4_MAINNET: V4Addresses = {
+  poolManager: "0x498581ff718922c3f8e6a244956af099b2652b2b",
+  positionManager: "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
+  stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
+  quoter: "0x0d5e0f971ed27fbff6c2837bf31316121532048d",
+  poolSwapTest: null,
+};
+
+export function getV4Addresses(chainId: SupportedTestnetChainId): V4Addresses {
+  if (IS_MAINNET) return V4_MAINNET;
+  return V4_BY_CHAIN[chainId];
+}
+
+export function getV4PoolManager(chainId: SupportedTestnetChainId): `0x${string}` {
+  return getV4Addresses(chainId).poolManager;
+}
+export function getV4PositionManager(chainId: SupportedTestnetChainId): `0x${string}` {
+  return getV4Addresses(chainId).positionManager;
+}
+export function getV4StateView(chainId: SupportedTestnetChainId): `0x${string}` {
+  return getV4Addresses(chainId).stateView;
+}
+export function getV4Quoter(chainId: SupportedTestnetChainId): `0x${string}` {
+  return getV4Addresses(chainId).quoter;
+}
+export function getPoolSwapTest(chainId: SupportedTestnetChainId): `0x${string}` | null {
+  return getV4Addresses(chainId).poolSwapTest;
+}
+
+/** Legacy single-chain export. Prefer `getV4PoolManager(chainId)`. */
 export const V4_POOL_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_POOL_MANAGER_MAINNET
-  : V4_POOL_MANAGER_SEPOLIA;
+  ? V4_MAINNET.poolManager
+  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolManager;
+/** Legacy single-chain export. Prefer `getV4PositionManager(chainId)`. */
 export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_POSITION_MANAGER_MAINNET
-  : V4_POSITION_MANAGER_SEPOLIA;
+  ? V4_MAINNET.positionManager
+  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].positionManager;
+/** Legacy single-chain export. Prefer `getV4StateView(chainId)`. */
 export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
-  ? V4_STATE_VIEW_MAINNET
-  : V4_STATE_VIEW_SEPOLIA;
-export const V4_QUOTER: `0x${string}` = IS_MAINNET ? V4_QUOTER_MAINNET : V4_QUOTER_SEPOLIA;
-export const POOL_SWAP_TEST: `0x${string}` | null = IS_MAINNET ? null : POOL_SWAP_TEST_SEPOLIA;
+  ? V4_MAINNET.stateView
+  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].stateView;
+/** Legacy single-chain export. Prefer `getV4Quoter(chainId)`. */
+export const V4_QUOTER: `0x${string}` = IS_MAINNET
+  ? V4_MAINNET.quoter
+  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].quoter;
+/** Legacy single-chain export. Prefer `getPoolSwapTest(chainId)`. */
+export const POOL_SWAP_TEST: `0x${string}` | null = IS_MAINNET
+  ? null
+  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolSwapTest;
+
+void BASE_MAINNET_CHAIN_ID;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 
 /**
- * Mantua hook addresses, network-driven.
+ * Mantua hook addresses, per chain.
  *
- * MVP scope (PR #100): Stable Protection (USDC/EURC only) and Dynamic
- * Fee (any pair). RWA Gate and Async Limit Order are removed. Stable
- * Protection only exists on Base Sepolia; Dynamic Fee exists on Base
- * Sepolia today and a Unichain Sepolia deployment is wired in Part 2.
+ * MVP scope (PR #101):
+ *  - Stable Protection: Base Sepolia only (USDC/EURC pair).
+ *  - Dynamic Fee: Base Sepolia + Unichain Sepolia. Both deployments
+ *    encode `BEFORE_SWAP | AFTER_SWAP` in the lower 14 bits of the
+ *    CREATE2-mined address (see DelleonMcglone/dynamic-fee README).
  *
- * Mainnet entries are `null`: neither hook is deployed on Base Mainnet
- * yet (launch-gating step). Callers must handle `null` ("hook not
- * available on this network").
- *
- * Sepolia entries: verified live by `npm run verify:hooks`.
+ * Mainnet entries are `null` (launch-gating step).
  */
+const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [BASE_SEPOLIA_CHAIN_ID]: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
+  [UNICHAIN_SEPOLIA_CHAIN_ID]: null,
+};
 
-const STABLE_PROTECTION_HOOK_MAINNET = null;
-const STABLE_PROTECTION_HOOK_SEPOLIA =
-  "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0" as const;
-const DYNAMIC_FEE_HOOK_MAINNET = null;
-const DYNAMIC_FEE_HOOK_SEPOLIA = "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0" as const;
-
-export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
-  ? STABLE_PROTECTION_HOOK_MAINNET
-  : STABLE_PROTECTION_HOOK_SEPOLIA;
-export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
-  ? DYNAMIC_FEE_HOOK_MAINNET
-  : DYNAMIC_FEE_HOOK_SEPOLIA;
+const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
+  [UNICHAIN_SEPOLIA_CHAIN_ID]: "0xa5eCBF949D964760f3F7805f59eb4AAc1f2500c0",
+};
 
 export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
-const HOOK_ADDRESSES: Record<HookName, `0x${string}` | null> = {
-  "stable-protection": STABLE_PROTECTION_HOOK,
-  "dynamic-fee": DYNAMIC_FEE_HOOK,
-};
+export { DEFAULT_CHAIN_ID };
 
-/**
- * Resolve a hook address by name on the active network. Returns `null`
- * when the hook isn't deployed on this network — callers should treat
- * that as "hook unavailable" and refuse pool creation that depends on it
- * (rather than falling back to a no-hook pool, which would silently
- * change pool semantics).
- */
-export function getHookAddress(name: HookName): `0x${string}` | null {
-  return HOOK_ADDRESSES[name];
+export function getHookAddress(
+  name: HookName,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
+): `0x${string}` | null {
+  if (IS_MAINNET) return null;
+  if (name === "stable-protection") return STABLE_PROTECTION_BY_CHAIN[chainId];
+  return DYNAMIC_FEE_BY_CHAIN[chainId];
 }
+
+/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
+export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
+  ? null
+  : STABLE_PROTECTION_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
+/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
+export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
+  ? null
+  : DYNAMIC_FEE_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
 
 /**
  * v4 PoolKey hook permission flags encoded in the lower 14 bits of each

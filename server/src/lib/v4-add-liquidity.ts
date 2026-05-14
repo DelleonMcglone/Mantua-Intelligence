@@ -1,4 +1,8 @@
 import { encodeFunctionData, keccak256, toHex } from "viem";
+import {
+  DEFAULT_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { getLiquidityForAmounts } from "./liquidity-math.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { getMaxUsableTick, getMinUsableTick, getSqrtRatioAtTick } from "./tick-math.ts";
@@ -13,7 +17,7 @@ import {
 } from "./v4-actions.ts";
 import {
   POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
-  V4_POSITION_MANAGER,
+  getV4PositionManager,
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
@@ -36,6 +40,8 @@ export interface BuildAddLiquidityArgs {
   slippageBps: number;
   owner: `0x${string}`;
   deadlineSeconds: number;
+  /** Target chain. Routes the calldata to the per-chain PositionManager. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface BuildAddLiquidityResult {
@@ -62,12 +68,14 @@ export interface BuildAddLiquidityResult {
  * contract pulls at most amount0Max + amount1Max and reverts otherwise.
  */
 export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAddLiquidityResult {
+  const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
   const { key, flipped } = buildPoolKey(
     args.tokenA,
     args.tokenB,
     args.fee,
     args.hookAddress ?? "0x0000000000000000000000000000000000000000",
     args.hookName ?? null,
+    chainId,
   );
   const tickLower = getMinUsableTick(key.tickSpacing);
   const tickUpper = getMaxUsableTick(key.tickSpacing);
@@ -127,7 +135,7 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
   );
 
   return {
-    to: V4_POSITION_MANAGER,
+    to: getV4PositionManager(chainId),
     data,
     value,
     liquidity: liquidity.toString(),

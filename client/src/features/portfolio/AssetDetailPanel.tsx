@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
-import { BASESCAN_URL, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO } from "@/lib/chains.ts";
+import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import {
   toDisplayAssets,
@@ -24,14 +26,19 @@ interface Props {
  * sends where it's the token moved). Each row links to BaseScan.
  */
 export function AssetDetailPanel({ symbol, onClose }: Props) {
+  const chainId = useCurrentChainId();
   const portfolio = usePortfolio();
   const asset = useMemo<DisplayAsset | null>(() => {
     if (!portfolio.walletAddress) return null;
-    const all = toDisplayAssets(portfolio.balances);
+    const all = toDisplayAssets(portfolio.balances, chainId);
     return all.find((a) => a.symbol === symbol) ?? null;
-  }, [portfolio.walletAddress, portfolio.balances, symbol]);
+  }, [portfolio.walletAddress, portfolio.balances, symbol, chainId]);
 
-  const meta = TOKENS[symbol];
+  // `meta` is undefined when the user deep-links to a token that doesn't
+  // exist on the active chain (e.g. cbBTC while on Unichain Sepolia).
+  // Falls back to the bare symbol so the panel still renders.
+  const meta = getTokens(chainId)[symbol] ?? { name: symbol };
+  const explorerUrl = CHAIN_INFO[chainId].explorerUrl;
   const txs = useMemo(
     () => portfolio.transactions.filter((t) => txInvolvesSymbol(t, symbol)),
     [portfolio.transactions, symbol],
@@ -78,7 +85,7 @@ export function AssetDetailPanel({ symbol, onClose }: Props) {
           {portfolio.walletAddress && txs.length > 0 && (
             <div className="space-y-1.5">
               {txs.map((t) => (
-                <TxRow key={t.id} tx={t} symbol={symbol} />
+                <TxRow key={t.id} tx={t} symbol={symbol} explorerUrl={explorerUrl} />
               ))}
             </div>
           )}
@@ -88,13 +95,21 @@ export function AssetDetailPanel({ symbol, onClose }: Props) {
   );
 }
 
-function TxRow({ tx, symbol }: { tx: PortfolioTransaction; symbol: TokenSymbol }) {
+function TxRow({
+  tx,
+  symbol,
+  explorerUrl,
+}: {
+  tx: PortfolioTransaction;
+  symbol: TokenSymbol;
+  explorerUrl: string;
+}) {
   const label = describeTx(tx, symbol);
   const when = formatRelative(tx.createdAt);
   const usd = tx.usdValue ? `$${Number(tx.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
   return (
     <a
-      href={`${BASESCAN_URL}/tx/${tx.txHash}`}
+      href={`${explorerUrl}/tx/${tx.txHash}`}
       target="_blank"
       rel="noopener noreferrer"
       className="flex items-center gap-3 px-3.5 py-2.5 rounded-sm border border-border-soft bg-bg-elev hover:bg-row-hover transition-colors no-underline"

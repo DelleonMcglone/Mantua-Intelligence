@@ -104,7 +104,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
     };
     for (const pos of localPositions) {
       const [a, b] = [pos.tokenA, pos.tokenB].sort();
-      const key = `${a}|${b}|${String(pos.fee)}|${pos.hook ?? "none"}`;
+      const key = `${String(pos.chainId)}|${a}|${b}|${String(pos.fee)}|${pos.hook ?? "none"}`;
       const amA = parseFloat(pos.amountA);
       const amB = parseFloat(pos.amountB);
       const pA = tokenPrices.prices[pos.tokenA] ?? 0;

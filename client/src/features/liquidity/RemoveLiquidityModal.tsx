@@ -10,12 +10,13 @@ import {
 } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerTxUrl } from "@/lib/chains.ts";
 import type { Position } from "./positions-types.ts";
 import { SlippageRow } from "./SlippageRow.tsx";
 import { useRemoveLiquidity } from "./use-remove-liquidity.ts";
 import { tokenLabelByAddress } from "./token-labels.ts";
 
-const BASESCAN_TX = "https://basescan.org/tx/";
 const PRESETS = [25, 50, 75, 100] as const;
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
+  const chainId = useCurrentChainId();
   const [percentage, setPercentage] = useState<number>(50);
   const [slippageBps, setSlippageBps] = useState(50);
   const confirm = useConfirmedAction();
@@ -104,12 +106,12 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
 
           {remove.state.txHash && (
             <a
-              href={`${BASESCAN_TX}${remove.state.txHash}`}
+              href={getExplorerTxUrl(chainId, remove.state.txHash)}
               target="_blank"
               rel="noreferrer"
               className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1"
             >
-              View on BaseScan <ExternalLink className="h-3 w-3" />
+              View transaction <ExternalLink className="h-3 w-3" />
             </a>
           )}
           {remove.state.status === "error" && remove.state.error && (

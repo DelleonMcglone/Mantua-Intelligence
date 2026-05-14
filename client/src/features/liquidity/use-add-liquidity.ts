@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
@@ -17,11 +18,6 @@ import {
 import type { HookName } from "./use-create-pool.ts";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
-
-const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
-  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
-const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
 
 export interface AddLiquidityArgs {
   tokenA: TokenSymbol;
@@ -85,6 +81,7 @@ interface PoolCreateCalldataRes {
 
 export function useAddLiquidity() {
   const { wallets } = useWallets();
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<AddState>({ status: "idle" });
 
   async function execute(args: AddLiquidityArgs): Promise<`0x${string}` | null> {
@@ -92,14 +89,16 @@ export function useAddLiquidity() {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
-        await wallet.switchChain(ACTIVE_CHAIN_ID);
+      if (wallet.chainId !== `eip155:${String(chainId)}`) {
+        await wallet.switchChain(chainId);
       }
+      const chain = CHAIN_INFO[chainId].viemChain;
+      const publicClient = createPublicClient({ chain, transport: http(getRpcUrl(chainId)) });
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: owner,
-        chain: ACTIVE_CHAIN,
+        chain,
         transport: custom(provider),
       });
 
@@ -115,6 +114,7 @@ export function useAddLiquidity() {
         const initRes = await api.post<PoolCreateCalldataRes>(
           "/api/pools/create/calldata",
           {
+            chainId,
             tokenA: args.tokenA,
             tokenB: args.tokenB,
             fee: args.fee,
@@ -126,7 +126,7 @@ export function useAddLiquidity() {
         setState({ status: "creating-pool", message: "Confirm pool init in wallet…" });
         const initTx = await walletClient.sendTransaction({
           account: owner,
-          chain: ACTIVE_CHAIN,
+          chain,
           to: initRes.to,
           data: initRes.data,
           value: BigInt(initRes.value),
@@ -135,6 +135,7 @@ export function useAddLiquidity() {
         await publicClient.waitForTransactionReceipt({ hash: initTx });
         poolSqrtPriceX96 = initRes.poolKey.sqrtPriceX96;
         void api.post("/api/pools/create/record", {
+          chainId,
           txHash: initTx,
           tokenA: args.tokenA,
           tokenB: args.tokenB,
@@ -155,13 +156,20 @@ export function useAddLiquidity() {
       setState({ status: "preparing" });
       const calldata = await api.post<CalldataRes>("/api/liquidity/add/calldata", {
         ...args,
+        chainId,
         ...(poolSqrtPriceX96 ? { sqrtPriceX96: poolSqrtPriceX96 } : {}),
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1200,
       });
 
       setState({ status: "approving", message: `Checking ${args.tokenA} approval…` });
-      const tA = TOKENS[args.tokenA];
-      const tB = TOKENS[args.tokenB];
+      const tokens = getTokens(chainId);
+      const tA = tokens[args.tokenA];
+      const tB = tokens[args.tokenB];
+      if (!tA || !tB) {
+        throw new Error(
+          `Token ${args.tokenA}/${args.tokenB} not available on chain ${String(chainId)}`,
+        );
+      }
       const approvalA = await ensurePermit2Approval(
         walletClient,
         publicClient,
@@ -205,7 +213,7 @@ export function useAddLiquidity() {
       });
       const txHash = await walletClient.sendTransaction({
         account: owner,
-        chain: ACTIVE_CHAIN,
+        chain,
         to,
         data,
         value: BigInt(calldata.value),
@@ -221,6 +229,7 @@ export function useAddLiquidity() {
         outcome === "success" ? extractMintedTokenId(receipt, owner) : null;
 
       void api.post("/api/liquidity/add/record", {
+        chainId,
         txHash,
         tokenA: args.tokenA,
         tokenB: args.tokenB,
@@ -243,6 +252,7 @@ export function useAddLiquidity() {
       // truth; this is purely a client-side breadcrumb.
       if (outcome === "success") {
         rememberLocalPool({
+          chainId,
           tokenA: args.tokenA,
           tokenB: args.tokenB,
           fee: args.fee,
@@ -250,9 +260,6 @@ export function useAddLiquidity() {
           txHash,
         });
         if (tokenId) {
-          // Format raw amounts back to display units for the
-          // Positions row. `formatBaseUnits` keeps it simple — it's
-          // the same conversion `formatTokenAmount` does.
           const fmt = (raw: string, decimals: number): string => {
             const r = BigInt(raw);
             const denom = 10n ** BigInt(decimals);
@@ -263,6 +270,7 @@ export function useAddLiquidity() {
             return `${whole.toString()}.${s.slice(0, 6)}`;
           };
           rememberLocalPosition({
+            chainId,
             tokenId,
             tokenA: args.tokenA,
             tokenB: args.tokenB,

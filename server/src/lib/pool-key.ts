@@ -1,5 +1,7 @@
+import { type SupportedTestnetChainId } from "./chains.ts";
 import { getToken, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
 import {
+  DEFAULT_CHAIN_ID,
   TICK_SPACING_BY_FEE,
   effectivePoolFee,
   type FeeTier,
@@ -39,10 +41,11 @@ export function buildPoolKey(
   fee: FeeTier,
   hook: `0x${string}` = NO_HOOK,
   hookName: HookName | null = null,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): { key: PoolKey; flipped: boolean } {
   if (symA === symB) throw new Error("Cannot create a pool with identical tokens");
-  const a = getToken(symA);
-  const b = getToken(symB);
+  const a = getToken(symA, chainId);
+  const b = getToken(symB, chainId);
   const addrA = (a.native ? ZERO_ADDRESS : a.address).toLowerCase() as `0x${string}`;
   const addrB = (b.native ? ZERO_ADDRESS : b.address).toLowerCase() as `0x${string}`;
   const flipped = addrA > addrB;

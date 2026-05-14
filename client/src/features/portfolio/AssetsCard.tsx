@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO } from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
@@ -134,6 +136,8 @@ interface AssetsCardProps {
 }
 
 export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}) {
+  const chainId = useCurrentChainId();
+  const chainName = CHAIN_INFO[chainId].displayName;
   const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
@@ -156,12 +160,12 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   const agent = useAgentPortfolio();
   const assets = useMemo<DisplayAsset[]>(() => {
     if (!portfolio.walletAddress) return [];
-    return toDisplayAssets(portfolio.balances);
-  }, [portfolio.walletAddress, portfolio.balances]);
+    return toDisplayAssets(portfolio.balances, chainId);
+  }, [portfolio.walletAddress, portfolio.balances, chainId]);
   const agentAssets = useMemo<DisplayAsset[]>(() => {
     if (!agent.agentAddress) return [];
-    return toDisplayAssets(agent.balances);
-  }, [agent.agentAddress, agent.balances]);
+    return toDisplayAssets(agent.balances, chainId);
+  }, [agent.agentAddress, agent.balances, chainId]);
   const agentPositionRows = useMemo<PortfolioPosition[]>(
     () => (IS_MAINNET ? [] : agentPositions.map(localPositionToRow)),
     [agentPositions],
@@ -316,7 +320,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
           <div className="max-h-[320px] overflow-auto">
             {!portfolio.walletAddress && (
               <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-                Connect a wallet to see your Base Sepolia balances.
+                Connect a wallet to see your {chainName} balances.
               </div>
             )}
             {portfolio.walletAddress && portfolio.loading && filtered.length === 0 && (
@@ -332,7 +336,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
               !portfolio.error &&
               filtered.length === 0 && (
                 <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-                  No matching balances on Base Sepolia.
+                  No matching balances on {chainName}.
                 </div>
               )}
             {filtered.map((a) => (
@@ -439,7 +443,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
                   ? () => {
                       const src = p.src;
                       if (!src) return;
-                      const key = localPoolKey(src.tokenA, src.tokenB, src.fee, src.hook);
+                      const key = localPoolKey(src.chainId, src.tokenA, src.tokenB, src.fee, src.hook);
                       onSelectPool?.(`local:${key}`);
                     }
                   : undefined;

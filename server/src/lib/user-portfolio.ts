@@ -3,9 +3,10 @@ import { type Address, parseAbi } from "viem";
 import { db } from "../db/client.ts";
 import { portfolioTransactions, type PortfolioTransaction } from "../db/schema/trading.ts";
 import { userPreferences, users } from "../db/schema/users.ts";
+import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { logger } from "./logger.ts";
-import { baseRpcClient } from "./rpc-client.ts";
-import { TOKENS, type TokenSymbol } from "./tokens.ts";
+import { getRpcClient } from "./rpc-client.ts";
+import { getTokens, type Token, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
 
 const ERC20_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
@@ -47,16 +48,18 @@ export async function getUserPortfolio(
   privyUserId: string,
   walletAddress: string,
   txLimit = 50,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): Promise<UserPortfolio> {
   const lower = walletAddress.toLowerCase();
-  const tokens = Object.entries(TOKENS) as [TokenSymbol, (typeof TOKENS)[TokenSymbol]][];
+  const tokens = Object.entries(getTokens(chainId)) as [TokenSymbol, Token][];
+  const rpcClient = getRpcClient(chainId);
 
   const balances = await Promise.all(
     tokens.map(async ([symbol, t]) => {
       try {
         const raw = t.native
-          ? await baseRpcClient.getBalance({ address: lower as Address })
-          : await baseRpcClient.readContract({
+          ? await rpcClient.getBalance({ address: lower as Address })
+          : await rpcClient.readContract({
               address: t.address,
               abi: ERC20_ABI,
               functionName: "balanceOf",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
-import { BASESCAN_URL } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO } from "@/lib/chains.ts";
 
 interface WalletMenuProps {
   walletAddress: string;
@@ -16,6 +17,8 @@ const CDP_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
  * on the window — the portfolio hooks listen and re-poll immediately.
  */
 export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
+  const chainId = useCurrentChainId();
+  const { explorerUrl, explorerName } = CHAIN_INFO[chainId];
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -76,8 +79,8 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
           <MenuItem onClick={handleCopy}>
             {copied ? "Copied!" : "Copy address"}
           </MenuItem>
-          <MenuLink href={`${BASESCAN_URL}/address/${walletAddress}`}>
-            View on BaseScan
+          <MenuLink href={`${explorerUrl}/address/${walletAddress}`}>
+            View on {explorerName}
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
           <MenuLink href={CDP_FAUCET_URL}>

@@ -1,67 +1,79 @@
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  isSupportedTestnetChainId,
+  type SupportedTestnetChainId,
+} from "@/lib/chains.ts";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import type { HookName } from "./use-create-pool.ts";
 
-const STORAGE_KEY = "mantua.localPositions.v1";
+const STORAGE_KEY = "mantua.localPositions.v2";
 
-/** Which wallet minted this position. Optional for back-compat with
- *  pre-2026-05-05 entries that didn't carry the field — readers
- *  treat missing as "user". */
 export type PositionOwner = "user" | "agent";
 
 export interface LocalPosition {
+  /** Chain the position was minted on. */
+  chainId: SupportedTestnetChainId;
   /** PositionManager ERC721 token id minted at add-liquidity time. */
   tokenId: string;
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
   hook: HookName | null;
-  /** Initial deposit amounts (display strings, not raw base units). */
   amountA: string;
   amountB: string;
-  /** Mint tx hash. */
   txHash: string;
-  /** ms epoch — used to sort newest first. */
   createdAt: number;
-  /** Which wallet held the mint (user-side or agent-managed CDP).
-   *  Defaults to "user" for legacy entries. */
   owner?: PositionOwner;
 }
 
-/**
- * Client-side breadcrumb for positions the user has minted on testnet.
- * `/api/positions` is Postgres-backed and the local DB stays offline
- * for everyone — but the Positions tab still needs to feel populated
- * once a mint receipt confirms. localStorage is the cheapest "remember
- * what the user just did" surface for the POC; swap to a server source
- * (Postgres, on-chain enumeration via PositionManager NFT, or a
- * Sepolia subgraph) once one of those lights up.
- *
- * On-chain state is still the source of truth — these entries are just
- * a list of NFT tokenIds the client knows about. If the user's wallet
- * holds the NFT, it's a real position regardless of what's in here.
- */
+interface LegacyLocalPosition {
+  tokenId: string;
+  tokenA: TokenSymbol;
+  tokenB: TokenSymbol;
+  fee: FeeTier;
+  hook: HookName | null;
+  amountA: string;
+  amountB: string;
+  txHash: string;
+  createdAt: number;
+  owner?: PositionOwner;
+}
 
 export function getLocalPositions(): LocalPosition[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as LocalPosition[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.sort((a, b) => b.createdAt - a.createdAt);
+    if (raw) {
+      const parsed = JSON.parse(raw) as LocalPosition[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((p) => isSupportedTestnetChainId(p.chainId))
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    // v1 → v2 migration: assign existing positions to Base Sepolia.
+    const legacyRaw = window.localStorage.getItem("mantua.localPositions.v1");
+    if (!legacyRaw) return [];
+    const legacy = JSON.parse(legacyRaw) as LegacyLocalPosition[];
+    if (!Array.isArray(legacy)) return [];
+    const migrated: LocalPosition[] = legacy.map((p) => ({
+      ...p,
+      chainId: BASE_SEPOLIA_CHAIN_ID,
+    }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    return migrated.sort((a, b) => b.createdAt - a.createdAt);
   } catch {
     return [];
   }
 }
 
-/** Positions held by the user's connected wallet. Legacy entries
- *  without an `owner` field are treated as user-owned. */
+/** User-owned positions across all chains. The Positions tab merges
+ *  Base Sepolia and Unichain Sepolia entries — caller filters per
+ *  chain if needed (the AssetsCard intentionally shows both). */
 export function getUserLocalPositions(): LocalPosition[] {
   return getLocalPositions().filter((p) => (p.owner ?? "user") === "user");
 }
 
-/** Positions minted by the agent's CDP-managed wallet. */
 export function getAgentLocalPositions(): LocalPosition[] {
   return getLocalPositions().filter((p) => p.owner === "agent");
 }
@@ -70,9 +82,11 @@ export function rememberLocalPosition(entry: Omit<LocalPosition, "createdAt">) {
   if (typeof window === "undefined") return;
   try {
     const existing = getLocalPositions();
-    // Dedupe on tokenId — re-adding to the same NFT updates its
-    // amounts/txHash/createdAt rather than producing a duplicate row.
-    const others = existing.filter((p) => p.tokenId !== entry.tokenId);
+    // Dedupe on `(chainId, tokenId)` — tokenIds aren't unique across
+    // chains, so the composite key prevents cross-chain collisions.
+    const others = existing.filter(
+      (p) => !(p.tokenId === entry.tokenId && p.chainId === entry.chainId),
+    );
     const next: LocalPosition = { ...entry, createdAt: Date.now() };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([next, ...others]));
   } catch {

@@ -3,6 +3,10 @@ import { z } from "zod";
 import { encodeFunctionData } from "viem";
 import { db } from "../db/client.ts";
 import { pools as poolsTable } from "../db/schema/trading.ts";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  UNICHAIN_SEPOLIA_CHAIN_ID,
+} from "../lib/chains.ts";
 import { resolveHookForPool } from "../lib/hook-pair-gating.ts";
 import { logAudit } from "../lib/audit.ts";
 import { logger } from "../lib/logger.ts";
@@ -14,7 +18,7 @@ import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
-  V4_POOL_MANAGER,
+  getV4PoolManager,
   isFeeTier,
 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -25,9 +29,18 @@ export const poolCreateRouter = Router();
 
 const hookSchema = z.enum(HOOK_NAMES);
 
+/**
+ * Supported chain ids — Base Sepolia (default for back-compat with
+ * pre-PR-101 clients) and Unichain Sepolia.
+ */
+const chainIdSchema = z
+  .union([z.literal(BASE_SEPOLIA_CHAIN_ID), z.literal(UNICHAIN_SEPOLIA_CHAIN_ID)])
+  .default(BASE_SEPOLIA_CHAIN_ID);
+
 const calldataSchema = z.object({
-  tokenA: z.string().refine(isTokenSymbol, "Unknown tokenA"),
-  tokenB: z.string().refine(isTokenSymbol, "Unknown tokenB"),
+  chainId: chainIdSchema,
+  tokenA: z.string(),
+  tokenB: z.string(),
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
   /** Optional hook binding. Omitted (or null) creates a no-hook pool. */
   hook: hookSchema.nullable().optional(),
@@ -49,7 +62,22 @@ poolCreateRouter.post(
         .json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
       return;
     }
-    const { tokenA, tokenB, fee, hook, initialAmount0Raw, initialAmount1Raw } = parsed.data;
+    const { chainId, tokenA, tokenB, fee, hook, initialAmount0Raw, initialAmount1Raw } =
+      parsed.data;
+    if (!isTokenSymbol(tokenA, chainId)) {
+      res.status(400).json({
+        error: `Unknown tokenA on chain ${String(chainId)}: ${tokenA}`,
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
+    if (!isTokenSymbol(tokenB, chainId)) {
+      res.status(400).json({
+        error: `Unknown tokenB on chain ${String(chainId)}: ${tokenB}`,
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
     if (tokenA === tokenB) {
       res.status(400).json({ error: "tokenA and tokenB must differ", code: "BAD_REQUEST" });
       return;
@@ -57,15 +85,23 @@ poolCreateRouter.post(
     try {
       const hookAddress = resolveHookForPool(
         hook ?? null,
-        getToken(tokenA).address,
-        getToken(tokenB).address,
+        getToken(tokenA, chainId).address,
+        getToken(tokenB, chainId).address,
+        chainId,
       );
       // Hooks like Stable Protection require key.fee == DYNAMIC_FEE_FLAG
       // and revert in beforeInitialize otherwise. `buildPoolKey` applies
       // `effectivePoolFee` when `hookName` is provided so the user's
       // static-tier choice still drives tickSpacing while the fee field
       // is overridden when the bound hook demands it.
-      const { key, flipped } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null);
+      const { key, flipped } = buildPoolKey(
+        tokenA,
+        tokenB,
+        fee,
+        hookAddress,
+        hook ?? null,
+        chainId,
+      );
 
       // Preflight: PoolManager rejects re-initialization, but the revert
       // bubbles through the wallet as "exceeds max transaction gas limit"
@@ -96,7 +132,8 @@ poolCreateRouter.post(
         args: [key, sqrtPriceX96],
       });
       res.json({
-        to: V4_POOL_MANAGER,
+        to: getV4PoolManager(chainId),
+        chainId,
         data,
         value: "0",
         poolKey: { ...key, sqrtPriceX96: sqrtPriceX96.toString() },
@@ -111,9 +148,10 @@ poolCreateRouter.post(
 );
 
 const recordSchema = z.object({
+  chainId: chainIdSchema,
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
-  tokenA: z.string().refine(isTokenSymbol),
-  tokenB: z.string().refine(isTokenSymbol),
+  tokenA: z.string(),
+  tokenB: z.string(),
   fee: z.number().int().refine(isFeeTier),
   hook: hookSchema.nullable().optional(),
   outcome: z.enum(["success", "failure"]),
@@ -130,30 +168,38 @@ poolCreateRouter.post(
       return;
     }
     const ctx = getRequestContext(req);
-    const { txHash, tokenA, tokenB, fee, hook, outcome } = parsed.data;
+    const { chainId, txHash, tokenA, tokenB, fee, hook, outcome } = parsed.data;
+    if (!isTokenSymbol(tokenA, chainId) || !isTokenSymbol(tokenB, chainId)) {
+      res
+        .status(400)
+        .json({ error: "Unknown token symbol for chain", code: "BAD_REQUEST" });
+      return;
+    }
     let hookAddress: `0x${string}`;
     try {
       hookAddress = resolveHookForPool(
         hook ?? null,
-        getToken(tokenA).address,
-        getToken(tokenB).address,
+        getToken(tokenA, chainId).address,
+        getToken(tokenB, chainId).address,
+        chainId,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "record failed";
       res.status(400).json({ error: message, code: "POOL_CREATE_INVALID" });
       return;
     }
-    const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null);
+    const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null, chainId);
     const poolKeyHash = keccak256(
-      toHex(`${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}`),
+      toHex(`${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}|${String(chainId)}`),
     );
 
     if (outcome === "success") {
       try {
         await db.insert(poolsTable).values({
+          chainId,
           poolKeyHash,
-          token0: getToken(tokenA).address,
-          token1: getToken(tokenB).address,
+          token0: getToken(tokenA, chainId).address,
+          token1: getToken(tokenB, chainId).address,
           fee: key.fee,
           tickSpacing: key.tickSpacing,
           hookAddress: key.hooks,
@@ -166,10 +212,11 @@ poolCreateRouter.post(
     }
     await logAudit({
       ...ctx,
+      chainId,
       action: "create_pool",
       outcome,
       txHash,
-      params: { tokenA, tokenB, fee, hook: hook ?? null, poolKeyHash },
+      params: { chainId, tokenA, tokenB, fee, hook: hook ?? null, poolKeyHash },
     });
     res.json({ ok: true, poolKeyHash });
   },

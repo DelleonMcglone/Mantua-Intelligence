@@ -1,21 +1,13 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
-import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
+import { type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 
 export type HookName = "stable-protection" | "dynamic-fee";
-
-const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
-  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
-
-const publicClient = createPublicClient({
-  chain: ACTIVE_CHAIN,
-  transport: http(baseRpcUrl),
-});
 
 interface CalldataReq {
   tokenA: TokenSymbol;
@@ -54,33 +46,38 @@ function existingPoolFromError(err: unknown): ExistingPoolDetails | null {
 
 export function useCreatePool() {
   const { wallets } = useWallets();
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<CreateState>({ status: "idle" });
 
   async function execute(req: CalldataReq): Promise<`0x${string}` | null> {
     try {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
-      // Privy types `useWallets()` so this assertion is "always" satisfied,
-      // but at runtime the array can be empty during transitional auth states.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!wallet) throw new Error("No wallet connected");
-      const targetChainId = `eip155:${String(ACTIVE_CHAIN_ID)}`;
-      if (wallet.chainId !== targetChainId) {
-        await wallet.switchChain(ACTIVE_CHAIN_ID);
+      const targetEip = `eip155:${String(chainId)}`;
+      if (wallet.chainId !== targetEip) {
+        await wallet.switchChain(chainId);
       }
 
+      const chain = CHAIN_INFO[chainId].viemChain;
+      const publicClient = createPublicClient({ chain, transport: http(getRpcUrl(chainId)) });
+
       setState({ status: "preparing" });
-      const calldata = await api.post<CalldataRes>("/api/pools/create/calldata", req);
+      const calldata = await api.post<CalldataRes>("/api/pools/create/calldata", {
+        ...req,
+        chainId,
+      });
 
       setState({ status: "signing", poolKey: calldata.poolKey });
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: wallet.address as `0x${string}`,
-        chain: ACTIVE_CHAIN,
+        chain,
         transport: custom(provider),
       });
       const txHash = await walletClient.sendTransaction({
         account: wallet.address as `0x${string}`,
-        chain: ACTIVE_CHAIN,
+        chain,
         to: calldata.to,
         data: calldata.data,
         value: BigInt(calldata.value),
@@ -91,6 +88,7 @@ export function useCreatePool() {
       const outcome = receipt.status === "success" ? "success" : "failure";
 
       void api.post("/api/pools/create/record", {
+        chainId,
         txHash,
         tokenA: req.tokenA,
         tokenB: req.tokenB,
