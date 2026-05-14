@@ -107,10 +107,9 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  *
  * MVP scope (PR #101):
  *  - Stable Protection: Base Sepolia only (USDC/EURC pair).
- *  - Dynamic Fee: Base Sepolia today; Unichain Sepolia is a fresh
- *    deployment pending — the address is wired as `null` until the
- *    deploy lands. Callers that resolve `null` should reject the pool
- *    operation with "hook not available on this chain".
+ *  - Dynamic Fee: Base Sepolia + Unichain Sepolia. Both deployments
+ *    encode `BEFORE_SWAP | AFTER_SWAP` in the lower 14 bits of the
+ *    CREATE2-mined address (see DelleonMcglone/dynamic-fee README).
  *
  * Mainnet entries are `null` (launch-gating step).
  */
@@ -121,10 +120,7 @@ const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` 
 
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
-  // TODO(unichain-dynamic-fee): swap in the address once the fresh
-  // Unichain Sepolia deployment of DynamicFeeHook lands. Until then
-  // `resolveHookForPool` rejects the request with "hook not deployed".
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: null,
+  [UNICHAIN_SEPOLIA_CHAIN_ID]: "0xa5eCBF949D964760f3F7805f59eb4AAc1f2500c0",
 };
 
 export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
