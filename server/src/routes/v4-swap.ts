@@ -19,20 +19,6 @@ import { writeRateLimiter } from "../middleware/rate-limit.ts";
 
 export const v4SwapRouter = Router();
 
-/**
- * Demo mode — when true, swap routes ignore the `hook` field on the
- * request body and always build the on-chain PoolKey with `hooks=0x0`.
- * This routes quotes / calldata to the no-hook variant of the pool
- * so the Stable Protection / Dynamic Fee hooks can't revert (their
- * oracle-dependent guards behave poorly on testnet without price
- * feeds). The UI still surfaces the user's hook selection visually;
- * only the on-chain query is detoured.
- *
- * Flip to `false` once the production hooks have working oracles
- * and we want swaps to go through the actual hook-gated pools.
- */
-const BYPASS_HOOK_FOR_DEMO = true;
-
 const hookSchema = z.enum(HOOK_NAMES);
 const chainIdSchema = z
   .number()
@@ -77,8 +63,7 @@ v4SwapRouter.post(
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
-    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
+    const effectiveHook = hook ?? null;
     try {
       const quote = await quoteExactInputV4({
         tokenIn,
@@ -141,8 +126,7 @@ v4SwapRouter.post(
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
-    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
+    const effectiveHook = hook ?? null;
     try {
       const { maxInput, reason } = await findMaxQuotableInputV4({
         tokenIn,
@@ -194,8 +178,7 @@ v4SwapRouter.post(
       res.status(400).json({ error: "tokenIn and tokenOut must differ", code: "BAD_REQUEST" });
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- BYPASS_HOOK_FOR_DEMO is a togglable flag
-    const effectiveHook = BYPASS_HOOK_FOR_DEMO ? null : (hook ?? null);
+    const effectiveHook = hook ?? null;
     try {
       const quote = await quoteExactInputV4({
         tokenIn,
