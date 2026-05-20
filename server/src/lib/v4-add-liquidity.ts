@@ -1,4 +1,8 @@
 import { encodeFunctionData, keccak256, toHex } from "viem";
+import {
+  DEFAULT_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { getLiquidityForAmounts } from "./liquidity-math.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { getMaxUsableTick, getMinUsableTick, getSqrtRatioAtTick } from "./tick-math.ts";
@@ -13,7 +17,7 @@ import {
 } from "./v4-actions.ts";
 import {
   POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
-  V4_POSITION_MANAGER,
+  getV4PositionManager,
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
@@ -36,6 +40,8 @@ export interface BuildAddLiquidityArgs {
   slippageBps: number;
   owner: `0x${string}`;
   deadlineSeconds: number;
+  /** Target chain. Routes the calldata to the per-chain PositionManager. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface BuildAddLiquidityResult {
@@ -62,12 +68,14 @@ export interface BuildAddLiquidityResult {
  * contract pulls at most amount0Max + amount1Max and reverts otherwise.
  */
 export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAddLiquidityResult {
+  const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
   const { key, flipped } = buildPoolKey(
     args.tokenA,
     args.tokenB,
     args.fee,
     args.hookAddress ?? "0x0000000000000000000000000000000000000000",
     args.hookName ?? null,
+    chainId,
   );
   const tickLower = getMinUsableTick(key.tickSpacing);
   const tickUpper = getMaxUsableTick(key.tickSpacing);
@@ -84,6 +92,24 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
     amount1: amount1Raw,
   });
   if (liquidity === 0n) {
+    // Two reasons this can fire: (1) one of the amounts is genuinely
+    // tiny relative to the other, or (2) the pool was initialized at
+    // an extreme sqrtPrice (e.g. MIN_SQRT_PRICE+1) so the math
+    // saturates to 0 no matter how much the user supplies. Detect
+    // case (2) and surface an actionable message — the only fix is
+    // to pick a fee tier whose pool hasn't been initialized yet, so
+    // the next create-call seeds it at the user's chosen price.
+    const MIN_SQRT = 4_295_128_739n;
+    const MAX_SQRT =
+      1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n;
+    const nearExtreme =
+      args.sqrtPriceX96 - MIN_SQRT < 1_000_000n ||
+      MAX_SQRT - args.sqrtPriceX96 < 1_000_000n;
+    if (nearExtreme) {
+      throw new Error(
+        "This pool was initialized at an unusable price. Pick a different fee tier (e.g. 0.05%, 0.30%, or 1.00%) — those pools haven't been initialized yet and will seed at your supplied price.",
+      );
+    }
     throw new Error("Computed liquidity is zero — increase amounts");
   }
 
@@ -127,7 +153,7 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
   );
 
   return {
-    to: V4_POSITION_MANAGER,
+    to: getV4PositionManager(chainId),
     data,
     value,
     liquidity: liquidity.toString(),

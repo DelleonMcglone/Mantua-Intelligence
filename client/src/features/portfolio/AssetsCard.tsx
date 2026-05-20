@@ -1,17 +1,24 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import { IS_MAINNET } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  CHAIN_INFO,
+  UNICHAIN_SEPOLIA_CHAIN_ID,
+} from "@/lib/chains.ts";
+import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
   getAgentLocalPositions,
   getUserLocalPositions,
   type LocalPosition,
 } from "@/features/liquidity/local-positions.ts";
+import { localPoolKey } from "@/features/liquidity/local-pools.ts";
 import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
 
-type HookName = "Dynamic Fee" | "Stable Protection" | "RWAgate" | "Vanilla";
+type HookName = "Stable Protection" | "Dynamic Fee" | "Volatile";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -23,13 +30,16 @@ interface PortfolioPosition {
   up: boolean;
   source: "mantua" | "external";
   hook: HookName;
+  /** Original LocalPosition for testnet rows — present iff the row
+   *  came from `localPositions.map(localPositionToRow)`. Used to
+   *  derive the `local:*` pool id for the click-through nav. */
+  src?: LocalPosition;
 }
 
 const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
   "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
   "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
-  RWAgate: { bg: "rgba(139,108,240,0.12)", fg: "var(--accent)", bd: "rgba(139,108,240,0.35)" },
-  Vanilla: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
+  Volatile: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
 };
 
 const POSITIONS: PortfolioPosition[] = [
@@ -53,7 +63,7 @@ const POSITIONS: PortfolioPosition[] = [
     pct: "+1.28%",
     up: true,
     source: "mantua",
-    hook: "RWAgate",
+    hook: "Dynamic Fee",
   },
   {
     a: "USDC",
@@ -75,7 +85,7 @@ const POSITIONS: PortfolioPosition[] = [
     pct: "+1.58%",
     up: true,
     source: "external",
-    hook: "Stable Protection",
+    hook: "Dynamic Fee",
   },
 ];
 
@@ -86,7 +96,7 @@ type Sort = (typeof SORTS)[number];
  * Assets card — matches prototype `AssetsCard` in shell.jsx: tabbed
  * Assets / Positions surface. Assets sub-view: search, network + sort
  * filter chips, PnL header, token rows. Positions sub-view (P4e-003):
- * source filter strip ("All wallet positions" / "Opened in Mantua") +
+ * chain filter strip ("All Base positions" / "All Unichain positions") +
  * `external` pill on rows whose source !== "mantua". Real balances /
  * positions arrive in Phase 8.
  */
@@ -94,17 +104,9 @@ type Sort = (typeof SORTS)[number];
  *  display label so the existing HOOK_TINT palette keeps working
  *  unchanged when we render local positions. */
 function localHookLabel(h: LocalPosition["hook"]): HookName {
-  if (!h) return "Vanilla";
-  switch (h) {
-    case "stable-protection":
-      return "Stable Protection";
-    case "dynamic-fee":
-      return "Dynamic Fee";
-    case "rwa-gate":
-      return "RWAgate";
-    case "async-limit-order":
-      return "Vanilla"; // no design-source palette entry yet
-  }
+  if (!h) return "Volatile";
+  if (h === "stable-protection") return "Stable Protection";
+  return "Dynamic Fee";
 }
 
 function localPositionToRow(p: LocalPosition): PortfolioPosition {
@@ -120,15 +122,27 @@ function localPositionToRow(p: LocalPosition): PortfolioPosition {
     up: true,
     source: "mantua",
     hook: localHookLabel(p.hook),
+    src: p,
   };
 }
 
-export function AssetsCard() {
+interface AssetsCardProps {
+  /** Navigate to the PoolDetailPage for the clicked LP position.
+   *  Called with a `local:` pool id derived from the position's
+   *  token pair + fee tier + hook. */
+  onSelectPool?: (poolId: string) => void;
+  /** Navigate to the AssetDetailPanel for the clicked balance row. */
+  onSelectAsset?: (symbol: TokenSymbol) => void;
+}
+
+export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}) {
+  const chainId = useCurrentChainId();
+  const chainName = CHAIN_INFO[chainId].displayName;
   const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
-  const [posSource, setPosSource] = useState<"all" | "mantua">("all");
+  const [posSource, setPosSource] = useState<"base" | "unichain">("base");
   // Re-read localStorage on each tab change so a fresh mint shows up
   // without a manual page refresh.
   const localPositions = useMemo<LocalPosition[]>(
@@ -146,12 +160,12 @@ export function AssetsCard() {
   const agent = useAgentPortfolio();
   const assets = useMemo<DisplayAsset[]>(() => {
     if (!portfolio.walletAddress) return [];
-    return toDisplayAssets(portfolio.balances);
-  }, [portfolio.walletAddress, portfolio.balances]);
+    return toDisplayAssets(portfolio.balances, chainId);
+  }, [portfolio.walletAddress, portfolio.balances, chainId]);
   const agentAssets = useMemo<DisplayAsset[]>(() => {
     if (!agent.agentAddress) return [];
-    return toDisplayAssets(agent.balances);
-  }, [agent.agentAddress, agent.balances]);
+    return toDisplayAssets(agent.balances, chainId);
+  }, [agent.agentAddress, agent.balances, chainId]);
   const agentPositionRows = useMemo<PortfolioPosition[]>(
     () => (IS_MAINNET ? [] : agentPositions.map(localPositionToRow)),
     [agentPositions],
@@ -181,11 +195,20 @@ export function AssetsCard() {
     : IS_MAINNET
       ? POSITIONS
       : localPositions.map(localPositionToRow);
-  const visiblePositions =
-    posSource === "mantua"
-      ? positionsAvailable.filter((p) => p.source === "mantua")
-      : positionsAvailable;
-  const mantuaCount = positionsAvailable.filter((p) => p.source === "mantua").length;
+  // Chain-based filter: Base Sepolia vs Unichain Sepolia. Rows without
+  // an attached `src` (mainnet mock POSITIONS) bucket under "base" so
+  // the IS_MAINNET design preview still renders.
+  const baseCount = positionsAvailable.filter(
+    (p) => !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
+  ).length;
+  const unichainCount = positionsAvailable.filter(
+    (p) => p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID,
+  ).length;
+  const visiblePositions = positionsAvailable.filter((p) =>
+    posSource === "unichain"
+      ? p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID
+      : !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
+  );
 
   const tabs = [
     { k: "assets" as const, label: "Assets", count: assets.length },
@@ -306,7 +329,7 @@ export function AssetsCard() {
           <div className="max-h-[320px] overflow-auto">
             {!portfolio.walletAddress && (
               <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-                Connect a wallet to see your Base Sepolia balances.
+                Connect a wallet to see your {chainName} balances.
               </div>
             )}
             {portfolio.walletAddress && portfolio.loading && filtered.length === 0 && (
@@ -322,12 +345,31 @@ export function AssetsCard() {
               !portfolio.error &&
               filtered.length === 0 && (
                 <div className="px-4 py-8 text-center text-[12px] text-text-dim">
-                  No matching balances on Base Sepolia.
+                  No matching balances on {chainName}.
                 </div>
               )}
             {filtered.map((a) => (
               <div
                 key={a.symbol}
+                onClick={
+                  onSelectAsset
+                    ? () => {
+                        onSelectAsset(a.symbol);
+                      }
+                    : undefined
+                }
+                role={onSelectAsset ? "button" : undefined}
+                tabIndex={onSelectAsset ? 0 : undefined}
+                onKeyDown={
+                  onSelectAsset
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelectAsset(a.symbol);
+                        }
+                      }
+                    : undefined
+                }
                 className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
               >
                 <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 flex">
@@ -358,8 +400,8 @@ export function AssetsCard() {
             <span className="text-[11px] text-text-mute mr-0.5">Show</span>
             {(
               [
-                { k: "all", label: "All wallet positions", count: positionsAvailable.length },
-                { k: "mantua", label: "Opened in Mantua", count: mantuaCount },
+                { k: "base", label: "All Base positions", count: baseCount },
+                { k: "unichain", label: "All Unichain positions", count: unichainCount },
               ] as const
             ).map((o) => {
               const active = posSource === o.k;
@@ -383,15 +425,6 @@ export function AssetsCard() {
             })}
           </div>
 
-          {posSource === "mantua" && (
-            <div className="px-3.5 py-2 text-[11px] text-text-mute border-b border-border-soft flex items-center gap-1.5">
-              Showing positions opened in Mantua.
-              <span className="border-b border-dotted border-text-mute cursor-pointer">
-                External positions coming soon
-              </span>
-            </div>
-          )}
-
           <div className="max-h-[360px] overflow-auto">
             {!portfolio.walletAddress && (
               <div className="px-4 py-8 text-center text-[12px] text-text-dim">
@@ -406,9 +439,30 @@ export function AssetsCard() {
             {portfolio.walletAddress &&
               visiblePositions.map((p, i) => {
                 const tint = HOOK_TINT[p.hook];
+                const handleClick = p.src
+                  ? () => {
+                      const src = p.src;
+                      if (!src) return;
+                      const key = localPoolKey(src.chainId, src.tokenA, src.tokenB, src.fee, src.hook);
+                      onSelectPool?.(`local:${key}`);
+                    }
+                  : undefined;
                 return (
                   <div
                     key={i}
+                    onClick={handleClick}
+                    role={handleClick ? "button" : undefined}
+                    tabIndex={handleClick ? 0 : undefined}
+                    onKeyDown={
+                      handleClick
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleClick();
+                            }
+                          }
+                        : undefined
+                    }
                     className="flex items-center gap-3 px-4 py-3 border-b border-border-soft cursor-pointer transition-colors hover:bg-row-hover"
                   >
                     <div className="flex flex-shrink-0">

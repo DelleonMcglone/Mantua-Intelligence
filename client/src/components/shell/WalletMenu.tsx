@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
-import { ACTIVE_CHAIN } from "@/lib/chain.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO } from "@/lib/chains.ts";
 
 interface WalletMenuProps {
   walletAddress: string;
@@ -9,9 +10,15 @@ interface WalletMenuProps {
 
 const CDP_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
 
+/**
+ * Connected-wallet pill in the header. Click toggles a dropdown with
+ * Copy address / View on BaseScan / Get testnet ETH (CDP) / Refresh
+ * balances / Disconnect. Refresh dispatches `mantua:refresh-portfolio`
+ * on the window — the portfolio hooks listen and re-poll immediately.
+ */
 export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
-  const { url: explorerUrl, name: explorerName } = ACTIVE_CHAIN.blockExplorers.default;
-
+  const chainId = useCurrentChainId();
+  const { explorerUrl, explorerName } = CHAIN_INFO[chainId];
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +52,11 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
     });
   };
 
+  const handleRefresh = () => {
+    window.dispatchEvent(new Event("mantua:refresh-portfolio"));
+    setOpen(false);
+  };
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -64,7 +76,9 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
           role="menu"
           className="absolute top-[calc(100%+6px)] right-0 z-30 bg-panel-solid border border-border rounded-sm p-1 min-w-[220px] shadow-lg"
         >
-          <MenuItem onClick={handleCopy}>{copied ? "Copied!" : "Copy address"}</MenuItem>
+          <MenuItem onClick={handleCopy}>
+            {copied ? "Copied!" : "Copy address"}
+          </MenuItem>
           <MenuLink href={`${explorerUrl}/address/${walletAddress}`}>
             View on {explorerName}
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -73,6 +87,7 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
             Get testnet ETH (CDP)
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
+          <MenuItem onClick={handleRefresh}>Refresh balances</MenuItem>
           <MenuItem
             onClick={() => {
               setOpen(false);
@@ -87,7 +102,13 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
   );
 }
 
-function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function MenuItem({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -100,7 +121,13 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: React.
   );
 }
 
-function MenuLink({ href, children }: { href: string; children: React.ReactNode }) {
+function MenuLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <a
       href={href}

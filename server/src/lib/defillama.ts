@@ -227,6 +227,14 @@ const pricesResponseSchema = z.object({
 
 export type DefiLlamaPrice = z.infer<typeof priceSchema>;
 
+const COIN_KEY = /^[a-z0-9-]+:[a-zA-Z0-9-]+$/;
+
+function validateCoins(coins: readonly string[]): void {
+  for (const c of coins) {
+    if (!COIN_KEY.test(c)) throw new Error(`Invalid coin key: ${c}`);
+  }
+}
+
 /**
  * Current token prices for a list of coin keys. Each key is either
  * `coingecko:<id>` or `<chain>:<contract-address>` (e.g.
@@ -238,13 +246,9 @@ export type DefiLlamaPrice = z.infer<typeof priceSchema>;
  */
 export async function getTokenPrices(
   coins: readonly string[],
-): Promise<Record<string, DefiLlamaPrice>> {
+): Promise<Partial<Record<string, DefiLlamaPrice>>> {
   if (coins.length === 0) return {};
-  for (const c of coins) {
-    if (!/^[a-z0-9-]+:[a-zA-Z0-9-]+$/.test(c)) {
-      throw new Error(`Invalid coin key: ${c}`);
-    }
-  }
+  validateCoins(coins);
   const sorted = [...coins].sort();
   return cached(`prices:${sorted.join(",")}`, async () => {
     const res = await fetch(`${COINS_BASE}/prices/current/${sorted.join(",")}`);
@@ -258,5 +262,110 @@ export async function getTokenPrices(
       return {};
     }
     return parsed.data.coins;
+  });
+}
+
+const percentageResponseSchema = z.object({
+  coins: z.record(z.string(), z.number()),
+});
+
+/**
+ * Percentage price change for a list of coin keys over the given
+ * lookback period. Returns a map keyed by coin string, value is the
+ * raw percent (e.g. `1.23` for +1.23%). Cached for 60s.
+ *
+ * Lookback period strings DefiLlama accepts: `1h`, `24h`, `7d`, `30d`.
+ * Default `24h` matches CoinGecko's `usd_24h_change`.
+ */
+export async function getTokenChangePercents(
+  coins: readonly string[],
+  period: "1h" | "24h" | "7d" | "30d" = "24h",
+): Promise<Partial<Record<string, number>>> {
+  if (coins.length === 0) return {};
+  validateCoins(coins);
+  const sorted = [...coins].sort();
+  return cached(`pct:${period}:${sorted.join(",")}`, async () => {
+    const url = `${COINS_BASE}/percentage/${sorted.join(",")}?lookForward=false&period=${period}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      logger.warn({ status: res.status, period }, "defillama percentage fetch failed");
+      return {};
+    }
+    const parsed = percentageResponseSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      logger.warn({ err: parsed.error.issues }, "defillama percentage schema mismatch");
+      return {};
+    }
+    return parsed.data.coins;
+  });
+}
+
+const chartPriceSchema = z.object({
+  timestamp: z.number(),
+  price: z.number(),
+});
+
+const chartSeriesSchema = z
+  .object({
+    symbol: z.string().optional(),
+    decimals: z.number().optional(),
+    confidence: z.number().optional(),
+    prices: z.array(chartPriceSchema),
+  })
+  .loose();
+
+const chartResponseSchema2 = z.object({
+  coins: z.record(z.string(), chartSeriesSchema),
+});
+
+/**
+ * Historical USD price series for a list of coin keys. `daysBack` is
+ * the lookback window; `points` is the number of evenly-spaced samples
+ * DefiLlama returns within that window (it picks the nearest point to
+ * each requested timestamp). Cached per coin+window+points.
+ *
+ * Returned shape mirrors CoinGecko's `market_chart.prices`: an array
+ * of `[timestampMs, priceUsd]` pairs keyed by `coingecko:<id>` so
+ * callers can swap sources without rewriting downstream code.
+ */
+export async function getTokenHistoricalPrices(
+  coins: readonly string[],
+  daysBack: number,
+  points = 100,
+): Promise<Partial<Record<string, [number, number][]>>> {
+  if (coins.length === 0) return {};
+  validateCoins(coins);
+  if (!Number.isFinite(daysBack) || daysBack <= 0) {
+    throw new Error("daysBack must be a positive number");
+  }
+  const sorted = [...coins].sort();
+  const startSec = Math.floor(Date.now() / 1000) - Math.floor(daysBack * 86400);
+  const periodSec = Math.max(60, Math.floor((daysBack * 86400) / points));
+  // DefiLlama accepts `period` as a human duration string; format the
+  // computed seconds into the smallest valid unit so the API returns
+  // ~`points` samples.
+  const period = periodSec >= 86400
+    ? `${String(Math.max(1, Math.floor(periodSec / 86400)))}d`
+    : periodSec >= 3600
+      ? `${String(Math.max(1, Math.floor(periodSec / 3600)))}h`
+      : `${String(Math.max(1, Math.floor(periodSec / 60)))}m`;
+  const cacheKeyStr = `chart:${sorted.join(",")}:d=${String(daysBack)}:n=${String(points)}`;
+  return cached(cacheKeyStr, async () => {
+    const url = `${COINS_BASE}/chart/${sorted.join(",")}?start=${String(startSec)}&span=${String(points)}&period=${period}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      logger.warn({ status: res.status, daysBack }, "defillama chart fetch failed");
+      return {};
+    }
+    const parsed = chartResponseSchema2.safeParse(await res.json());
+    if (!parsed.success) {
+      logger.warn({ err: parsed.error.issues }, "defillama chart schema mismatch");
+      return {};
+    }
+    const out: Record<string, [number, number][]> = {};
+    for (const [coin, series] of Object.entries(parsed.data.coins)) {
+      out[coin] = series.prices.map((p) => [p.timestamp * 1000, p.price]);
+    }
+    return out;
   });
 }

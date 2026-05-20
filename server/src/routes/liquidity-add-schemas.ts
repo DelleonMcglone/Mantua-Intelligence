@@ -1,12 +1,17 @@
 import { z } from "zod";
-import { isTokenSymbol } from "../lib/tokens.ts";
+import { BASE_SEPOLIA_CHAIN_ID, UNICHAIN_SEPOLIA_CHAIN_ID } from "../lib/chains.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
 
 const hookSchema = z.enum(HOOK_NAMES);
 
+const chainIdSchema = z
+  .union([z.literal(BASE_SEPOLIA_CHAIN_ID), z.literal(UNICHAIN_SEPOLIA_CHAIN_ID)])
+  .default(BASE_SEPOLIA_CHAIN_ID);
+
 export const calldataSchema = z.object({
-  tokenA: z.string().refine(isTokenSymbol, "Unknown tokenA"),
-  tokenB: z.string().refine(isTokenSymbol, "Unknown tokenB"),
+  chainId: chainIdSchema,
+  tokenA: z.string(),
+  tokenB: z.string(),
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
   /** Optional hook binding — must match the hook the pool was created
    *  with so the reconstructed PoolKey matches on-chain (hooks like
@@ -24,9 +29,10 @@ export const calldataSchema = z.object({
 });
 
 export const recordSchema = z.object({
+  chainId: chainIdSchema,
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
-  tokenA: z.string().refine(isTokenSymbol),
-  tokenB: z.string().refine(isTokenSymbol),
+  tokenA: z.string(),
+  tokenB: z.string(),
   fee: z.number().int().refine(isFeeTier),
   hook: hookSchema.nullable().optional(),
   amountARaw: z.string().regex(/^\d+$/),

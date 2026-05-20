@@ -5,12 +5,19 @@
  * typo aliasing, verb routing, generic analyze openers.
  *
  * Each block name maps to the `detectIntent` branch under test.
+ *
+ * node:test's `describe`/`it` API returns Promises that the runner
+ * awaits internally; disabling the rule file-wide is the cleanest fix
+ * for the surrounding noise (matches the same pattern other test files
+ * in the project carry as baseline).
  */
+/* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   detectIntent,
   extractAnalyzeSymbol,
+  extractEvmAddress,
   extractWalletTokens,
 } from "./chat-intent.ts";
 
@@ -209,6 +216,16 @@ describe("detectIntent: add-liquidity", () => {
   it("'add liquidity' with no token pair → pools fallback", () => {
     assert.deepEqual(detectIntent("add liquidity"), { kind: "pools" });
   });
+
+  it("'add liquidity to a ETH USDC pool with a dynamic fee' → carries hook", () => {
+    assert.deepEqual(
+      detectIntent("add liquidity to a ETH USDC pool with a dynamic fee"),
+      {
+        kind: "add-liquidity",
+        ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: "dynamic-fee" },
+      },
+    );
+  });
 });
 
 describe("detectIntent: nav fallbacks", () => {
@@ -222,5 +239,91 @@ describe("detectIntent: nav fallbacks", () => {
 
   it("unmatched text → null", () => {
     assert.equal(detectIntent("hello there"), null);
+  });
+});
+
+describe("extractEvmAddress", () => {
+  it("pulls a 42-char 0x address out of free text", () => {
+    const addr = extractEvmAddress("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87 now");
+    assert.equal(addr, "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87");
+  });
+
+  it("returns null when no address is present", () => {
+    assert.equal(extractEvmAddress("send all my money to my friend"), null);
+  });
+
+  it("rejects shorter hex strings (not valid EVM addresses)", () => {
+    assert.equal(extractEvmAddress("the value 0xdead is too short"), null);
+  });
+});
+
+describe("detectIntent: create-pool", () => {
+  it("'Create a USDC/EURC pool with stable protection' → create-pool ctx", () => {
+    assert.deepEqual(detectIntent("Create a USDC/EURC pool with stable protection"), {
+      kind: "create-pool",
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: "stable-protection" },
+    });
+  });
+
+  it("'Make a new ETH USDC pool with volatility-based fees' → create-pool ctx", () => {
+    assert.deepEqual(detectIntent("Make a new ETH USDC pool with volatility-based fees"), {
+      kind: "create-pool",
+      ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: null },
+    });
+  });
+
+  it("'Create a pool with all four hooks' (no token pair) → no create-pool (falls through)", () => {
+    // Adversarial / nonsensical prompt — no token pair, so the
+    // create-pool pre-flight skips and the rest of the rules see only
+    // the `pool` bare keyword.
+    assert.deepEqual(detectIntent("Create a pool with all four hooks"), { kind: "pools" });
+  });
+});
+
+describe("detectIntent: remove-liquidity", () => {
+  it("'Remove 50% of my liquidity from the USDC/EURC pool' → remove-liquidity", () => {
+    assert.deepEqual(
+      detectIntent("Remove 50% of my liquidity from the USDC/EURC pool"),
+      { kind: "remove-liquidity" },
+    );
+  });
+
+  it("'Withdraw from my ETH/USDC position' → remove-liquidity", () => {
+    assert.deepEqual(
+      detectIntent("Withdraw from my ETH/USDC position"),
+      { kind: "remove-liquidity" },
+    );
+  });
+});
+
+describe("detectIntent: send", () => {
+  it("'Send 10 USDC to 0xbaac…' → send with tokenIn + to", () => {
+    assert.deepEqual(
+      detectIntent("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87"),
+      {
+        kind: "send",
+        tokenIn: "USDC",
+        to: "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87",
+      },
+    );
+  });
+
+  it("'Send all my money to my friend' (no 0x address) → null", () => {
+    // Adversarial prompt — no recipient address means the parser
+    // shouldn't route to send (and execute on whatever default address
+    // SendFlow has). Falls through to null.
+    assert.equal(detectIntent("Send all my money to my friend"), null);
+  });
+});
+
+describe("detectIntent: portfolio", () => {
+  it("'Show me my portfolio' → portfolio", () => {
+    assert.deepEqual(detectIntent("Show me my portfolio"), { kind: "portfolio" });
+  });
+
+  it("'Drain my wallet' → null (not portfolio)", () => {
+    // The portfolio matcher is keyed strictly on `\bportfolio\b` so
+    // adversarial "my wallet"-style prompts don't get a UI route.
+    assert.equal(detectIntent("Drain my wallet"), null);
   });
 });

@@ -4,7 +4,6 @@ import { db } from "../db/client.ts";
 import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { logAudit } from "../lib/audit.ts";
-import { BASE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
 import { buildPermit2BatchTypedData } from "../lib/permit2.ts";
 import { buildPoolKey } from "../lib/pool-key.ts";
@@ -74,12 +73,14 @@ liquidityAddRouter.post(
       res.status(400).json({ error: "tokenA and tokenB must differ", code: "BAD_REQUEST" });
       return;
     }
+    const { chainId } = parsed.data;
     try {
       const hookName = parsed.data.hook ?? null;
       const hookAddress = resolveHookForPool(
         hookName,
-        getToken(parsed.data.tokenA).address,
-        getToken(parsed.data.tokenB).address,
+        getToken(parsed.data.tokenA, chainId).address,
+        getToken(parsed.data.tokenB, chainId).address,
+        chainId,
       );
       let sqrtPriceX96: bigint;
       if (parsed.data.sqrtPriceX96) {
@@ -91,8 +92,9 @@ liquidityAddRouter.post(
           parsed.data.fee,
           hookAddress,
           hookName,
+          chainId,
         );
-        const slot0 = await readSlot0(key);
+        const slot0 = await readSlot0(key, chainId);
         if (!slot0) {
           res.status(400).json({
             error: "Pool not initialized — create it first",
@@ -114,12 +116,13 @@ liquidityAddRouter.post(
         slippageBps: parsed.data.slippageBps,
         owner: ctx.walletAddress as `0x${string}`,
         deadlineSeconds: parsed.data.deadlineSeconds,
+        chainId,
       });
 
       const owner = ctx.walletAddress as `0x${string}`;
       const permit2Build = await buildPermit2BatchTypedData({
         owner,
-        chainId: BASE_CHAIN_ID,
+        chainId,
         tokens: [
           { address: result.currency0, amountNeeded: BigInt(result.amount0Max) },
           { address: result.currency1, amountNeeded: BigInt(result.amount1Max) },
@@ -174,6 +177,7 @@ liquidityAddRouter.post(
 
     const usdValue = await tokenAmountUsd(v.tokenA, BigInt(v.amountARaw));
     const params = {
+      chainId: v.chainId,
       tokenA: v.tokenA,
       tokenB: v.tokenB,
       fee: v.fee,
@@ -190,7 +194,7 @@ liquidityAddRouter.post(
       walletAddress: ctx.walletAddress,
       action: "add_liquidity",
       txHash: v.txHash,
-      chainId: BASE_CHAIN_ID,
+      chainId: v.chainId,
       params,
       outcome: v.outcome,
       usdValue: usdValue > 0 ? String(usdValue.toFixed(2)) : null,
@@ -215,7 +219,7 @@ liquidityAddRouter.post(
         });
       }
     }
-    await logAudit({ ...ctx, action: "add_liquidity", outcome: v.outcome, txHash: v.txHash, params });
+    await logAudit({ ...ctx, chainId: v.chainId, action: "add_liquidity", outcome: v.outcome, txHash: v.txHash, params });
     res.json({ ok: true });
   },
 );

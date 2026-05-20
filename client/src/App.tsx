@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
@@ -11,6 +12,7 @@ import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
+import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
@@ -39,6 +41,7 @@ type Route =
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
   | { kind: "positions" }
+  | { kind: "asset"; symbol: TokenSymbol }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
@@ -51,6 +54,19 @@ type Route =
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
   const [route, setRoute] = useState<Route>({ kind: "landing" });
+
+  // PanelHeader's "New chat" button (rendered inside every panel)
+  // falls back to this event when no `onNewChat` prop is wired —
+  // letting any panel reset to the home menu without prop-drilling.
+  useEffect(() => {
+    const handler = () => {
+      setRoute({ kind: "home" });
+    };
+    window.addEventListener("mantua:new-chat", handler);
+    return () => {
+      window.removeEventListener("mantua:new-chat", handler);
+    };
+  }, []);
 
   if (!ready) {
     return (
@@ -91,17 +107,24 @@ export default function App() {
       onLogoClick={() => {
         setRoute({ kind: "landing" });
       }}
-      left={<LeftColumn />}
+      left={<LeftColumn setRoute={setRoute} />}
       right={<RightColumn route={route} setRoute={setRoute} />}
     />
   );
 }
 
-function LeftColumn() {
+function LeftColumn({ setRoute }: { setRoute: (r: Route) => void }) {
   return (
     <>
       <PortfolioCard />
-      <AssetsCard />
+      <AssetsCard
+        onSelectPool={(id) => {
+          setRoute({ kind: "pool", id });
+        }}
+        onSelectAsset={(symbol) => {
+          setRoute({ kind: "asset", symbol });
+        }}
+      />
     </>
   );
 }
@@ -122,6 +145,7 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
 }
 
 function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
+  const chainId = useCurrentChainId();
   switch (route.kind) {
     case "home":
       return (
@@ -175,8 +199,12 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "add-liquidity":
+      // Key on chainId so a network switch remounts the form and the
+      // useState initializers re-pick chain-aware defaults (Unichain
+      // has no EURC, etc.).
       return (
         <AddLiquidityForm
+          key={chainId}
           {...(route.ctx ? { ctx: route.ctx } : {})}
           onBack={() => {
             setRoute({ kind: "pools" });
@@ -189,6 +217,16 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "positions":
       return (
         <PositionsList
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "asset":
+      return (
+        <AssetDetailPanel
+          key={route.symbol}
+          symbol={route.symbol}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -234,26 +272,78 @@ function promptToRoute(id: HomePromptId): Route {
 }
 
 /**
- * Thin adapter from the pure intent matcher (`lib/chat-intent.ts`)
- * to the App's `Route` discriminated union. Lives here because
- * `Route` references `PoolKeyContext` from the AddLiquidityForm,
- * which would pull React types into the otherwise-pure intent
- * module if we collapsed them. The shapes line up byte-for-byte —
- * this is just a re-cast.
+ * Re-export of the pure intent matcher from `lib/chat-intent.ts`.
+ * The returned `Intent` goes through `intentToRoute()` below to land
+ * on a concrete `Route` — the two unions don't line up shape-for-
+ * shape (Intent has create-pool / remove-liquidity / send / portfolio
+ * kinds that collapse into a smaller Route set).
  */
-function detectIntent(text: string): Route | null {
-  const intent: Intent | null = detectIntentImpl(text);
-  if (!intent) return null;
-  return intent;
+function detectIntent(text: string): Intent | null {
+  return detectIntentImpl(text);
 }
 
 function handleChatCommand(text: string, setRoute: (r: Route) => void) {
   const next = detectIntent(text);
   if (next) {
-    setRoute(next);
+    setRoute(intentToRoute(next));
     return;
   }
   // Fallback: drop the user into the analyze panel so they at least
   // see the suggestion buttons rather than nothing happening.
   setRoute({ kind: "analyze", question: text });
+}
+
+/**
+ * Map a parsed `Intent` (from the chat NLP layer) onto a concrete
+ * `Route` (what `RouteContent` knows how to render). Most Intent kinds
+ * have a 1:1 Route counterpart; the kinds that don't yet collapse to
+ * the closest existing panel:
+ *
+ * - `create-pool` → `add-liquidity` — the AddLiquidityForm already
+ *   handles create-or-add via its calldata flow (initialize the pool
+ *   if missing, then add liquidity).
+ * - `remove-liquidity` → `positions` — per-position deep-linking
+ *   needs a pool/position id we don't extract yet; PositionsList lets
+ *   the user pick which position to remove.
+ * - `send` → `agent` — AgentPanel hosts SendFlow.
+ * - `portfolio` → `home` — HomeMenu already surfaces PortfolioCard
+ *   + AssetsCard.
+ *
+ * As deep-link surfaces land (send Route, etc.), the corresponding
+ * `case` here is the only place that needs to change — the parser
+ * is already producing the richer intent.
+ */
+function intentToRoute(intent: Intent): Route {
+  switch (intent.kind) {
+    case "home":
+      return { kind: "home" };
+    case "swap":
+      return {
+        kind: "swap",
+        ...(intent.tokenIn ? { tokenIn: intent.tokenIn } : {}),
+        ...(intent.tokenOut ? { tokenOut: intent.tokenOut } : {}),
+      };
+    case "pools":
+      return { kind: "pools" };
+    case "add-liquidity":
+    case "create-pool":
+      return intent.ctx
+        ? { kind: "add-liquidity", ctx: intent.ctx }
+        : { kind: "add-liquidity" };
+    case "remove-liquidity":
+      return { kind: "positions" };
+    case "positions":
+      return { kind: "positions" };
+    case "send":
+      return { kind: "agent" };
+    case "portfolio":
+      return { kind: "home" };
+    case "analyze":
+      return {
+        kind: "analyze",
+        ...(intent.topic ? { topic: intent.topic } : {}),
+        ...(intent.question ? { question: intent.question } : {}),
+        ...(intent.symbol ? { symbol: intent.symbol } : {}),
+      };
+  }
 }

@@ -53,6 +53,17 @@ export function useAgentPortfolio(): AgentPortfolioState {
     notProvisioned: false,
     error: null,
   });
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  useEffect(() => {
+    const handler = () => {
+      setRefreshNonce((n) => n + 1);
+    };
+    window.addEventListener("mantua:refresh-portfolio", handler);
+    return () => {
+      window.removeEventListener("mantua:refresh-portfolio", handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -101,7 +112,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, ready]);
+  }, [authenticated, ready, refreshNonce]);
 
   if (!ready || !authenticated) {
     return {

@@ -1,5 +1,7 @@
+import { type SupportedTestnetChainId } from "./chains.ts";
 import { getToken, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
 import {
+  DEFAULT_CHAIN_ID,
   TICK_SPACING_BY_FEE,
   effectivePoolFee,
   type FeeTier,
@@ -26,12 +28,12 @@ const NO_HOOK = ZERO_ADDRESS;
  * ETH (zero address) sorts before any ERC-20.
  *
  * `hookName` is optional but should be passed any time the caller
- * knows which Mantua hook is bound to the pool. Hooks like
- * `stable-protection` and `dynamic-fee` require the v4 dynamic-fee
- * flag (`0x800000`) in `key.fee`, regardless of which static tier
- * the user picked — `effectivePoolFee` makes the swap. The static
- * tier still drives `tickSpacing`, so the user's choice of "0.01%"
- * still means tick spacing 1 even when fee is overridden.
+ * knows which Mantua hook is bound to the pool. Stable Protection
+ * and Dynamic Fee both require the v4 dynamic-fee flag (`0x800000`)
+ * in `key.fee`, regardless of which static tier the user picked —
+ * `effectivePoolFee` makes the swap. The static tier still drives
+ * `tickSpacing`, so the user's choice of "0.01%" still means tick
+ * spacing 1 even when fee is overridden.
  */
 export function buildPoolKey(
   symA: TokenSymbol,
@@ -39,10 +41,11 @@ export function buildPoolKey(
   fee: FeeTier,
   hook: `0x${string}` = NO_HOOK,
   hookName: HookName | null = null,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): { key: PoolKey; flipped: boolean } {
   if (symA === symB) throw new Error("Cannot create a pool with identical tokens");
-  const a = getToken(symA);
-  const b = getToken(symB);
+  const a = getToken(symA, chainId);
+  const b = getToken(symB, chainId);
   const addrA = (a.native ? ZERO_ADDRESS : a.address).toLowerCase() as `0x${string}`;
   const addrB = (b.native ? ZERO_ADDRESS : b.address).toLowerCase() as `0x${string}`;
   const flipped = addrA > addrB;

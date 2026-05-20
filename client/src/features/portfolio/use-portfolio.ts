@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { ApiError, api } from "@/lib/api.ts";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
+import type { SupportedTestnetChainId } from "@/lib/chains.ts";
 
 interface PortfolioBalance {
   symbol: TokenSymbol;
@@ -11,13 +13,29 @@ interface PortfolioBalance {
   usdValue: number;
 }
 
+export interface PortfolioTransaction {
+  id: string;
+  action: string;
+  txHash: string;
+  chainId: number;
+  /** Action-specific shape (tokenIn/tokenOut for swap, tokenA/tokenB
+   *  for liquidity, token for send_tokens, etc.). Treated as opaque
+   *  by most consumers; AssetDetailPanel walks it to filter by symbol. */
+  params: Record<string, unknown>;
+  outcome: string;
+  usdValue: string | null;
+  createdAt: string;
+}
+
 interface PortfolioResponse {
   address: string;
   balances: PortfolioBalance[];
+  transactions?: PortfolioTransaction[];
 }
 
 interface PortfolioState {
   balances: PortfolioBalance[];
+  transactions: PortfolioTransaction[];
   loading: boolean;
   error: string | null;
   walletAddress: string | null;
@@ -33,17 +51,36 @@ const POLL_MS = 15_000;
  */
 export function usePortfolio(): PortfolioState {
   const { authenticated, ready, user } = usePrivy();
+  const chainId = useCurrentChainId();
   const wallet = user?.wallet?.address ?? null;
   const [state, setState] = useState<PortfolioState>({
     balances: [],
+    transactions: [],
     loading: false,
     error: null,
     walletAddress: null,
   });
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  useEffect(() => {
+    const handler = () => {
+      setRefreshNonce((n) => n + 1);
+    };
+    window.addEventListener("mantua:refresh-portfolio", handler);
+    return () => {
+      window.removeEventListener("mantua:refresh-portfolio", handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!ready || !authenticated || !wallet) {
-      setState({ balances: [], loading: false, error: null, walletAddress: null });
+      setState({
+        balances: [],
+        transactions: [],
+        loading: false,
+        error: null,
+        walletAddress: null,
+      });
       return;
     }
 
@@ -52,10 +89,13 @@ export function usePortfolio(): PortfolioState {
 
     const tick = async () => {
       try {
-        const data = await api.get<PortfolioResponse>("/api/portfolio");
+        const data = await api.get<PortfolioResponse>(
+          `/api/portfolio?chainId=${String(chainId)}`,
+        );
         if (cancelled) return;
         setState({
           balances: data.balances,
+          transactions: data.transactions ?? [],
           loading: false,
           error: null,
           walletAddress: data.address,
@@ -77,7 +117,7 @@ export function usePortfolio(): PortfolioState {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, ready, wallet]);
+  }, [authenticated, ready, wallet, refreshNonce, chainId]);
 
   return state;
 }
@@ -98,11 +138,15 @@ export interface DisplayAsset {
   decimals: number;
 }
 
-export function toDisplayAssets(balances: PortfolioBalance[]): DisplayAsset[] {
+export function toDisplayAssets(
+  balances: PortfolioBalance[],
+  chainId: SupportedTestnetChainId,
+): DisplayAsset[] {
+  const tokens = getTokens(chainId);
   return balances
     .filter((b) => b.symbol !== "WETH") // user-facing list excludes WETH
     .map((b) => {
-      const meta = TOKENS[b.symbol];
+      const meta = tokens[b.symbol];
       const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
       const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;
       return {

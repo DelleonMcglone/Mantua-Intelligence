@@ -3,12 +3,26 @@ import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { userPreferences, users } from "../db/schema/users.ts";
+import {
+  BASE_SEPOLIA_CHAIN_ID,
+  isSupportedTestnetChainId,
+  type SupportedTestnetChainId,
+} from "../lib/chains.ts";
 import { logger } from "../lib/logger.ts";
 import { getPortfolioHistory } from "../lib/portfolio-history.ts";
 import { HISTORY_RANGES } from "../lib/price-history.ts";
 import { getUserPortfolio } from "../lib/user-portfolio.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { walletRateLimiter, writeRateLimiter } from "../middleware/rate-limit.ts";
+
+function readChainId(req: Request): SupportedTestnetChainId {
+  const raw = req.query.chainId;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (isSupportedTestnetChainId(n)) return n;
+  }
+  return BASE_SEPOLIA_CHAIN_ID;
+}
 
 export const portfolioRouter = Router();
 
@@ -48,8 +62,9 @@ portfolioRouter.get(
       return;
     }
     try {
-      const portfolio = await getUserPortfolio(privyUserId, walletAddress);
-      res.json(portfolio);
+      const chainId = readChainId(req);
+      const portfolio = await getUserPortfolio(privyUserId, walletAddress, 50, chainId);
+      res.json({ ...portfolio, chainId });
     } catch (err) {
       logger.error({ err }, "user portfolio fetch failed");
       res.status(502).json({

@@ -12,8 +12,8 @@
 These Terms of Service ("Terms") govern your access to and use of
 Mantua (the "Service"), an interface for interacting with Uniswap v4
 liquidity pools and Mantua's deployed Liquidity Hooks ("Stable
-Protection," "Dynamic Fee," "RWAgate," and "Async Limit Order") on
-**Base Sepolia, a public Ethereum testnet**. The Service is operated
+Protection" and "Dynamic Fee") on **Base Sepolia, a public Ethereum
+testnet**. The Service is operated
 in a testnet beta only — there is no mainnet deployment. By
 connecting a wallet to the Service or otherwise using it, you accept
 these Terms.

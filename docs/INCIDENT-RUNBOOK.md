@@ -68,10 +68,10 @@ tail -10000 /private/tmp/mantua-server.log | grep '0xbaac'
 
 **On-chain incidents (Base Sepolia testnet beta):**
 
-- The four hooks live at `0xe5e6…20C0` (Stable Protection),
-  `0x9788…40c0` (Dynamic Fee), `0xbba7…4a80` (RWAgate), `0xb9e2…0d0c8`
-  (Async Limit Order) on Base Sepolia. Mainnet is out of scope for
-  this beta — see `docs/tasks/v2-roadmap.md` Phase 9.
+- Mantua hooks on Base Sepolia: Stable Protection (`0xe5e6…20C0`,
+  gated to USDC/EURC) and Dynamic Fee (`0x9788…40c0`, any pair).
+  Mainnet is out of scope for this beta — see
+  `docs/tasks/v2-roadmap.md` Phase 9.
 - v4 PoolManager Sepolia: `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408`.
 - v4 Quoter Sepolia: `0x4a6513c898fe1B2d0e78d3b0e0a4a151589B1cBa`.
 - PoolSwapTest helper Sepolia: `0x8b5bcc363dde2614281ad875bad385e0a785d3b9`.

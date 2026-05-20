@@ -4,9 +4,3 @@
 [submodule "contracts/hooks/dynamic-fee"]
 	path = contracts/hooks/dynamic-fee
 	url = https://github.com/DelleonMcglone/dynamic-fee.git
-[submodule "contracts/hooks/rwa-gate"]
-	path = contracts/hooks/rwa-gate
-	url = https://github.com/DelleonMcglone/RWAgate.git
-[submodule "contracts/hooks/limit-orders"]
-	path = contracts/hooks/limit-orders
-	url = https://github.com/DelleonMcglone/limit-orders.git

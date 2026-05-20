@@ -8,13 +8,7 @@
  * round-trip every render.
  */
 
-export const HOOK_OPTIONS = [
-  "none",
-  "stable-protection",
-  "dynamic-fee",
-  "rwa-gate",
-  "async-limit-order",
-] as const;
+export const HOOK_OPTIONS = ["none", "stable-protection", "dynamic-fee"] as const;
 
 export type HookOption = (typeof HOOK_OPTIONS)[number];
 
@@ -29,22 +23,12 @@ export const HOOK_META: Record<HookOption, HookMeta> = {
   "stable-protection": {
     value: "stable-protection",
     label: "Stable Protection",
-    description: "Minimizes depeg & slippage",
+    description: "Minimizes depeg & slippage on USDC/EURC",
   },
   "dynamic-fee": {
     value: "dynamic-fee",
     label: "Dynamic Fee",
     description: "Fees adjust to volatility",
-  },
-  "rwa-gate": {
-    value: "rwa-gate",
-    label: "RWAgate",
-    description: "Compliance-gated routing",
-  },
-  "async-limit-order": {
-    value: "async-limit-order",
-    label: "Async Limit Order",
-    description: "Off-chain matching, on-chain settle",
   },
 };
 

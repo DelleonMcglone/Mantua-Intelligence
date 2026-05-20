@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronDown, Send, Settings } from "lucide-react";
+import { Send, Settings } from "lucide-react";
+import { ChainSelector } from "./ChainSelector.tsx";
 
 interface Props {
   onSubmit: (text: string) => void;
@@ -46,14 +47,7 @@ export function InputBar({ onSubmit }: Props) {
         </button>
       </div>
       <div className="mt-2 flex gap-2 items-center">
-        <button
-          type="button"
-          className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1.5"
-        >
-          <span className="w-2 h-2 rounded-full" style={{ background: "#0052ff" }} />
-          Base
-          <ChevronDown className="h-3 w-3" />
-        </button>
+        <ChainSelector />
         <div className="flex-1" />
         <button
           type="button"
