@@ -189,6 +189,24 @@ describe("detectIntent: swap", () => {
   it("verb only → swap with no token presets", () => {
     assert.deepEqual(detectIntent("swap stablecoins"), { kind: "swap" });
   });
+
+  it("'swap ETH for USDC with dynamic fee' threads hook into the intent", () => {
+    assert.deepEqual(detectIntent("swap ETH for USDC with dynamic fee"), {
+      kind: "swap",
+      tokenIn: "ETH",
+      tokenOut: "USDC",
+      hook: "dynamic-fee",
+    });
+  });
+
+  it("'trade USDC for EURC using stable protection' threads stable-protection hook", () => {
+    assert.deepEqual(detectIntent("trade USDC for EURC using stable protection"), {
+      kind: "swap",
+      tokenIn: "USDC",
+      tokenOut: "EURC",
+      hook: "stable-protection",
+    });
+  });
 });
 
 describe("detectIntent: add-liquidity", () => {

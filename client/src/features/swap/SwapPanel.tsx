@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
+import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { HookSelector } from "./HookSelector.tsx";
 import { TestnetSwapPanel } from "./TestnetSwapPanel.tsx";
 import { PegZoneIndicator } from "./PegZoneIndicator.tsx";
@@ -30,6 +31,9 @@ interface SwapPanelProps {
    *  ("swap ETH for cbBTC" → tokenIn=ETH, tokenOut=cbBTC). */
   initialTokenIn?: TokenSymbol;
   initialTokenOut?: TokenSymbol;
+  /** Pre-seed the hook selector when the chat intent matched a hook
+   *  keyword ("swap ETH for USDC with dynamic fee" → "dynamic-fee"). */
+  initialHook?: HookName;
 }
 
 /**
@@ -40,7 +44,7 @@ interface SwapPanelProps {
  * warnings → Exchange Rate card → Fee Architecture → divider stats →
  * Review CTA.
  */
-export function SwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPanelProps = {}) {
+export function SwapPanel({ onClose, initialTokenIn, initialTokenOut, initialHook }: SwapPanelProps = {}) {
   // Mainnet swaps go through Uniswap's Trading API (full routing,
   // permit2, etc.). Testnet swaps go through V4Quoter + PoolSwapTest,
   // wired in a sibling panel — the Trading API doesn't index Sepolia,
@@ -51,6 +55,7 @@ export function SwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPane
         {...(onClose ? { onClose } : {})}
         {...(initialTokenIn ? { initialTokenIn } : {})}
         {...(initialTokenOut ? { initialTokenOut } : {})}
+        {...(initialHook ? { initialHook } : {})}
       />
     );
   }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
+import type { HookName } from "./features/liquidity/use-create-pool.ts";
 import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
 import { AppShell } from "./components/shell/AppShell.tsx";
@@ -36,6 +37,7 @@ type Route =
       kind: "swap";
       tokenIn?: TokenSymbol;
       tokenOut?: TokenSymbol;
+      hook?: HookName | null;
     }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
@@ -164,6 +166,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         <SwapPanel
           {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
           {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
+          {...(route.hook ? { initialHook: route.hook } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -322,6 +325,7 @@ function intentToRoute(intent: Intent): Route {
         kind: "swap",
         ...(intent.tokenIn ? { tokenIn: intent.tokenIn } : {}),
         ...(intent.tokenOut ? { tokenOut: intent.tokenOut } : {}),
+        ...(intent.hook ? { hook: intent.hook } : {}),
       };
     case "pools":
       return { kind: "pools" };

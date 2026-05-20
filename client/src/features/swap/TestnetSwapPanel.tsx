@@ -28,6 +28,10 @@ interface Props {
   onClose?: () => void;
   initialTokenIn?: TokenSymbol;
   initialTokenOut?: TokenSymbol;
+  /** Pre-seed the hook selector. When omitted, falls back to
+   *  `recommendedHookForPair(seedIn, seedOut) ?? "none"`. Set by the
+   *  chat-intent matcher when the user prompt names a hook explicitly. */
+  initialHook?: HookName;
 }
 
 const HOOK_OPTIONS: { value: HookName | "none"; label: string }[] = [
@@ -93,7 +97,7 @@ function ctaLabel(status: ReturnType<typeof useTestnetSwap>["state"]["status"]):
  *   the pool whose `(currency0, currency1, fee, tickSpacing, hooks)`
  *   matches the user's selection.
  */
-export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: Props) {
+export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut, initialHook }: Props) {
   const seedIn: TokenSymbol = initialTokenIn ?? "USDC";
   const seedOut: TokenSymbol = initialTokenOut ?? "EURC";
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
@@ -103,7 +107,7 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
     DEFAULT_FEE_TIER_FOR_PAIR(isStable(seedIn), isStable(seedOut)),
   );
   const [hook, setHook] = useState<HookName | "none">(
-    () => recommendedHookForPair(seedIn, seedOut) ?? "none",
+    () => initialHook ?? recommendedHookForPair(seedIn, seedOut) ?? "none",
   );
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 
