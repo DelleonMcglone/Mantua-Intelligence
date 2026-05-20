@@ -71,9 +71,9 @@ describe("TOPICS / topicSchema", () => {
     const expected = [
       "eth-price",
       "eurc-peg",
-      "usdc-usdt-pool",
-      "top-rwa-tokens",
-      "cbbtc-24h-volume",
+      "usdc-eurc-pool",
+      "top-stablecoins",
+      "usdc-24h-volume",
       "mantua-hooks",
       "token-price",
     ];
