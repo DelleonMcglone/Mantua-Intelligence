@@ -2,11 +2,11 @@ import { ArrowLeft, History, Plus, X } from "lucide-react";
 
 const CHAT_ACTIONS = [
   { k: "wallet", t: "Create & Manage Wallet", d: "Create agent wallet via CDP", e: "🔑" },
-  { k: "send", t: "Send Tokens", d: "Transfer tokens to any address", e: "📩" },
-  { k: "swap", t: "Swap Tokens", d: "Exchange between tokens in agent wallet", e: "🔄" },
-  { k: "liq", t: "Liquidity", d: "Add/remove liquidity from a pool", e: "💧" },
-  { k: "query", t: "Query On-Chain Data", d: "Fetch any crypto data", e: "🔍" },
   { k: "fund", t: "Fund Agent Wallet", d: "Get tokens", e: "🚰" },
+  { k: "query", t: "Query On-Chain Data", d: "Fetch any crypto data", e: "🔍" },
+  { k: "liq", t: "Liquidity", d: "Add/remove liquidity from a pool", e: "💧" },
+  { k: "swap", t: "Swap Tokens", d: "Exchange between tokens in agent wallet", e: "🔄" },
+  { k: "send", t: "Send Tokens", d: "Transfer tokens to any address", e: "📩" },
 ] as const;
 
 export type ChatActionKey = (typeof CHAT_ACTIONS)[number]["k"];
