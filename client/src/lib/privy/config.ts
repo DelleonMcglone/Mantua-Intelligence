@@ -20,13 +20,17 @@ const SUPPORTED_TESTNET_CHAINS = [baseSepolia, unichainSepolia];
 const DEFAULT_CHAIN = IS_MAINNET ? base : baseSepolia;
 const SUPPORTED_CHAINS = IS_MAINNET ? [base] : SUPPORTED_TESTNET_CHAINS;
 
+const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as
+  | string
+  | undefined;
+
 export const privyConfig: PrivyClientConfig = {
   appearance: { theme: "dark", accentColor: "#8b6cf0" },
   loginMethods: ["email", "google", "apple", "passkey", "wallet"],
   embeddedWallets: {
     ethereum: { createOnLogin: "users-without-wallets" },
   },
-  walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+  walletConnectCloudProjectId: WALLETCONNECT_PROJECT_ID,
   // viem `Chain` type drifts between our copy and Privy's bundled
   // (porto-vendored) copy under `exactOptionalPropertyTypes: true`.
   // Runtime value is identical; @ts-expect-error silences the
@@ -37,10 +41,4 @@ export const privyConfig: PrivyClientConfig = {
   supportedChains: SUPPORTED_CHAINS,
 };
 
-export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
-
-if (!PRIVY_APP_ID) {
-  throw new Error(
-    "VITE_PRIVY_APP_ID is missing. Add it to client/.env.local — see client/.env.example.",
-  );
-}
+export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID as string | undefined;
