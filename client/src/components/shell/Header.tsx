@@ -2,6 +2,7 @@ import { Sun, Moon } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Logo } from "./Logo.tsx";
+import { WalletMenu } from "./WalletMenu.tsx";
 
 interface HeaderProps {
   walletAddress?: string | undefined;
@@ -36,11 +37,8 @@ export function Header({ walletAddress, onConnect, onDisconnect, onLogoClick }: 
         <Button variant="icon" size="icon" aria-label="Toggle theme" onClick={toggle}>
           <Icon className="h-[18px] w-[18px]" />
         </Button>
-        {walletAddress ? (
-          <Button variant="ghost" onClick={onDisconnect}>
-            <span className="h-2 w-2 rounded-full bg-green" />
-            <span className="font-mono text-[13px]">{shorten(walletAddress)}</span>
-          </Button>
+        {walletAddress && onDisconnect ? (
+          <WalletMenu walletAddress={walletAddress} onDisconnect={onDisconnect} />
         ) : (
           <Button variant="primary" onClick={onConnect}>
             Connect Wallet
@@ -49,9 +47,4 @@ export function Header({ walletAddress, onConnect, onDisconnect, onLogoClick }: 
       </div>
     </header>
   );
-}
-
-function shorten(addr: string): string {
-  if (addr.length <= 10) return addr;
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
