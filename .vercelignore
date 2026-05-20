@@ -1,0 +1,15 @@
+node_modules
+.git
+.claude
+.husky
+contracts/lib
+contracts/out
+contracts/cache
+contracts/broadcast
+contracts/test
+contracts/script
+contracts/abi
+**/*.log
+.env*
+!.env.example
+client/dist

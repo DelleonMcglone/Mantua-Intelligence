@@ -64,3 +64,4 @@ logs/
 *.log
 docs/security/slither/*
 !docs/security/slither/.gitkeep
+.vercel
