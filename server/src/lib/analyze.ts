@@ -21,9 +21,9 @@ import { z } from "zod";
 export const TOPICS = [
   "eth-price",
   "eurc-peg",
-  "usdc-usdt-pool",
-  "top-rwa-tokens",
-  "cbbtc-24h-volume",
+  "usdc-eurc-pool",
+  "top-stablecoins",
+  "usdc-24h-volume",
   "mantua-hooks",
   // Generic price lookup — uses the `?symbol=` query param (or the
   // `symbol` body field) to drive a CoinGecko spot fetch. Falls back
@@ -164,23 +164,23 @@ async function eurcPeg(): Promise<AnalyzeResponse> {
   };
 }
 
-async function usdcUsdtPool(): Promise<AnalyzeResponse> {
+async function usdcEurcPool(): Promise<AnalyzeResponse> {
   const all = await listBasePools();
-  const candidates = all.filter((p) => /USDC.*USDT|USDT.*USDC/i.test(p.symbol));
+  const candidates = all.filter((p) => /USDC.*EURC|EURC.*USDC/i.test(p.symbol));
   if (candidates.length === 0) {
     return {
-      topic: "usdc-usdt-pool",
-      title: "USDC/USDT pool health",
+      topic: "usdc-eurc-pool",
+      title: "USDC/EURC pool health",
       summary:
-        "DefiLlama doesn't currently surface a USDC/USDT pool on Base. On Base, USDC pairs typically route against ETH or cbBTC; USDT volume is concentrated on Ethereum L1 and Arbitrum.",
+        "DefiLlama doesn't currently surface a USDC/EURC pool on Base. USDC/EURC is the marquee pair for Mantua's Stable Protection hook (dynamic fees scale across five depeg zones) — once external liquidity migrates onto a v4 pool with the hook attached, this route surfaces live TVL/APY here.",
       sources: [{ name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" }],
     };
   }
   const top = candidates.sort((a, b) => b.tvlUsd - a.tvlUsd)[0]!;
   return {
-    topic: "usdc-usdt-pool",
-    title: "USDC/USDT — top Base pool",
-    summary: `The deepest USDC/USDT pool on Base sits in ${top.project} with ${fmtUsd(top.tvlUsd)} TVL${
+    topic: "usdc-eurc-pool",
+    title: "USDC/EURC — top Base pool",
+    summary: `The deepest USDC/EURC pool on Base sits in ${top.project} with ${fmtUsd(top.tvlUsd)} TVL${
       top.poolMeta ? ` (fee tier ${top.poolMeta})` : ""
     }. ${
       top.apy && top.apy > 0
@@ -197,33 +197,33 @@ async function usdcUsdtPool(): Promise<AnalyzeResponse> {
   };
 }
 
-async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
+async function usdc24hVolume(): Promise<AnalyzeResponse> {
   const all = await listBasePools();
-  const cbbtcPools = all.filter((p) => /cbBTC/i.test(p.symbol));
-  if (cbbtcPools.length === 0) {
+  const usdcPools = all.filter((p) => /\bUSDC\b/i.test(p.symbol));
+  if (usdcPools.length === 0) {
     return {
-      topic: "cbbtc-24h-volume",
-      title: "cbBTC volume on Base",
+      topic: "usdc-24h-volume",
+      title: "USDC volume on Base",
       summary:
-        "DefiLlama doesn't currently surface cbBTC pools on Base. cbBTC was minted on Base in 2024; once liquidity migrates onto v3/v4 pools the route returns real numbers here.",
+        "DefiLlama isn't returning USDC pools on Base right now. USDC is the canonical Base stablecoin (Circle-native); transient API hiccup is the most likely cause — try again in a moment.",
       sources: [
         { name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" },
       ],
     };
   }
-  const total24h = cbbtcPools.reduce((s, p) => s + (p.volumeUsd1d ?? 0), 0);
-  const total7d = cbbtcPools.reduce((s, p) => s + (p.volumeUsd7d ?? 0), 0);
+  const total24h = usdcPools.reduce((s, p) => s + (p.volumeUsd1d ?? 0), 0);
+  const total7d = usdcPools.reduce((s, p) => s + (p.volumeUsd7d ?? 0), 0);
   const avgDaily7d = total7d / 7;
   const trend =
     avgDaily7d > 0 ? ((total24h - avgDaily7d) / avgDaily7d) * 100 : 0;
-  const top = cbbtcPools.sort(
+  const top = usdcPools.sort(
     (a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0),
   )[0]!;
   return {
-    topic: "cbbtc-24h-volume",
-    title: "cbBTC — 24h volume on Base",
-    summary: `Across ${String(cbbtcPools.length)} cbBTC pools on Base, ${fmtUsd(total24h)} of volume cleared in the last 24h${
-      Number.isFinite(trend)
+    topic: "usdc-24h-volume",
+    title: "USDC — 24h volume on Base",
+    summary: `Across ${String(usdcPools.length)} USDC pools on Base, ${fmtUsd(total24h)} of volume cleared in the last 24h${
+      Number.isFinite(trend) && avgDaily7d > 0
         ? ` (${fmtPct(trend)} vs the trailing 7-day daily average)`
         : ""
     }. Largest single pool: ${top.project} ${top.symbol} at ${fmtUsd(top.volumeUsd1d ?? 0)}.`,
@@ -234,53 +234,63 @@ async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
       { label: "Top pool", value: `${top.project} (${fmtUsd(top.volumeUsd1d ?? 0)})` },
     ],
     sources: [
-      { name: "DefiLlama (Base cbBTC pools)", url: "https://defillama.com/yields?chain=Base&token=CBBTC" },
+      { name: "DefiLlama (Base USDC pools)", url: "https://defillama.com/yields?chain=Base&token=USDC" },
     ],
   };
 }
 
-const RWA_LIST: { symbol: string; name: string; coingeckoId: string; venue: string }[] = [
-  { symbol: "MKR", name: "MakerDAO", coingeckoId: "maker", venue: "Ethereum L1" },
-  { symbol: "ONDO", name: "Ondo Finance", coingeckoId: "ondo-finance", venue: "Ethereum L1 / Arbitrum" },
-  { symbol: "PENDLE", name: "Pendle", coingeckoId: "pendle", venue: "Ethereum L1 / Arbitrum" },
-  { symbol: "RWA", name: "Centrifuge", coingeckoId: "centrifuge", venue: "Ethereum L1" },
-  { symbol: "POLYX", name: "Polymesh", coingeckoId: "polymesh", venue: "Polymesh" },
+/**
+ * Major USD-pegged stablecoins, ordered by canonical market-cap rank
+ * (USDT > USDC > DAI > USDe > USDS > FDUSD > PYUSD). Ranking lives
+ * here because we don't currently wire DefiLlama's stablecoins
+ * endpoint — the order is stable enough between API calls that
+ * baking it in is safer than re-fetching MC for every request.
+ */
+const STABLECOIN_LIST: { symbol: string; name: string; coingeckoId: string; issuer: string }[] = [
+  { symbol: "USDT", name: "Tether", coingeckoId: "tether", issuer: "Tether" },
+  { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", issuer: "Circle" },
+  { symbol: "DAI", name: "Dai", coingeckoId: "dai", issuer: "Sky / Maker" },
+  { symbol: "USDe", name: "Ethena USDe", coingeckoId: "ethena-usde", issuer: "Ethena" },
+  { symbol: "USDS", name: "Sky USDS", coingeckoId: "usds", issuer: "Sky" },
+  { symbol: "FDUSD", name: "First Digital USD", coingeckoId: "first-digital-usd", issuer: "First Digital" },
+  { symbol: "PYUSD", name: "PayPal USD", coingeckoId: "paypal-usd", issuer: "PayPal / Paxos" },
 ];
 
-async function topRwaTokens(): Promise<AnalyzeResponse> {
-  const keys = RWA_LIST.map((t) => `coingecko:${t.coingeckoId}`);
-  const [prices, changes] = await Promise.all([
-    getTokenPrices(keys),
-    getTokenChangePercents(keys),
-  ]);
-  const rows = RWA_LIST.map((t) => {
-    const k = `coingecko:${t.coingeckoId}`;
+async function topStablecoins(): Promise<AnalyzeResponse> {
+  const keys = STABLECOIN_LIST.map((t) => `coingecko:${t.coingeckoId}`);
+  const prices = await getTokenPrices(keys);
+  const rows = STABLECOIN_LIST.map((t) => {
+    const p = prices[`coingecko:${t.coingeckoId}`]?.price;
     return {
       ...t,
-      price: prices[k]?.price ?? 0,
-      change: changes[k] ?? 0,
+      price: p ?? 0,
+      dev: p !== undefined ? (p - 1) * 100 : Number.POSITIVE_INFINITY,
     };
-  })
-    .filter((r) => r.price > 0)
-    .sort((a, b) => b.change - a.change);
+  }).filter((r) => r.price > 0);
   if (rows.length === 0) {
     return {
-      topic: "top-rwa-tokens",
-      title: "Top RWA tokens",
-      summary: "Couldn't pull live prices right now. Try again in a minute.",
+      topic: "top-stablecoins",
+      title: "Top stablecoins",
+      summary: "Couldn't pull live stablecoin prices right now. Try again in a minute.",
       sources: [{ name: "DefiLlama" }],
     };
   }
-  const winner = rows[0]!;
+  // Sort by peg tightness (closest to $1 first). "Top performing" for
+  // a stablecoin = holding its peg.
+  const ranked = [...rows].sort((a, b) => Math.abs(a.dev) - Math.abs(b.dev));
+  const winner = ranked[0]!;
   return {
-    topic: "top-rwa-tokens",
-    title: "Top performing RWA tokens (24h)",
-    summary: `Across the major RWA names, ${winner.name} (${winner.symbol}) leads the day at ${fmtPct(winner.change)}. Sorted by 24h change:`,
-    metrics: rows.map((r) => ({
-      label: `${r.symbol} (${r.venue})`,
-      value: `${fmtUsd(r.price)} · ${fmtPct(r.change)}`,
+    topic: "top-stablecoins",
+    title: "Top stablecoins — peg health (24h)",
+    summary: `Across the major USD-pegged names, ${winner.name} (${winner.symbol}) is holding tightest at ${fmtUsd(winner.price)} (${fmtPct(winner.dev)} from $1.00). Ordered by distance from peg:`,
+    metrics: ranked.map((r) => ({
+      label: `${r.symbol} (${r.issuer})`,
+      value: `${fmtUsd(r.price)} · ${fmtPct(r.dev)} from peg`,
     })),
-    sources: [{ name: "DefiLlama", url: "https://defillama.com/coins" }],
+    sources: [
+      { name: "DefiLlama (coins)", url: "https://defillama.com/coins" },
+      { name: "DefiLlama stablecoins", url: "https://defillama.com/stablecoins" },
+    ],
   };
 }
 
@@ -345,9 +355,9 @@ const TOPIC_RUNNERS: Record<
 > = {
   "eth-price": ethPrice,
   "eurc-peg": eurcPeg,
-  "usdc-usdt-pool": usdcUsdtPool,
-  "top-rwa-tokens": topRwaTokens,
-  "cbbtc-24h-volume": cbbtc24hVolume,
+  "usdc-eurc-pool": usdcEurcPool,
+  "top-stablecoins": topStablecoins,
+  "usdc-24h-volume": usdc24hVolume,
   "mantua-hooks": mantuaHooks,
 };
 
@@ -374,10 +384,10 @@ const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
   "mantua-hooks": STATIC_TTL,
   "eth-price": PRICE_TTL,
   "eurc-peg": PRICE_TTL,
-  "top-rwa-tokens": PRICE_TTL,
+  "top-stablecoins": PRICE_TTL,
   "token-price": PRICE_TTL,
-  "usdc-usdt-pool": POOL_TTL,
-  "cbbtc-24h-volume": POOL_TTL,
+  "usdc-eurc-pool": POOL_TTL,
+  "usdc-24h-volume": POOL_TTL,
 };
 
 /**

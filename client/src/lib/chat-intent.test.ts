@@ -75,12 +75,12 @@ describe("detectIntent: analyze topics", () => {
     });
   });
 
-  it("routes 'cbBTC volume' → cbbtc-24h-volume", () => {
-    const i = detectIntent("What is cbBTC's 24h volume trend?");
+  it("routes 'USDC volume' → usdc-24h-volume", () => {
+    const i = detectIntent("What is USDC's 24h volume trend?");
     assert.deepEqual(i, {
       kind: "analyze",
-      topic: "cbbtc-24h-volume",
-      question: "What is cbBTC's 24h volume trend?",
+      topic: "usdc-24h-volume",
+      question: "What is USDC's 24h volume trend?",
     });
   });
 
@@ -93,21 +93,21 @@ describe("detectIntent: analyze topics", () => {
     });
   });
 
-  it("routes USDC/USDT mention → usdc-usdt-pool", () => {
-    const i = detectIntent("Analyze USDC/USDT pool health");
+  it("routes USDC/EURC mention → usdc-eurc-pool", () => {
+    const i = detectIntent("Analyze USDC/EURC pool health");
     assert.deepEqual(i, {
       kind: "analyze",
-      topic: "usdc-usdt-pool",
-      question: "Analyze USDC/USDT pool health",
+      topic: "usdc-eurc-pool",
+      question: "Analyze USDC/EURC pool health",
     });
   });
 
-  it("routes 'top RWA tokens' → top-rwa-tokens", () => {
-    const i = detectIntent("Show me top performing RWA tokens");
+  it("routes 'top stablecoins' → top-stablecoins", () => {
+    const i = detectIntent("Show me top performing stable coins");
     assert.deepEqual(i, {
       kind: "analyze",
-      topic: "top-rwa-tokens",
-      question: "Show me top performing RWA tokens",
+      topic: "top-stablecoins",
+      question: "Show me top performing stable coins",
     });
   });
 });
