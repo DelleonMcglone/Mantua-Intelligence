@@ -27,8 +27,8 @@ interface AnalyzeResponse {
 type Topic =
   | "eth-price"
   | "eurc-peg"
-  | "usdc-usdt-pool"
-  | "top-rwa-tokens"
+  | "usdc-eurc-pool"
+  | "top-stablecoins"
   | "cbbtc-24h-volume"
   | "mantua-hooks"
   | "token-price";
@@ -36,8 +36,8 @@ type Topic =
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "eth-price", question: "What is the current price of ETH?" },
   { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
-  { topic: "usdc-usdt-pool", question: "Analyze USDC/USDT pool health" },
-  { topic: "top-rwa-tokens", question: "Show me top performing RWA tokens" },
+  { topic: "usdc-eurc-pool", question: "Analyze USDC/EURC pool health" },
+  { topic: "top-stablecoins", question: "Show me top performing Stablecoins" },
   { topic: "cbbtc-24h-volume", question: "What is cbBTC's 24h volume trend?" },
   { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
 ];

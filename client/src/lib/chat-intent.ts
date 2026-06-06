@@ -19,8 +19,8 @@ import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 export type AnalyzeTopic =
   | "eth-price"
   | "eurc-peg"
-  | "usdc-usdt-pool"
-  | "top-rwa-tokens"
+  | "usdc-eurc-pool"
+  | "top-stablecoins"
   | "cbbtc-24h-volume"
   | "mantua-hooks"
   | "token-price";
@@ -125,8 +125,8 @@ export function extractEvmAddress(text: string): `0x${string}` | null {
  * Action verbs whose presence signals the user wants to *do* something,
  * not ask about a topic. Used both by the pre-flight (verb + pair →
  * action) and to gate single-token analytic rules so prompts like
- * "Swap 100 USDC for USDT" aren't hijacked into the `usdc-usdt-pool`
- * analytic when USDT isn't in the alias map.
+ * "Swap 100 USDC for EURC" aren't hijacked into the `usdc-eurc-pool`
+ * analytic.
  *
  * Excludes `analyze`/`learn`/`tell`/`what`/`how`/`show` deliberately —
  * those are question framings the analytic rules need to keep matching.
@@ -225,8 +225,8 @@ export function detectIntent(text: string): Intent | null {
 
   // Analytic-topic rules. Each is gated on `!hasActionVerb` where the
   // topic keyword could otherwise be tripped by an action prompt that
-  // happens to mention the same token (e.g. "Swap USDC for USDT" should
-  // not route to the USDC/USDT pool analytic). Topic rules whose
+  // happens to mention the same token (e.g. "Swap USDC for EURC" should
+  // not route to the USDC/EURC pool analytic). Topic rules whose
   // signal *is* a question framing (`mantua-hooks` keyed on "learn"/
   // "explain"/"what"/"tell"/"describe"/"how") don't need the guard.
   const hasActionVerb = ACTION_VERB_RE.test(t);
@@ -234,23 +234,17 @@ export function detectIntent(text: string): Intent | null {
   if (!hasActionVerb && /\bcb.?btc\b/.test(t) && /(volume|trend|24h|24 ?hour)/.test(t)) {
     return { kind: "analyze", topic: "cbbtc-24h-volume", question: text };
   }
-  // `\brwa\b` not `(rwa|…)` — the bare alternation matches inside
-  // "rwagate" (hook name), routing prompts like "Use rwagate" into the
-  // RWA-tokens analytic by accident. Real RWA-topic prompts say "RWA"
-  // as a standalone word.
-  if (
-    !hasActionVerb &&
-    (/\brwa\b/.test(t) ||
-      /real.?world.?asset/.test(t) ||
-      (/(top|best|leading)/.test(t) && /(token|asset)/.test(t) && /(rwa|real)/.test(t)))
-  ) {
-    return { kind: "analyze", topic: "top-rwa-tokens", question: text };
+  // Stablecoins leaderboard — keyed on the standalone word so it fires
+  // for "Show me top performing stablecoins" but stays gated behind
+  // `!hasActionVerb` so "Swap into a stablecoin" routes as an action.
+  if (!hasActionVerb && /\bstablecoins?\b/.test(t)) {
+    return { kind: "analyze", topic: "top-stablecoins", question: text };
   }
   if (!hasActionVerb && /\beurc\b/.test(t) && /(peg|above|below|stable|deviation)/.test(t)) {
     return { kind: "analyze", topic: "eurc-peg", question: text };
   }
-  if (!hasActionVerb && /\busdc\b/.test(t) && /\busdt\b/.test(t)) {
-    return { kind: "analyze", topic: "usdc-usdt-pool", question: text };
+  if (!hasActionVerb && /\busdc\b/.test(t) && /\beurc\b/.test(t)) {
+    return { kind: "analyze", topic: "usdc-eurc-pool", question: text };
   }
   if (/(price|cost|worth|trading|value|how much)/.test(t)) {
     const sym = extractAnalyzeSymbol(text);

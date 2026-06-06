@@ -21,8 +21,8 @@ import { z } from "zod";
 export const TOPICS = [
   "eth-price",
   "eurc-peg",
-  "usdc-usdt-pool",
-  "top-rwa-tokens",
+  "usdc-eurc-pool",
+  "top-stablecoins",
   "cbbtc-24h-volume",
   "mantua-hooks",
   // Generic price lookup — uses the `?symbol=` query param (or the
@@ -164,23 +164,23 @@ async function eurcPeg(): Promise<AnalyzeResponse> {
   };
 }
 
-async function usdcUsdtPool(): Promise<AnalyzeResponse> {
+async function usdcEurcPool(): Promise<AnalyzeResponse> {
   const all = await listBasePools();
-  const candidates = all.filter((p) => /USDC.*USDT|USDT.*USDC/i.test(p.symbol));
+  const candidates = all.filter((p) => /USDC.*EURC|EURC.*USDC/i.test(p.symbol));
   if (candidates.length === 0) {
     return {
-      topic: "usdc-usdt-pool",
-      title: "USDC/USDT pool health",
+      topic: "usdc-eurc-pool",
+      title: "USDC/EURC pool health",
       summary:
-        "DefiLlama doesn't currently surface a USDC/USDT pool on Base. On Base, USDC pairs typically route against ETH or cbBTC; USDT volume is concentrated on Ethereum L1 and Arbitrum.",
+        "DefiLlama doesn't currently surface a USDC/EURC pool on Base. The USD/EUR stablecoin cross is thin onchain today; on Mantua it's the canonical pair for the Stable Protection hook, which keeps the pool from draining when either leg drifts off peg.",
       sources: [{ name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" }],
     };
   }
   const top = candidates.sort((a, b) => b.tvlUsd - a.tvlUsd)[0]!;
   return {
-    topic: "usdc-usdt-pool",
-    title: "USDC/USDT — top Base pool",
-    summary: `The deepest USDC/USDT pool on Base sits in ${top.project} with ${fmtUsd(top.tvlUsd)} TVL${
+    topic: "usdc-eurc-pool",
+    title: "USDC/EURC — top Base pool",
+    summary: `The deepest USDC/EURC pool on Base sits in ${top.project} with ${fmtUsd(top.tvlUsd)} TVL${
       top.poolMeta ? ` (fee tier ${top.poolMeta})` : ""
     }. ${
       top.apy && top.apy > 0
@@ -239,21 +239,21 @@ async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
   };
 }
 
-const RWA_LIST: { symbol: string; name: string; coingeckoId: string; venue: string }[] = [
-  { symbol: "MKR", name: "MakerDAO", coingeckoId: "maker", venue: "Ethereum L1" },
-  { symbol: "ONDO", name: "Ondo Finance", coingeckoId: "ondo-finance", venue: "Ethereum L1 / Arbitrum" },
-  { symbol: "PENDLE", name: "Pendle", coingeckoId: "pendle", venue: "Ethereum L1 / Arbitrum" },
-  { symbol: "RWA", name: "Centrifuge", coingeckoId: "centrifuge", venue: "Ethereum L1" },
-  { symbol: "POLYX", name: "Polymesh", coingeckoId: "polymesh", venue: "Polymesh" },
+const STABLECOIN_LIST: { symbol: string; name: string; coingeckoId: string; peg: string }[] = [
+  { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", peg: "USD" },
+  { symbol: "USDT", name: "Tether", coingeckoId: "tether", peg: "USD" },
+  { symbol: "DAI", name: "Dai", coingeckoId: "dai", peg: "USD" },
+  { symbol: "EURC", name: "Euro Coin", coingeckoId: "euro-coin", peg: "EUR" },
+  { symbol: "agEUR", name: "Angle EUR", coingeckoId: "ageur", peg: "EUR" },
 ];
 
-async function topRwaTokens(): Promise<AnalyzeResponse> {
-  const keys = RWA_LIST.map((t) => `coingecko:${t.coingeckoId}`);
+async function topStablecoins(): Promise<AnalyzeResponse> {
+  const keys = STABLECOIN_LIST.map((t) => `coingecko:${t.coingeckoId}`);
   const [prices, changes] = await Promise.all([
     getTokenPrices(keys),
     getTokenChangePercents(keys),
   ]);
-  const rows = RWA_LIST.map((t) => {
+  const rows = STABLECOIN_LIST.map((t) => {
     const k = `coingecko:${t.coingeckoId}`;
     return {
       ...t,
@@ -265,19 +265,19 @@ async function topRwaTokens(): Promise<AnalyzeResponse> {
     .sort((a, b) => b.change - a.change);
   if (rows.length === 0) {
     return {
-      topic: "top-rwa-tokens",
-      title: "Top RWA tokens",
+      topic: "top-stablecoins",
+      title: "Top stablecoins",
       summary: "Couldn't pull live prices right now. Try again in a minute.",
       sources: [{ name: "DefiLlama" }],
     };
   }
   const winner = rows[0]!;
   return {
-    topic: "top-rwa-tokens",
-    title: "Top performing RWA tokens (24h)",
-    summary: `Across the major RWA names, ${winner.name} (${winner.symbol}) leads the day at ${fmtPct(winner.change)}. Sorted by 24h change:`,
+    topic: "top-stablecoins",
+    title: "Top performing stablecoins (24h)",
+    summary: `Across the major stablecoins, ${winner.name} (${winner.symbol}) leads the day at ${fmtPct(winner.change)}. Sorted by 24h change:`,
     metrics: rows.map((r) => ({
-      label: `${r.symbol} (${r.venue})`,
+      label: `${r.symbol} (${r.peg} peg)`,
       value: `${fmtUsd(r.price)} · ${fmtPct(r.change)}`,
     })),
     sources: [{ name: "DefiLlama", url: "https://defillama.com/coins" }],
@@ -328,10 +328,10 @@ function mantuaHooks(): AnalyzeResponse {
     topic: "mantua-hooks",
     title: "Mantua hooks",
     summary:
-      "Mantua ships two Liquidity Hooks on Uniswap v4: Dynamic Fee (any pair) and Stable Protection (USDC/EURC). Both plug into the pool lifecycle to add behavior vanilla pools can't.",
+      "Mantua ships two Liquidity Hooks on Uniswap v4: Stable Protection (USDC/EURC) and Dynamic Fee (any pair). Both plug into the pool lifecycle to add behavior vanilla pools can't.",
     bullets: [
-      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Available on Base Sepolia, any pair.",
       "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs. Base Sepolia, USDC/EURC only.",
+      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Available on Base Sepolia, any pair.",
     ],
     sources: [
       { name: "Uniswap v4 Hooks", url: "https://docs.uniswap.org/contracts/v4/concepts/hooks" },
@@ -345,8 +345,8 @@ const TOPIC_RUNNERS: Record<
 > = {
   "eth-price": ethPrice,
   "eurc-peg": eurcPeg,
-  "usdc-usdt-pool": usdcUsdtPool,
-  "top-rwa-tokens": topRwaTokens,
+  "usdc-eurc-pool": usdcEurcPool,
+  "top-stablecoins": topStablecoins,
   "cbbtc-24h-volume": cbbtc24hVolume,
   "mantua-hooks": mantuaHooks,
 };
@@ -374,9 +374,9 @@ const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
   "mantua-hooks": STATIC_TTL,
   "eth-price": PRICE_TTL,
   "eurc-peg": PRICE_TTL,
-  "top-rwa-tokens": PRICE_TTL,
+  "top-stablecoins": PRICE_TTL,
   "token-price": PRICE_TTL,
-  "usdc-usdt-pool": POOL_TTL,
+  "usdc-eurc-pool": POOL_TTL,
   "cbbtc-24h-volume": POOL_TTL,
 };
 
