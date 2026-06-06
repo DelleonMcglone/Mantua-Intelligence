@@ -226,18 +226,7 @@ const FAQS: FAQItem[] = [
             >
               Coinbase CDP Faucet
             </a>{" "}
-            — ETH, USDC, cbBTC, and EURC
-          </li>
-          <li>
-            <a
-              href="https://app.optimism.io/faucet"
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:text-accent-2 underline"
-            >
-              Optimism Faucet
-            </a>{" "}
-            — ETH
+            — ETH, USDC, EURC and cbBTC
           </li>
           <li>
             <a
@@ -248,7 +237,7 @@ const FAQS: FAQItem[] = [
             >
               Circle Faucet
             </a>{" "}
-            — USDC and EURC
+            — USDC, EURC and cirBTC
           </li>
         </ul>
       </>
