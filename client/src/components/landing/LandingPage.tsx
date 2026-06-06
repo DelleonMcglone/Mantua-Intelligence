@@ -294,25 +294,56 @@ function FAQ() {
   );
 }
 
+interface TrustedTeam {
+  name: string;
+  /** Transparent-background logo in `client/public/assets/`. */
+  logo: string;
+  href: string;
+  /** Monochrome mark — recolor per theme (white in dark, black in
+   *  light) via an invert filter. Colored marks (e.g. Uniswap's pink
+   *  shield) leave this off and render as-is. */
+  mono?: boolean;
+}
+const TRUSTED_BY: TrustedTeam[] = [
+  {
+    name: "Uniswap Foundation",
+    logo: "/assets/uniswap-foundation.png",
+    href: "https://www.uniswapfoundation.org/",
+  },
+  {
+    name: "Crecimiento",
+    logo: "/assets/crecimiento.png",
+    href: "https://www.crecimiento.build/",
+    mono: true,
+  },
+];
+
 interface FooterCard {
   title: string;
   subtitle: string;
   href: string;
+  /** Event logo in `client/public/assets/`. Falls back to the Trophy
+   *  icon if the file is missing. */
+  logo: string;
 }
 const FOOTER_CARDS: FooterCard[] = [
   {
     title: "Base Batches 001",
     subtitle: "DEFI AI CATEGORY",
     href: "https://devfolio.co/projects/mantua-protocol-98d6",
+    logo: "/assets/base-batches.png",
   },
   {
     title: "Atrium Academy UH18 Hook Incubator",
     subtitle: "Pioneer of the Stable Protection Hook",
     href: "https://atriumacademy.notion.site/hook-directory?p=3285f0444abe81e599f8c4a4a2e2b9f7&pm=c",
+    logo: "/assets/atrium-academy.png",
   },
 ];
 
 function Footer() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   return (
     <footer className="border-t border-border-soft px-5 sm:px-8 py-8">
       <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -324,7 +355,22 @@ function Footer() {
             rel="noreferrer"
             className="border border-border-soft rounded-md px-4 py-3.5 flex items-center gap-3 transition-colors hover:border-amber/60 hover:bg-bg-elev"
           >
-            <Trophy className="h-5 w-5" style={{ color: "var(--amber)" }} />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+              <img
+                src={c.logo}
+                alt=""
+                aria-hidden="true"
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  // No logo file yet — fall back to the Trophy icon.
+                  const img = e.currentTarget;
+                  const icon = img.nextElementSibling as HTMLElement | null;
+                  img.style.display = "none";
+                  if (icon) icon.style.display = "block";
+                }}
+              />
+              <Trophy className="hidden h-5 w-5" style={{ color: "var(--amber)" }} />
+            </span>
             <div>
               <div className="text-[13px] font-semibold" style={{ color: "var(--amber)" }}>
                 {c.title}
@@ -336,7 +382,47 @@ function Footer() {
           </a>
         ))}
       </div>
-      <p className="text-[11px] text-text-mute text-center mt-6">
+
+      <div className="max-w-4xl mx-auto mt-12 text-center">
+        <p
+          className={`text-[11px] uppercase tracking-[0.2em] ${
+            isDark ? "text-white" : "text-black"
+          }`}
+        >
+          Trusted by leading teams
+        </p>
+        <div className="mt-8 flex flex-wrap items-start justify-center gap-x-16 gap-y-8">
+          {TRUSTED_BY.map((t) => (
+            <a
+              key={t.name}
+              href={t.href}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex w-40 flex-col items-center gap-3"
+            >
+              <img
+                src={t.logo}
+                alt={t.name}
+                className="h-14 w-auto object-contain transition-transform group-hover:scale-105"
+                style={t.mono && isDark ? { filter: "invert(1)" } : undefined}
+                onError={(e) => {
+                  // Hide a broken image — the name label below still shows.
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+              <span
+                className={`text-sm font-semibold tracking-wide ${
+                  isDark ? "text-white" : "text-black"
+                }`}
+              >
+                {t.name}
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-[11px] text-text-mute text-center mt-10">
         © 2026 Mantua.AI. All rights reserved.
       </p>
     </footer>
