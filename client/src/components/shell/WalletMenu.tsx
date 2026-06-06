@@ -9,6 +9,7 @@ interface WalletMenuProps {
 }
 
 const CDP_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
+const ARC_FAUCET_URL = "https://faucet.circle.com/";
 
 /**
  * Connected-wallet pill in the header. Click toggles a dropdown with
@@ -85,6 +86,10 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
           </MenuLink>
           <MenuLink href={CDP_FAUCET_URL}>
             Get testnet ETH (CDP)
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </MenuLink>
+          <MenuLink href={ARC_FAUCET_URL}>
+            Get testnet USDC (ARC)
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
           <MenuItem onClick={handleRefresh}>Refresh balances</MenuItem>
