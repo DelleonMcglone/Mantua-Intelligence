@@ -6,6 +6,12 @@
       "sourceType": "github",
       "computedHash": "7242840b223b4ecae9b01edda024dd98a01d892ad301e7bcf8060d47504a49d8"
     },
+    "base-mcp": {
+      "source": "base/skills",
+      "sourceType": "github",
+      "skillPath": "skills/base-mcp/SKILL.md",
+      "computedHash": "841a5f2a1ba051c8b23cd070e39d58488174d0fa3d55b8d0fb77469b0ce6a039"
+    },
     "fund": {
       "source": "coinbase/agentic-wallet-skills",
       "sourceType": "github",
