@@ -309,7 +309,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
         {/* Token inputs + flip button */}
         <div
           className="grid items-stretch mt-4 gap-2"
-          style={{ gridTemplateColumns: "1fr auto 1fr" }}
+          style={{ gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)" }}
         >
           <TokenInputCard
             label={tokenA}
