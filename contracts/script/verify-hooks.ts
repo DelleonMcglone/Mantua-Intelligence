@@ -48,16 +48,6 @@ const HOOKS: HookConfig[] = [
     rpcUrl: "https://sepolia.base.org",
     expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
   },
-  {
-    name: "DynamicFee",
-    repo: "DelleonMcglone/dynamic-fee",
-    pinnedCommit: "62710d6d9b403557b073a702b5546bc10e75c0c6",
-    address: "0xa5eCBF949D964760f3F7805f59eb4AAc1f2500c0",
-    chainId: 1301,
-    chainName: "Unichain Sepolia",
-    rpcUrl: "https://sepolia.unichain.org",
-    expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
-  },
 ];
 
 /** Uniswap v4 Hooks.sol permission flags (lower 14 bits of hook address). */

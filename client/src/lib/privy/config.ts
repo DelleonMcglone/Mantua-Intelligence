@@ -1,6 +1,5 @@
 import { base, baseSepolia } from "viem/chains";
 import type { PrivyClientConfig } from "@privy-io/react-auth";
-import { unichainSepolia } from "../chains.ts";
 import { IS_MAINNET } from "../tokens.ts";
 
 /**
@@ -8,14 +7,11 @@ import { IS_MAINNET } from "../tokens.ts";
  *  - D-005 ACCEPTED: email + Google + Apple + passkey + external wallet
  *  - D-006 ACCEPTED: createOnLogin = 'users-without-wallets'
  *  - D-007 ACCEPTED: WalletConnect enabled with project ID
- *  - PR #101: testnet beta supports BOTH Base Sepolia (84532) and
- *    Unichain Sepolia (1301). Default chain is Base Sepolia; the user
- *    switches via the chain selector in `InputBar.tsx`, which calls
- *    `wallet.switchChain()` against the chosen id. Mainnet
- *    (`VITE_MANTUA_NETWORK=mainnet`) collapses back to Base Mainnet
- *    single-chain — mainnet redeploys are launch-gating, separate work.
+ *  - Testnet beta runs on Base Sepolia (84532). Mainnet
+ *    (`VITE_MANTUA_NETWORK=mainnet`) switches to Base Mainnet —
+ *    mainnet redeploys are launch-gating, separate work.
  */
-const SUPPORTED_TESTNET_CHAINS = [baseSepolia, unichainSepolia];
+const SUPPORTED_TESTNET_CHAINS = [baseSepolia];
 
 const DEFAULT_CHAIN = IS_MAINNET ? base : baseSepolia;
 const SUPPORTED_CHAINS = IS_MAINNET ? [base] : SUPPORTED_TESTNET_CHAINS;

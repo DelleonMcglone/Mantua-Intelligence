@@ -26,7 +26,7 @@ import {StableProtectionHook} from "stable-protection/StableProtectionHook.sol";
 ///
 ///         Differences from the upstream `Deploy.s.sol` in
 ///         `hooks/stable-protection/script/`:
-///           - PoolManager + chain via env (was: hardcoded Unichain Sepolia)
+///           - PoolManager + chain via env (was: hardcoded for a different testnet)
 ///           - No mock stablecoins / liquidity / test swap — Base Sepolia
 ///             pool creation runs separately via the existing client flow,
 ///             using Circle's testnet USDC/EURC. Keeps this script focused

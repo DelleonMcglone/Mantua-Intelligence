@@ -27,10 +27,6 @@ const schema = z.object({
         : "https://sepolia.base.org",
     ),
 
-  /** Unichain Sepolia RPC URL. PR #101 adds runtime multi-chain
-   *  support; defaults to the public endpoint. */
-  UNICHAIN_SEPOLIA_RPC_URL: z.url().default("https://sepolia.unichain.org"),
-
   /** The Graph decentralized-network API key. Required for /api/positions
    *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
    *  Mantua-opened positions are returned). */

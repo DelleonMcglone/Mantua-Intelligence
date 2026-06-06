@@ -1,11 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import {
-  BASE_SEPOLIA_CHAIN_ID,
-  CHAIN_INFO,
-  UNICHAIN_SEPOLIA_CHAIN_ID,
-} from "@/lib/chains.ts";
+import { CHAIN_INFO } from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
 import {
@@ -96,7 +92,6 @@ type Sort = (typeof SORTS)[number];
  * Assets card — matches prototype `AssetsCard` in shell.jsx: tabbed
  * Assets / Positions surface. Assets sub-view: search, network + sort
  * filter chips, PnL header, token rows. Positions sub-view (P4e-003):
- * chain filter strip ("All Base positions" / "All Unichain positions") +
  * `external` pill on rows whose source !== "mantua". Real balances /
  * positions arrive in Phase 8.
  */
@@ -142,7 +137,6 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
-  const [posSource, setPosSource] = useState<"base" | "unichain">("base");
   // Re-read localStorage on each tab change so a fresh mint shows up
   // without a manual page refresh.
   const localPositions = useMemo<LocalPosition[]>(
@@ -195,20 +189,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
     : IS_MAINNET
       ? POSITIONS
       : localPositions.map(localPositionToRow);
-  // Chain-based filter: Base Sepolia vs Unichain Sepolia. Rows without
-  // an attached `src` (mainnet mock POSITIONS) bucket under "base" so
-  // the IS_MAINNET design preview still renders.
-  const baseCount = positionsAvailable.filter(
-    (p) => !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
-  ).length;
-  const unichainCount = positionsAvailable.filter(
-    (p) => p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID,
-  ).length;
-  const visiblePositions = positionsAvailable.filter((p) =>
-    posSource === "unichain"
-      ? p.src?.chainId === UNICHAIN_SEPOLIA_CHAIN_ID
-      : !p.src || p.src.chainId === BASE_SEPOLIA_CHAIN_ID,
-  );
+  const visiblePositions = positionsAvailable;
 
   const tabs = [
     { k: "assets" as const, label: "Assets", count: assets.length },
@@ -396,35 +377,6 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
 
       {tab === "positions" && (
         <>
-          <div className="px-3.5 py-2.5 border-b border-border-soft flex items-center gap-1.5">
-            <span className="text-[11px] text-text-mute mr-0.5">Show</span>
-            {(
-              [
-                { k: "base", label: "All Base positions", count: baseCount },
-                { k: "unichain", label: "All Unichain positions", count: unichainCount },
-              ] as const
-            ).map((o) => {
-              const active = posSource === o.k;
-              return (
-                <button
-                  key={o.k}
-                  type="button"
-                  onClick={() => {
-                    setPosSource(o.k);
-                  }}
-                  className={`px-2.5 py-1 rounded-full text-[11px] cursor-pointer inline-flex items-center gap-1 ${
-                    active
-                      ? "bg-text text-bg border border-text"
-                      : "bg-bg-elev text-text-dim border border-border-soft"
-                  }`}
-                >
-                  {o.label}
-                  <span className="text-[10px] font-mono opacity-70">{o.count}</span>
-                </button>
-              );
-            })}
-          </div>
-
           <div className="max-h-[360px] overflow-auto">
             {!portfolio.walletAddress && (
               <div className="px-4 py-8 text-center text-[12px] text-text-dim">

@@ -5,12 +5,8 @@ import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { getExplorerTxUrl } from "@/lib/chains.ts";
+import { getExplorerTxUrl, type SupportedTestnetChainId } from "@/lib/chains.ts";
 import { type TokenSymbol } from "@/lib/tokens.ts";
-import {
-  UNICHAIN_SEPOLIA_CHAIN_ID,
-  type SupportedTestnetChainId,
-} from "@/lib/chains.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
 import { DEFAULT_FEE_TIER_FOR_PAIR, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { FeeTierPicker } from "./FeeTierPicker.tsx";
@@ -62,9 +58,9 @@ const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] =
 function defaultPairForChain(
   chainId: SupportedTestnetChainId,
 ): [TokenSymbol, TokenSymbol] {
-  if (chainId === UNICHAIN_SEPOLIA_CHAIN_ID) return ["ETH", "USDC"];
-  // Base Sepolia (and the mainnet fallback path) keeps the original
-  // USDC/EURC default so the Stable Protection recommendation lights up.
+  void chainId;
+  // Base Sepolia (and the mainnet fallback path) defaults to USDC/EURC
+  // so the Stable Protection recommendation lights up.
   return ["USDC", "EURC"];
 }
 

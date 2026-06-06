@@ -67,9 +67,8 @@ export function getLocalPositions(): LocalPosition[] {
   }
 }
 
-/** User-owned positions across all chains. The Positions tab merges
- *  Base Sepolia and Unichain Sepolia entries — caller filters per
- *  chain if needed (the AssetsCard intentionally shows both). */
+/** User-owned positions. The Positions tab shows Base Sepolia
+ *  entries. */
 export function getUserLocalPositions(): LocalPosition[] {
   return getLocalPositions().filter((p) => (p.owner ?? "user") === "user");
 }

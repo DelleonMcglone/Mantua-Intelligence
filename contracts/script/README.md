@@ -9,7 +9,7 @@ run** — see procedure below.
 ### Why a Sepolia-specific script?
 
 The upstream `hooks/stable-protection/script/Deploy.s.sol` (vendored
-submodule) hardcodes Unichain Sepolia constants (PoolManager
+submodule) hardcodes another testnet's constants (PoolManager
 `0x00B0…62AC`, test routers, mock-stablecoin pool setup). Re-targeting
 Base Sepolia means changing the PoolManager and skipping the
 mock/liquidity/test-swap path (we use real Circle testnet USDC/EURC
@@ -77,8 +77,7 @@ Base Sepolia, address captured"** that:
    Base Sepolia (84532) ✅ Deployed.
 3. Updates `docs/security/sign-off.md` to mark the bytecode-verified
    column ✅ for Stable Protection on Base Sepolia.
-4. Updates `contracts/README.md` hook table — remove the "Unichain
-   Sepolia (deprecated)" row, replace with the Base Sepolia entry.
+4. Updates `contracts/README.md` hook table — add the Base Sepolia entry.
 
 Tracking: see `docs/tech-debt.md` TD-002.
 

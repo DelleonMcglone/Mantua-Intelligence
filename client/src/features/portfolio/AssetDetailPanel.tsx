@@ -35,8 +35,8 @@ export function AssetDetailPanel({ symbol, onClose }: Props) {
   }, [portfolio.walletAddress, portfolio.balances, symbol, chainId]);
 
   // `meta` is undefined when the user deep-links to a token that doesn't
-  // exist on the active chain (e.g. cbBTC while on Unichain Sepolia).
-  // Falls back to the bare symbol so the panel still renders.
+  // exist on the active chain. Falls back to the bare symbol so the
+  // panel still renders.
   const meta = getTokens(chainId)[symbol] ?? { name: symbol };
   const explorerUrl = CHAIN_INFO[chainId].explorerUrl;
   const txs = useMemo(

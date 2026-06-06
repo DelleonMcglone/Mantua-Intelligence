@@ -200,8 +200,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
       );
     case "add-liquidity":
       // Key on chainId so a network switch remounts the form and the
-      // useState initializers re-pick chain-aware defaults (Unichain
-      // has no EURC, etc.).
+      // useState initializers re-pick chain-aware defaults.
       return (
         <AddLiquidityForm
           key={chainId}

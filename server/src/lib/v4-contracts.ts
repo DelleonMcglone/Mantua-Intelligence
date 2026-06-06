@@ -8,14 +8,12 @@
  *
  * Mainnet addresses verified bytecode-present 2026-04-26; Base Sepolia
  * addresses sourced from developers.uniswap.org/contracts/v4/deployments
- * 2026-04-28; Unichain Sepolia addresses sourced from the same page
- * 2026-05-14.
+ * 2026-04-28.
  */
 import {
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
-  UNICHAIN_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 import { IS_MAINNET } from "./constants.ts";
@@ -37,13 +35,6 @@ const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
     stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
     quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
     poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
-  },
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: {
-    poolManager: "0x00b036b58a818b1bc34d502d3fe730db729e62ac",
-    positionManager: "0xf969aee60879c54baaed9f3ed26147db216fd664",
-    stateView: "0xc199f1072a74d4e905aba1a84d9a45e2546b6222",
-    quoter: "0x56dcd40a3f2d466f48e7f48bdbe5cc9b92ae4472",
-    poolSwapTest: "0x9140a78c1a137c7ff1c151ec8231272af78a99a4",
   },
 };
 
@@ -105,22 +96,20 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 /**
  * Mantua hook addresses, per chain.
  *
- * MVP scope (PR #101):
+ * Scope:
  *  - Stable Protection: Base Sepolia only (USDC/EURC pair).
- *  - Dynamic Fee: Base Sepolia + Unichain Sepolia. Both deployments
- *    encode `BEFORE_SWAP | AFTER_SWAP` in the lower 14 bits of the
- *    CREATE2-mined address (see DelleonMcglone/dynamic-fee README).
+ *  - Dynamic Fee: Base Sepolia. Encodes `BEFORE_SWAP | AFTER_SWAP` in
+ *    the lower 14 bits of the CREATE2-mined address (see
+ *    DelleonMcglone/dynamic-fee README).
  *
  * Mainnet entries are `null` (launch-gating step).
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [BASE_SEPOLIA_CHAIN_ID]: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: null,
 };
 
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: "0xa5eCBF949D964760f3F7805f59eb4AAc1f2500c0",
 };
 
 export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;

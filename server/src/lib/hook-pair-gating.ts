@@ -8,8 +8,8 @@
  *    the demo treats this pair as the canonical peg-protected pool.
  *    Broaden when the hook is upgraded to accept a `targetRatio`.
  *  - Dynamic Fee: unrestricted pair on any supported chain — but the
- *    hook must actually be deployed (Unichain Sepolia deployment is
- *    pending; calling there throws "hook not deployed").
+ *    hook must actually be deployed (calling on a chain without a
+ *    deployment throws "hook not deployed").
  */
 
 import {
@@ -32,8 +32,8 @@ interface ChainHookAllowlist {
 
 /**
  * Per-chain, per-hook allowlist. A hook missing from a chain's entry
- * means the hook is not available on that chain (e.g. Stable Protection
- * on Unichain). `pairs: null` means any pair is allowed.
+ * means the hook is not available on that chain. `pairs: null` means
+ * any pair is allowed.
  */
 const HOOK_ALLOWLIST: Record<
   SupportedTestnetChainId,
@@ -41,12 +41,6 @@ const HOOK_ALLOWLIST: Record<
 > = {
   [BASE_SEPOLIA_CHAIN_ID]: {
     "stable-protection": { pairs: [["USDC", "EURC"]] },
-    "dynamic-fee": { pairs: null },
-  },
-  [1301]: {
-    // Stable Protection intentionally absent on Unichain Sepolia
-    // (deployed bytecode lives only on Base Sepolia, and the pair
-    // semantics don't fit Unichain's testnet token set).
     "dynamic-fee": { pairs: null },
   },
 };

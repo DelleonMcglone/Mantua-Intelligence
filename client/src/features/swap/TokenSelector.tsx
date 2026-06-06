@@ -18,8 +18,7 @@ interface TokenSelectorProps {
  * Pill-style token picker — matches the design's `TokenPicker`
  * (panels_more.jsx:307). Click to open a popover anchored under the
  * pill with each user-facing token for the *current* chain (Base
- * Sepolia or Unichain Sepolia). WETH is hidden; routing wraps ETH
- * internally.
+ * Sepolia). WETH is hidden; routing wraps ETH internally.
  */
 export function TokenSelector({ value, onChange, disabledSymbol }: TokenSelectorProps) {
   const [open, setOpen] = useState(false);

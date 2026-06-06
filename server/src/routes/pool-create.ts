@@ -3,10 +3,7 @@ import { z } from "zod";
 import { encodeFunctionData } from "viem";
 import { db } from "../db/client.ts";
 import { pools as poolsTable } from "../db/schema/trading.ts";
-import {
-  BASE_SEPOLIA_CHAIN_ID,
-  UNICHAIN_SEPOLIA_CHAIN_ID,
-} from "../lib/chains.ts";
+import { BASE_SEPOLIA_CHAIN_ID } from "../lib/chains.ts";
 import { resolveHookForPool } from "../lib/hook-pair-gating.ts";
 import { logAudit } from "../lib/audit.ts";
 import { logger } from "../lib/logger.ts";
@@ -29,13 +26,8 @@ export const poolCreateRouter = Router();
 
 const hookSchema = z.enum(HOOK_NAMES);
 
-/**
- * Supported chain ids — Base Sepolia (default for back-compat with
- * pre-PR-101 clients) and Unichain Sepolia.
- */
-const chainIdSchema = z
-  .union([z.literal(BASE_SEPOLIA_CHAIN_ID), z.literal(UNICHAIN_SEPOLIA_CHAIN_ID)])
-  .default(BASE_SEPOLIA_CHAIN_ID);
+/** Supported chain ids — Base Sepolia. */
+const chainIdSchema = z.literal(BASE_SEPOLIA_CHAIN_ID).default(BASE_SEPOLIA_CHAIN_ID);
 
 const calldataSchema = z.object({
   chainId: chainIdSchema,

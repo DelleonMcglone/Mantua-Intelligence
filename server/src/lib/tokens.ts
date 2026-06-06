@@ -14,15 +14,12 @@
  *   - Base Mainnet (8453): issuer docs per P1-002.
  *   - Base Sepolia (84532): cbBTC RPC-probed, USDC/EURC are Circle's
  *     official testnet tokens, WETH is the canonical OP-stack address.
- *   - Unichain Sepolia (1301): USDC is the user-confirmed testnet
- *     address. ETH only otherwise (no Mantua-supported ERC-20s yet).
  */
 
 import {
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
-  UNICHAIN_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 import { IS_MAINNET } from "./constants.ts";
@@ -54,20 +51,13 @@ const TOKENS_BASE_SEPOLIA = {
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x808456652fdb597867f38412077A9182bf77359F", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: BASE_SEPOLIA_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
-const TOKENS_UNICHAIN_SEPOLIA = {
-  ETH: { symbol: "ETH", name: "Ethereum", address: ZERO_ADDRESS, decimals: 18, coingeckoId: "ethereum", native: true, chainId: UNICHAIN_SEPOLIA_CHAIN_ID },
-  USDC: { symbol: "USDC", name: "USD Coin", address: "0x31d0220469e10c4E71834a79b1f276d740d3768F", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: UNICHAIN_SEPOLIA_CHAIN_ID },
-} as const satisfies Record<string, Token>;
-
 /** Union of every token symbol across networks. */
 export type TokenSymbol =
   | keyof typeof TOKENS_BASE_MAINNET
-  | keyof typeof TOKENS_BASE_SEPOLIA
-  | keyof typeof TOKENS_UNICHAIN_SEPOLIA;
+  | keyof typeof TOKENS_BASE_SEPOLIA;
 
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
   [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: TOKENS_UNICHAIN_SEPOLIA,
 };
 
 export function getTokens(chainId: SupportedTestnetChainId): Record<string, Token> {
@@ -96,10 +86,7 @@ export function isTokenSymbol(
  */
 export function isAnyChainTokenSymbol(s: string): s is TokenSymbol {
   if (IS_MAINNET) return Object.prototype.hasOwnProperty.call(TOKENS_BASE_MAINNET, s);
-  return (
-    Object.prototype.hasOwnProperty.call(TOKENS_BASE_SEPOLIA, s) ||
-    Object.prototype.hasOwnProperty.call(TOKENS_UNICHAIN_SEPOLIA, s)
-  );
+  return Object.prototype.hasOwnProperty.call(TOKENS_BASE_SEPOLIA, s);
 }
 
 /**

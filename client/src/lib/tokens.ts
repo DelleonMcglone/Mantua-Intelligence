@@ -7,7 +7,6 @@
 import {
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
-  UNICHAIN_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
   CHAIN_INFO,
 } from "./chains.ts";
@@ -31,7 +30,6 @@ export const BASESCAN_TX = `${BASESCAN_URL}/tx/`;
 
 const V4_POSITION_MANAGER_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}`> = {
   [BASE_SEPOLIA_CHAIN_ID]: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: "0xf969aee60879c54baaed9f3ed26147db216fd664",
 };
 
 /**
@@ -74,19 +72,12 @@ const TOKENS_BASE_SEPOLIA = {
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x808456652fdb597867f38412077A9182bf77359F", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: BASE_SEPOLIA_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
-const TOKENS_UNICHAIN_SEPOLIA = {
-  ETH: { symbol: "ETH", name: "Ethereum", address: ZERO_ADDRESS, decimals: 18, coingeckoId: "ethereum", native: true, chainId: UNICHAIN_SEPOLIA_CHAIN_ID },
-  USDC: { symbol: "USDC", name: "USD Coin", address: "0x31d0220469e10c4E71834a79b1f276d740d3768F", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: UNICHAIN_SEPOLIA_CHAIN_ID },
-} as const satisfies Record<string, Token>;
-
 export type TokenSymbol =
   | keyof typeof TOKENS_BASE_MAINNET
-  | keyof typeof TOKENS_BASE_SEPOLIA
-  | keyof typeof TOKENS_UNICHAIN_SEPOLIA;
+  | keyof typeof TOKENS_BASE_SEPOLIA;
 
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
   [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
-  [UNICHAIN_SEPOLIA_CHAIN_ID]: TOKENS_UNICHAIN_SEPOLIA,
 };
 
 export function getTokens(chainId: SupportedTestnetChainId): Record<string, Token> {

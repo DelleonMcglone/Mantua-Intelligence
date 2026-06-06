@@ -330,7 +330,7 @@ function mantuaHooks(): AnalyzeResponse {
     summary:
       "Mantua ships two Liquidity Hooks on Uniswap v4: Dynamic Fee (any pair) and Stable Protection (USDC/EURC). Both plug into the pool lifecycle to add behavior vanilla pools can't.",
     bullets: [
-      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Available on Base Sepolia and Unichain Sepolia, any pair.",
+      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Available on Base Sepolia, any pair.",
       "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs. Base Sepolia, USDC/EURC only.",
     ],
     sources: [

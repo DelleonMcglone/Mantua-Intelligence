@@ -118,7 +118,6 @@ Completed:   0
 | Feature                         | Reason                   |
 | ------------------------------- | ------------------------ |
 | Voice Commands (Whisper)        | Dropped — text NLP only  |
-| Unichain Sepolia                | Out of scope — Base only |
 | Mock Tokens (mUSDC, mETH, etc.) | Real tokens only         |
 | Prediction Markets              | Not in v2 scope          |
 | Vaults                          | Not in v2 scope          |
@@ -751,7 +750,7 @@ E2E"). Mainnet would be a future, separately-scoped phase.
 
 ## ⚠️ Critical Implementation Rules
 
-1. **Base Sepolia only (testnet beta)** — the live target is Base Sepolia (chain ID 84532). The code keeps mainnet branches (chain ID 8453) selectable via `MANTUA_NETWORK` so a future mainnet phase can flip a flag rather than refactor, but the v2 testnet beta does not deploy to mainnet. No Unichain Sepolia, no Anvil in production code paths.
+1. **Base Sepolia only (testnet beta)** — the live target is Base Sepolia (chain ID 84532). The code keeps mainnet branches (chain ID 8453) selectable via `MANTUA_NETWORK` so a future mainnet phase can flip a flag rather than refactor, but the v2 testnet beta does not deploy to mainnet. No Anvil in production code paths.
 2. **Chain ID matches `MANTUA_NETWORK`** — read from `useChainId()` and reject mismatches
 3. **NEVER hardcode token prices** — Dune's hardcoded testnet prices (ETH=$2000 etc.) were a v1 expedient; v2 pulls live prices
 4. **NEVER duplicate swap/liquidity logic** — single shared module, used by UI and agent
