@@ -219,7 +219,7 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
               Balance: {balanceInDisplay} {tokenIn}
             </span>
           </div>
-          {cappedMax !== null && cappedMax === 0n && (
+          {amountEntered && cappedMax !== null && cappedMax === 0n && (
             <div className="text-[11px] text-amber mt-1.5">
               {poolMax.reason
                 ? `Swap rejected by hook: ${humanizeRevertReason(poolMax.reason)}`
