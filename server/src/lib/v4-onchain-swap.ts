@@ -18,6 +18,7 @@ import {
   type HookName,
 } from "./v4-contracts.ts";
 import { assertHookPairAllowedBySymbol } from "./hook-pair-gating.ts";
+import { readSlot0 } from "./v4-state-view.ts";
 
 /**
  * Walk a viem error tree to find the raw revert data hex string
@@ -314,6 +315,31 @@ export async function findMaxQuotableInputV4(
     const friendlyMessage = firstError instanceof Error ? firstError.message : "non-Error throw";
     reason =
       decodedRevert.hookReasonDecoded ?? decodedRevert.decoded ?? friendlyMessage;
+    // When we couldn't decode a specific pool/hook reason, the generic
+    // friendlyMessage ("pool may be missing liquidity…") is misleading
+    // for a pool that actually exists. Disambiguate with a slot0 read so
+    // an initialized pool reports a hook/liquidity rejection, not a
+    // missing pool. One extra eth_call, only on the undecodable path.
+    if (!decodedRevert.hookReasonDecoded && !decodedRevert.decoded) {
+      const probeChainId = args.chainId ?? DEFAULT_CHAIN_ID;
+      try {
+        const hookAddr = resolveHookAddress(args.hook, probeChainId);
+        const { key } = buildPoolKey(
+          args.tokenIn,
+          args.tokenOut,
+          args.fee,
+          hookAddr,
+          args.hook,
+          probeChainId,
+        );
+        const slot0 = await readSlot0(key, probeChainId);
+        reason = slot0
+          ? "The pool exists but the swap was rejected — the hook may have paused swaps (e.g. Stable Protection's circuit breaker during a depeg) or liquidity is out of range. Try a smaller amount or a different hook."
+          : "No pool is initialized for this pair at this fee tier and hook. Try a different fee tier, hook, or pair.";
+      } catch {
+        // Keep the friendlyMessage fallback if the slot0 read fails.
+      }
+    }
     logger.warn(
       {
         tokenIn: args.tokenIn,
