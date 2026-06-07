@@ -162,12 +162,16 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   // available ratio (CoinGecko 4xx, etc.) leave the other side alone.
   const tokenPrices = useTokenPrices(useMemo(() => [tokenA, tokenB], [tokenA, tokenB]));
   const priceRatioAtoB = useMemo(() => {
+    // Stable Protection pools are initialized at 1:1 server-side (the
+    // hook models the pair as a 1:1 peg), so mirror 1:1 to keep the
+    // entered amounts consistent with the price the pool will open at.
+    if (hook === "stable-protection") return 1;
     const pa = tokenPrices.prices[tokenA];
     const pb = tokenPrices.prices[tokenB];
     if (pa && pb && pa > 0 && pb > 0) return pa / pb;
     if (isStable(tokenA) && isStable(tokenB)) return 1;
     return null;
-  }, [tokenPrices.prices, tokenA, tokenB]);
+  }, [tokenPrices.prices, tokenA, tokenB, hook]);
 
   function onAmountAChange(value: string) {
     setAmountA(value);

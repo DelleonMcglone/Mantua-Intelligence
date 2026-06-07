@@ -9,6 +9,14 @@
 const Q96 = 1n << 96n;
 const Q192 = 1n << 192n;
 
+/**
+ * sqrtPriceX96 for a 1:1 price (price === 1.0): sqrt(1) << 96 === 2^96.
+ * Used to initialize peg-anchored pools (e.g. Stable Protection, which
+ * models its pair as a 1:1 peg) at parity so they open in the HEALTHY
+ * zone regardless of the amounts the user happened to enter.
+ */
+export const SQRT_PRICE_X96_1_1 = Q96;
+
 const MIN_SQRT_PRICE_X96 = 4_295_128_739n; // v4 TickMath.MIN_SQRT_PRICE
 const MAX_SQRT_PRICE_X96 =
   1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n; // MAX_SQRT_PRICE
