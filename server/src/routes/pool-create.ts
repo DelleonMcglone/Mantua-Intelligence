@@ -9,7 +9,7 @@ import { logAudit } from "../lib/audit.ts";
 import { logger } from "../lib/logger.ts";
 import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
-import { encodeSqrtPriceX96 } from "../lib/sqrt-price.ts";
+import { encodeSqrtPriceX96, SQRT_PRICE_X96_1_1 } from "../lib/sqrt-price.ts";
 import { getToken, isTokenSymbol } from "../lib/tokens.ts";
 import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
@@ -115,9 +115,20 @@ poolCreateRouter.post(
 
       const a0 = BigInt(initialAmount0Raw);
       const a1 = BigInt(initialAmount1Raw);
-      const sqrtPriceX96 = encodeSqrtPriceX96(
-        flipped ? { amount0Raw: a1, amount1Raw: a0 } : { amount0Raw: a0, amount1Raw: a1 },
-      );
+      // Stable Protection models its pair as a 1:1 peg (the hook's E2E
+      // initializes at SQRT_PRICE_1_1 and classifies depeg zones around
+      // parity). Deriving the init price from the user's entered amounts
+      // can open the pool off-peg — even small drift, a noisy price feed,
+      // or a lopsided deposit starts it in a WARN/CRITICAL zone, and the
+      // circuit breaker then blocks every swap. Force parity for this
+      // hook so new pools open HEALTHY; all other hooks (and no-hook
+      // pools) keep the amount-derived market price.
+      const sqrtPriceX96 =
+        hook === "stable-protection"
+          ? SQRT_PRICE_X96_1_1
+          : encodeSqrtPriceX96(
+              flipped ? { amount0Raw: a1, amount1Raw: a0 } : { amount0Raw: a0, amount1Raw: a1 },
+            );
       const data = encodeFunctionData({
         abi: POOL_MANAGER_INITIALIZE_ABI,
         functionName: "initialize",
