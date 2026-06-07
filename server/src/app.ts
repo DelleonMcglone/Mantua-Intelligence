@@ -1,0 +1,65 @@
+import express from "express";
+import pinoHttp from "pino-http";
+import { logger } from "./lib/logger.ts";
+import { attachAuth } from "./middleware/auth.ts";
+import { killSwitch } from "./middleware/kill-switch.ts";
+import { ipRateLimiter } from "./middleware/rate-limit.ts";
+import { agentInstructionRouter } from "./routes/agent-instruction.ts";
+import { agentLiquidityRouter } from "./routes/agent-liquidity.ts";
+import { agentPortfolioRouter } from "./routes/agent-portfolio.ts";
+import { agentQueryRouter } from "./routes/agent-query.ts";
+import { agentSendRouter } from "./routes/agent-send.ts";
+import { agentSwapRouter } from "./routes/agent-swap.ts";
+import { agentWalletsRouter } from "./routes/agent-wallets.ts";
+import { commandParseRouter } from "./routes/command-parse.ts";
+import { analyticsRouter } from "./routes/analytics.ts";
+import { analyzeRouter } from "./routes/analyze.ts";
+import { healthRouter } from "./routes/health.ts";
+import { liquidityAddRouter } from "./routes/liquidity-add.ts";
+import { liquidityRemoveRouter } from "./routes/liquidity-remove.ts";
+import { poolCreateRouter } from "./routes/pool-create.ts";
+import { poolStateRouter } from "./routes/pool-state.ts";
+import { poolsRouter } from "./routes/pools.ts";
+import { portfolioRouter } from "./routes/portfolio.ts";
+import { positionsRouter } from "./routes/positions.ts";
+import { quoteRouter } from "./routes/quote.ts";
+import { swapRouter } from "./routes/swap.ts";
+import { tokenPricesRouter } from "./routes/token-prices.ts";
+import { v4SwapRouter } from "./routes/v4-swap.ts";
+
+/**
+ * Express app factory, shared by the standalone server (`index.ts`,
+ * local dev) and the Vercel serverless entrypoint (`api/index.ts`).
+ * Keeping route/middleware registration here means both run identical
+ * wiring — the only difference is `index.ts` calls `.listen()`.
+ */
+export const app = express();
+app.set("trust proxy", 1);
+app.use(pinoHttp({ logger }));
+app.use(express.json());
+app.use(ipRateLimiter);
+app.use(killSwitch);
+app.use(attachAuth);
+
+app.use(healthRouter);
+app.use(poolsRouter);
+app.use(poolCreateRouter);
+app.use(poolStateRouter);
+app.use(liquidityAddRouter);
+app.use(liquidityRemoveRouter);
+app.use(positionsRouter);
+app.use(portfolioRouter);
+app.use(quoteRouter);
+app.use(swapRouter);
+app.use(tokenPricesRouter);
+app.use(v4SwapRouter);
+app.use(agentWalletsRouter);
+app.use(agentSendRouter);
+app.use(agentSwapRouter);
+app.use(agentLiquidityRouter);
+app.use(agentQueryRouter);
+app.use(agentPortfolioRouter);
+app.use(agentInstructionRouter);
+app.use(commandParseRouter);
+app.use(analyticsRouter);
+app.use(analyzeRouter);

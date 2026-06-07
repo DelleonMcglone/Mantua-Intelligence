@@ -59,7 +59,7 @@ export default tseslint.config(
   // disable type-aware ones so we don't have to maintain a dedicated
   // tsconfig project for them.
   {
-    files: ["contracts/script/**/*.ts", "eslint.config.js", "*.config.{js,cjs,mjs,ts}"],
+    files: ["api/**/*.ts", "contracts/script/**/*.ts", "eslint.config.js", "*.config.{js,cjs,mjs,ts}"],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ecmaVersion: 2023,
