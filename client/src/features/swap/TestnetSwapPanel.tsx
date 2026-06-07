@@ -170,6 +170,10 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
   });
 
   const expectedOut = quote.data ? formatTokenAmount(tokenOut, quote.data.amountOut) : "";
+  // A successful quote that returns 0 out means the pool has no usable
+  // liquidity at this size — show a clear message and block the swap
+  // instead of a silent "0" the user can't act on.
+  const noLiquidity = quote.data !== null && BigInt(quote.data.amountOut) === 0n;
 
   function selectTokenIn(sym: TokenSymbol) {
     if (sym === tokenOut) setTokenOut(tokenIn);
@@ -345,6 +349,12 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
         {!hookIncompatible && quote.error && (
           <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>
         )}
+        {!hookIncompatible && !quote.error && noLiquidity && (
+          <p className="text-xs text-amber text-center mt-3">
+            Insufficient liquidity — this pool can&apos;t fill that amount. Try a smaller
+            amount, a different fee tier, or another pair.
+          </p>
+        )}
 
         <Button
           variant="primary"
@@ -352,6 +362,7 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
           disabled={
             hookIncompatible !== null ||
             !quote.data ||
+            noLiquidity ||
             !amountEntered ||
             swap.state.status === "quoting" ||
             swap.state.status === "approving" ||
@@ -366,9 +377,11 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
         >
           {hookIncompatible
             ? "Hook unavailable for this pair"
-            : amountEntered
-              ? ctaLabel(swap.state.status)
-              : "Enter amount"}
+            : !amountEntered
+              ? "Enter amount"
+              : noLiquidity
+                ? "Insufficient liquidity"
+                : ctaLabel(swap.state.status)}
         </Button>
 
         {swap.state.message && swap.state.status !== "idle" && swap.state.status !== "error" && (
