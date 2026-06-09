@@ -34,12 +34,12 @@ type Topic =
   | "token-price";
 
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
-  { topic: "eth-price", question: "What is the current price of ETH?" },
-  { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
-  { topic: "usdc-eurc-pool", question: "Analyze USDC/EURC pool health" },
-  { topic: "top-stablecoins", question: "Show me top performing Stablecoins" },
-  { topic: "cbbtc-24h-volume", question: "What is cbBTC's 24h volume trend?" },
   { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
+  { topic: "top-stablecoins", question: "Show me top performing Stablecoins" },
+  { topic: "usdc-eurc-pool", question: "Analyze USDC/EURC pool health" },
+  { topic: "eth-price", question: "What is the current price of ETH?" },
+  { topic: "cbbtc-24h-volume", question: "What is cbBTC's 24h volume trend?" },
+  { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
 ];
 
 interface AnalyzePanelProps {
