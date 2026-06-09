@@ -72,9 +72,7 @@ function readStoredNetwork(): NetworkKey {
  */
 export function ChainProvider({ children }: { children: React.ReactNode }) {
   const { wallets } = useWallets();
-  const [chainId, setChainIdState] = useState<SupportedTestnetChainId>(() =>
-    readStoredChainId(),
-  );
+  const [chainId, setChainIdState] = useState<SupportedTestnetChainId>(() => readStoredChainId());
   const [selectedNetwork, setSelectedNetworkState] = useState<NetworkKey>(() =>
     readStoredNetwork(),
   );
@@ -83,7 +81,7 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
   // Pick the wallet the user is connected through. Privy's first entry
   // is the primary; same convention used elsewhere in the codebase.
   const wallet = useMemo(() => {
-    return wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
+    return wallets.find((w) => w.walletClientType === "privy") ?? wallets.at(0);
   }, [wallets]);
 
   // Pull initial chainId from the wallet on first mount so the
@@ -96,12 +94,18 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
       ? Number(wallet.chainId.slice("eip155:".length))
       : Number(wallet.chainId);
     if (isSupportedTestnetChainId(eip)) {
+      // Mirroring the wallet's externally-controlled chain into React
+      // state is exactly the external-system sync an effect is for.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setChainIdState(eip);
     }
   }, [wallet?.chainId]);
 
   const setChainId = useCallback(
     async (next: SupportedTestnetChainId) => {
+      // Multi-chain-readiness guard: a no-op while only one chain is
+      // supported, but keeps the early-return correct as chains are added.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (next === chainId) return;
       if (!wallet) {
         // No wallet yet — just remember the selection; we'll switch

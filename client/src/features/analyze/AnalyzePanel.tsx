@@ -70,9 +70,7 @@ export function AnalyzePanel({
   initialQuestion,
   initialSymbol,
 }: AnalyzePanelProps) {
-  const [phase, setPhase] = useState<"suggest" | "result">(
-    initialTopic ? "result" : "suggest",
-  );
+  const [phase, setPhase] = useState<"suggest" | "result">(initialTopic ? "result" : "suggest");
   const [active, setActive] = useState<{
     topic: Topic;
     question: string;
@@ -82,8 +80,7 @@ export function AnalyzePanel({
       ? {
           topic: initialTopic,
           question:
-            initialQuestion ??
-            (SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? ""),
+            initialQuestion ?? SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? "",
           ...(initialSymbol ? { symbol: initialSymbol } : {}),
         }
       : null,
@@ -96,9 +93,12 @@ export function AnalyzePanel({
   useEffect(() => {
     if (phase !== "result" || !active) return;
     let cancelled = false;
+    // Reset to the loading state before kicking off the fetch below.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true);
     setError(null);
     setData(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     const params = new URLSearchParams({ topic: active.topic });
     if (active.symbol) params.set("symbol", active.symbol);
     api
@@ -167,11 +167,10 @@ export function AnalyzePanel({
           <>
             {initialQuestion && (
               <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3 mb-4 text-[13px] text-text-dim">
-                Got your question:{" "}
-                <span className="text-text">"{initialQuestion}"</span>
+                Got your question: <span className="text-text">"{initialQuestion}"</span>
                 <div className="text-[11px] text-text-mute mt-1">
-                  I don't have a dedicated runner for this yet — pick a related
-                  suggestion below or rephrase.
+                  I don't have a dedicated runner for this yet — pick a related suggestion below or
+                  rephrase.
                 </div>
               </div>
             )}
@@ -228,9 +227,9 @@ function ResultBody({
         <div>{error}</div>
         {isRateLimit && (
           <div className="text-text-dim text-[12px]">
-            CoinGecko's free tier rate-limits aggressive callers. The server caches
-            successful responses for 5 minutes; one successful fetch will be served
-            from cache for everyone after that.
+            CoinGecko's free tier rate-limits aggressive callers. The server caches successful
+            responses for 5 minutes; one successful fetch will be served from cache for everyone
+            after that.
           </div>
         )}
         <button
@@ -284,7 +283,7 @@ function ResultBody({
       {data.sources && data.sources.length > 0 && (
         <div className="text-[11px] text-text-mute">
           Sources:{" "}
-          {data.sources.map((s, i) => (
+          {data.sources.map((s, i, arr) => (
             <span key={`${s.name}-${String(i)}`}>
               {s.url ? (
                 <a
@@ -298,7 +297,7 @@ function ResultBody({
               ) : (
                 <span>{s.name}</span>
               )}
-              {i < data.sources!.length - 1 ? ", " : ""}
+              {i < arr.length - 1 ? ", " : ""}
             </span>
           ))}
         </div>
