@@ -2,7 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useWallets } from "@privy-io/react-auth";
 import {
   BASE_SEPOLIA_CHAIN_ID,
+  DEFAULT_NETWORK_KEY,
+  isNetworkKey,
   isSupportedTestnetChainId,
+  NETWORK_OPTIONS,
+  type NetworkKey,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 
@@ -16,11 +20,19 @@ interface ChainContextValue {
   /** True while a `wallet.switchChain` call is in flight (user
    *  approval dialog open in their wallet). */
   switching: boolean;
+  /** Network shown in the chatbot switcher. May be a UI-only stub
+   *  (e.g. "arc") that isn't yet backed by a real data chain. */
+  selectedNetwork: NetworkKey;
+  /** Pick a network in the switcher. For a real data chain this also
+   *  switches the wallet + data `chainId`; for a stub it only updates
+   *  the label (reads stay on the fallback Base chain). */
+  setNetwork: (key: NetworkKey) => Promise<void>;
 }
 
 const ChainContext = createContext<ChainContextValue | null>(null);
 
 const STORAGE_KEY = "mantua.selectedChainId";
+const STORAGE_KEY_NETWORK = "mantua.selectedNetwork";
 
 function readStoredChainId(): SupportedTestnetChainId {
   if (typeof window === "undefined") return BASE_SEPOLIA_CHAIN_ID;
@@ -32,6 +44,17 @@ function readStoredChainId(): SupportedTestnetChainId {
     return BASE_SEPOLIA_CHAIN_ID;
   } catch {
     return BASE_SEPOLIA_CHAIN_ID;
+  }
+}
+
+function readStoredNetwork(): NetworkKey {
+  if (typeof window === "undefined") return DEFAULT_NETWORK_KEY;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_NETWORK);
+    if (raw && isNetworkKey(raw)) return raw;
+    return DEFAULT_NETWORK_KEY;
+  } catch {
+    return DEFAULT_NETWORK_KEY;
   }
 }
 
@@ -51,6 +74,9 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
   const { wallets } = useWallets();
   const [chainId, setChainIdState] = useState<SupportedTestnetChainId>(() =>
     readStoredChainId(),
+  );
+  const [selectedNetwork, setSelectedNetworkState] = useState<NetworkKey>(() =>
+    readStoredNetwork(),
   );
   const [switching, setSwitching] = useState(false);
 
@@ -110,9 +136,30 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
     [chainId, wallet],
   );
 
+  const setNetwork = useCallback(
+    async (key: NetworkKey) => {
+      const opt = NETWORK_OPTIONS.find((o) => o.key === key);
+      if (!opt) return;
+      setSelectedNetworkState(key);
+      try {
+        window.localStorage.setItem(STORAGE_KEY_NETWORK, key);
+      } catch {
+        // localStorage failures (quota, private mode) are non-fatal —
+        // the selection still drives the in-memory context.
+      }
+      // Real data chain → switch the wallet + data chainId. UI-only stub
+      // (dataChainId === null, e.g. Arc) → label-only; reads stay on the
+      // current Base data chain until Arc's network params are wired in.
+      if (opt.dataChainId != null) {
+        await setChainId(opt.dataChainId);
+      }
+    },
+    [setChainId],
+  );
+
   const value = useMemo<ChainContextValue>(
-    () => ({ chainId, setChainId, switching }),
-    [chainId, setChainId, switching],
+    () => ({ chainId, setChainId, switching, selectedNetwork, setNetwork }),
+    [chainId, setChainId, switching, selectedNetwork, setNetwork],
   );
 
   return <ChainContext.Provider value={value}>{children}</ChainContext.Provider>;

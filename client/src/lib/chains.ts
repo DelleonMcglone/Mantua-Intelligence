@@ -53,6 +53,54 @@ export function getChainInfo(chainId: SupportedTestnetChainId): ChainInfo {
   return CHAIN_INFO[chainId];
 }
 
+/**
+ * Network options for the chatbot's network switcher. This is a
+ * presentation-layer list, intentionally decoupled from the typed
+ * `SupportedTestnetChainId` data registry so it can surface networks
+ * that aren't yet wired for on-chain reads/writes (UI stubs).
+ */
+export type NetworkKey = "base" | "arc";
+
+export interface NetworkOption {
+  key: NetworkKey;
+  shortName: string;
+  displayName: string;
+  /** Brand-color dot for the selector chip. */
+  dotColor: string;
+  /**
+   * The real data chain backing this option, or `null` for a UI-only
+   * stub. Selecting a stub updates the switcher label but does NOT
+   * switch the wallet or change which chain balances/pools are read
+   * from — those fall back to the default Base data chain. Replace Arc's
+   * `null` with a real `SupportedTestnetChainId` once its network params
+   * (chainId, RPC, explorer, token registry) are wired in.
+   */
+  dataChainId: SupportedTestnetChainId | null;
+}
+
+export const NETWORK_OPTIONS: NetworkOption[] = [
+  {
+    key: "base",
+    shortName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].shortName,
+    displayName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].displayName,
+    dotColor: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].dotColor,
+    dataChainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+  {
+    key: "arc",
+    shortName: "Arc",
+    displayName: "Arc",
+    dotColor: "#4a6fa5",
+    dataChainId: null,
+  },
+];
+
+export const DEFAULT_NETWORK_KEY: NetworkKey = "base";
+
+export function isNetworkKey(s: string): s is NetworkKey {
+  return s === "base" || s === "arc";
+}
+
 export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: string): string {
   return `${CHAIN_INFO[chainId].explorerUrl}/tx/${txHash}`;
 }
