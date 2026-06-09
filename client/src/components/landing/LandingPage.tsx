@@ -219,7 +219,7 @@ const FAQS: FAQItem[] = [
         <ul className="mt-3 space-y-1.5 list-disc list-outside pl-5 marker:text-text-mute">
           <li>
             <a
-              href="https://portal.cdp.coinbase.com/products/faucet"
+              href="https://portal.cdp.coinbase.com/entity_e7c091a8-58d4-54ec-81ba-0146dec8ff74/onchain-tools/faucet?project=9813a4a0-187c-4540-9685-410bf73463ab&network=base-sepolia"
               target="_blank"
               rel="noreferrer"
               className="text-accent hover:text-accent-2 underline"
