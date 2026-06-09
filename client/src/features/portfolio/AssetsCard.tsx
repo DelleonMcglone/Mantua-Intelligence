@@ -250,28 +250,6 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
           </div>
 
           <div className="px-3.5 py-2.5 flex gap-2 items-center border-b border-border-soft relative">
-            <button
-              type="button"
-              className="px-2.5 py-1 rounded-full border border-border bg-bg-elev text-text-dim text-[12px] inline-flex items-center gap-1"
-            >
-              <span className="w-3.5 h-3.5 inline-flex items-center justify-center text-text-mute">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                </svg>
-              </span>
-              All networks
-              <ChevronDown className="h-3 w-3" />
-            </button>
             <div className="relative">
               <button
                 type="button"
@@ -395,7 +373,13 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
                   ? () => {
                       const src = p.src;
                       if (!src) return;
-                      const key = localPoolKey(src.chainId, src.tokenA, src.tokenB, src.fee, src.hook);
+                      const key = localPoolKey(
+                        src.chainId,
+                        src.tokenA,
+                        src.tokenB,
+                        src.fee,
+                        src.hook,
+                      );
                       onSelectPool?.(`local:${key}`);
                     }
                   : undefined;

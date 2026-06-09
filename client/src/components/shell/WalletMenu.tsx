@@ -8,7 +8,8 @@ interface WalletMenuProps {
   onDisconnect: () => void;
 }
 
-const CDP_FAUCET_URL = "https://portal.cdp.coinbase.com/products/faucet";
+const CDP_FAUCET_URL =
+  "https://portal.cdp.coinbase.com/entity_e7c091a8-58d4-54ec-81ba-0146dec8ff74/onchain-tools/faucet?project=9813a4a0-187c-4540-9685-410bf73463ab&network=base-sepolia&token=ETH";
 const ARC_FAUCET_URL = "https://faucet.circle.com/";
 
 /**
@@ -77,9 +78,7 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
           role="menu"
           className="absolute top-[calc(100%+6px)] right-0 z-30 bg-panel-solid border border-border rounded-sm p-1 min-w-[220px] shadow-lg"
         >
-          <MenuItem onClick={handleCopy}>
-            {copied ? "Copied!" : "Copy address"}
-          </MenuItem>
+          <MenuItem onClick={handleCopy}>{copied ? "Copied!" : "Copy address"}</MenuItem>
           <MenuLink href={`${explorerUrl}/address/${walletAddress}`}>
             View on {explorerName}
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -107,13 +106,7 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
   );
 }
 
-function MenuItem({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function MenuItem({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -126,13 +119,7 @@ function MenuItem({
   );
 }
 
-function MenuLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
+function MenuLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a
       href={href}
