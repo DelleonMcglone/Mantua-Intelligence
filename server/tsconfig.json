@@ -22,6 +22,9 @@
     "noImplicitOverride": true,
 
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "paths": {
       "@/*": ["./src/*"]
     },
