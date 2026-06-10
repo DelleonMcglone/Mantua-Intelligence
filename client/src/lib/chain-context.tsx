@@ -103,9 +103,6 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
 
   const setChainId = useCallback(
     async (next: SupportedTestnetChainId) => {
-      // Multi-chain-readiness guard: a no-op while only one chain is
-      // supported, but keeps the early-return correct as chains are added.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (next === chainId) return;
       if (!wallet) {
         // No wallet yet — just remember the selection; we'll switch

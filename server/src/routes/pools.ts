@@ -55,7 +55,8 @@ const detailQuerySchema = z.object({
  * Returns pool snapshot + historical TVL/APY chart points.
  */
 poolsRouter.get("/api/pools/:id", async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const rawId = req.params.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
   if (!id) {
     res.status(400).json({ error: "Missing pool id", code: "BAD_REQUEST" });
     return;

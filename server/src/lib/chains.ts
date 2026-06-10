@@ -12,13 +12,17 @@
 
 export const BASE_MAINNET_CHAIN_ID = 8453 as const;
 export const BASE_SEPOLIA_CHAIN_ID = 84532 as const;
+export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
 
 /**
  * Chains that can carry a user-initiated transaction. When IS_MAINNET
  * flips to true the supported set collapses to Base Mainnet only —
  * mainnet redeploy of the hooks is launch-gating, separate work.
  */
-export const SUPPORTED_TESTNET_CHAIN_IDS = [BASE_SEPOLIA_CHAIN_ID] as const;
+export const SUPPORTED_TESTNET_CHAIN_IDS = [
+  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
+] as const;
 
 export type SupportedTestnetChainId = (typeof SUPPORTED_TESTNET_CHAIN_IDS)[number];
 
@@ -47,6 +51,12 @@ export const CHAIN_INFO: Record<SupportedTestnetChainId, ChainInfo> = {
     shortName: "Base Sepolia",
     displayName: "Base Sepolia",
     explorerUrl: "https://sepolia.basescan.org",
+  },
+  [ARC_TESTNET_CHAIN_ID]: {
+    id: ARC_TESTNET_CHAIN_ID,
+    shortName: "Arc",
+    displayName: "Arc Testnet",
+    explorerUrl: "https://testnet.arcscan.app",
   },
 };
 

@@ -13,8 +13,10 @@ import { localPoolKey } from "@/features/liquidity/local-pools.ts";
 import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
 import { toDisplayAssets, usePortfolio, type DisplayAsset } from "./use-portfolio.ts";
-
-type HookName = "Stable Protection" | "Dynamic Fee" | "Volatile";
+import { HOOK_TINT, type HookName } from "./hook-tint.ts";
+import { EarningsTabBody } from "./EarningsTab.tsx";
+import { useEarnings } from "./use-earnings.ts";
+import { earningPoolCount } from "./earnings.ts";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -31,12 +33,6 @@ interface PortfolioPosition {
    *  derive the `local:*` pool id for the click-through nav. */
   src?: LocalPosition;
 }
-
-const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
-  "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
-  "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
-  Volatile: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
-};
 
 const POSITIONS: PortfolioPosition[] = [
   {
@@ -133,7 +129,7 @@ interface AssetsCardProps {
 export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}) {
   const chainId = useCurrentChainId();
   const chainName = CHAIN_INFO[chainId].displayName;
-  const [tab, setTab] = useState<"assets" | "positions" | "agent">("assets");
+  const [tab, setTab] = useState<"assets" | "positions" | "agent" | "earnings">("assets");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
@@ -152,6 +148,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
 
   const portfolio = usePortfolio();
   const agent = useAgentPortfolio();
+  const earnings = useEarnings(portfolio.walletAddress);
   const assets = useMemo<DisplayAsset[]>(() => {
     if (!portfolio.walletAddress) return [];
     return toDisplayAssets(portfolio.balances, chainId);
@@ -198,6 +195,11 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
       k: "agent" as const,
       label: "Agent",
       count: agentAssets.length + agentPositionRows.length,
+    },
+    {
+      k: "earnings" as const,
+      label: "Earnings",
+      count: earningPoolCount(earnings),
     },
   ];
 
@@ -450,6 +452,8 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
           agentPositionRows={agentPositionRows}
         />
       )}
+
+      {tab === "earnings" && <EarningsTabBody data={earnings} />}
     </div>
   );
 }
@@ -579,7 +583,7 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC"];
+const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC", "cirBTC"];
 
 function AssetRowIcon({ symbol }: { symbol: string }) {
   const norm = symbol === "WETH" ? "ETH" : symbol;

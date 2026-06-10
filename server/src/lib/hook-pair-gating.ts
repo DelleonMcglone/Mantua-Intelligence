@@ -13,14 +13,11 @@
  */
 
 import {
+  ARC_TESTNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
-import {
-  DEFAULT_CHAIN_ID,
-  getHookAddress,
-  type HookName,
-} from "./v4-contracts.ts";
+import { DEFAULT_CHAIN_ID, getHookAddress, type HookName } from "./v4-contracts.ts";
 import { getTokens, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
 
 type SymbolPair = readonly [TokenSymbol, TokenSymbol];
@@ -43,12 +40,12 @@ const HOOK_ALLOWLIST: Record<
     "stable-protection": { pairs: [["USDC", "EURC"]] },
     "dynamic-fee": { pairs: null },
   },
+  // No Mantua hooks deployed on Arc yet — empty entry → all hooks
+  // unavailable on Arc until the deployments land.
+  [ARC_TESTNET_CHAIN_ID]: {},
 };
 
-function lookupSymbol(
-  addr: string,
-  chainId: SupportedTestnetChainId,
-): TokenSymbol | null {
+function lookupSymbol(addr: string, chainId: SupportedTestnetChainId): TokenSymbol | null {
   const lower = addr.toLowerCase();
   const tokens = getTokens(chainId);
   for (const symbol of Object.keys(tokens) as TokenSymbol[]) {
@@ -89,10 +86,7 @@ export function isHookPairAllowed(
   return allow.some((p) => pairsMatch(p, [sym0, sym1]));
 }
 
-function hookIncompatibilityReason(
-  hook: HookName,
-  chainId: SupportedTestnetChainId,
-): string {
+function hookIncompatibilityReason(hook: HookName, chainId: SupportedTestnetChainId): string {
   const allow = listAllowedPairs(hook, chainId);
   if (allow === undefined) {
     if (hook === "stable-protection") {
@@ -107,14 +101,22 @@ function hookIncompatibilityReason(
 }
 
 export class HookPairNotAllowedError extends Error {
+  readonly hook: HookName;
+  readonly chainId: SupportedTestnetChainId;
+  readonly token0Address: string;
+  readonly token1Address: string;
   constructor(
-    public readonly hook: HookName,
-    public readonly chainId: SupportedTestnetChainId,
-    public readonly token0Address: string,
-    public readonly token1Address: string,
+    hook: HookName,
+    chainId: SupportedTestnetChainId,
+    token0Address: string,
+    token1Address: string,
   ) {
     super(hookIncompatibilityReason(hook, chainId));
     this.name = "HookPairNotAllowedError";
+    this.hook = hook;
+    this.chainId = chainId;
+    this.token0Address = token0Address;
+    this.token1Address = token1Address;
   }
 }
 
@@ -149,12 +151,12 @@ export function assertHookPairAllowedBySymbol(
 ): void {
   if (!isHookPairAllowedBySymbol(hook, symbolA, symbolB, chainId)) {
     const tokens = getTokens(chainId);
-    throw new HookPairNotAllowedError(
-      hook,
-      chainId,
-      tokens[symbolA]?.address ?? ZERO_ADDRESS,
-      tokens[symbolB]?.address ?? ZERO_ADDRESS,
-    );
+    // A TokenSymbol valid on one chain may not exist on `chainId`
+    // (e.g. cbBTC is Base-only, cirBTC is Arc-only) — fall back to the
+    // zero address rather than throwing while building the error.
+    const addrA = symbolA in tokens ? tokens[symbolA].address : ZERO_ADDRESS;
+    const addrB = symbolB in tokens ? tokens[symbolB].address : ZERO_ADDRESS;
+    throw new HookPairNotAllowedError(hook, chainId, addrA, addrB);
   }
 }
 
@@ -173,9 +175,7 @@ export function resolveHookForPool(
   if (!hook) return ZERO_ADDRESS;
   const addr = getHookAddress(hook, chainId);
   if (!addr) {
-    throw new Error(
-      `Hook "${hook}" is not deployed on chain ${String(chainId)} yet.`,
-    );
+    throw new Error(`Hook "${hook}" is not deployed on chain ${String(chainId)} yet.`);
   }
   assertHookPairAllowed(hook, token0Address, token1Address, chainId);
   return addr;

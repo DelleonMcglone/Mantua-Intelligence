@@ -63,11 +63,11 @@ export async function fetchSubgraphPositions(
       query: POSITIONS_BY_OWNER_QUERY,
       variables: { owner: walletAddress.toLowerCase(), first },
     }),
-    signal: options.signal,
+    ...(options.signal ? { signal: options.signal } : {}),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`subgraph http ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`subgraph http ${String(res.status)}: ${body.slice(0, 200)}`);
   }
   const json = (await res.json()) as PositionsResponse;
   if (json.errors?.length) {

@@ -24,7 +24,10 @@ export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
   return getUsdPriceForToken(token);
 }
 
-async function getUsdPriceForToken(token: Token): Promise<number> {
+async function getUsdPriceForToken(token: Token | undefined): Promise<number> {
+  // Tokens without a CoinGecko id (e.g. cirBTC) or an unknown symbol
+  // simply have no price — return 0 rather than throwing.
+  if (!token || !token.coingeckoId) return 0;
   const cached = cache.get(token.coingeckoId);
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.usd;
   const key = `coingecko:${token.coingeckoId}`;
@@ -34,14 +37,20 @@ async function getUsdPriceForToken(token: Token): Promise<number> {
   return usd;
 }
 
-/** USD value of `amount` (raw base units) for `symbol`. */
-export async function tokenAmountUsd(symbol: TokenSymbol, amountRaw: bigint): Promise<number> {
-  const token = TOKENS[symbol];
+/** USD value of `amount` (raw base units) for a known token object. Use
+ *  this over the symbol-based `tokenAmountUsd` when you already hold the
+ *  chain-correct token (the legacy `TOKENS` map is Base-only and lacks
+ *  chain-specific tokens like Arc's cirBTC). */
+export async function tokenAmountUsdForToken(token: Token, amountRaw: bigint): Promise<number> {
   const price = await getUsdPriceForToken(token);
   if (price === 0) return 0;
   const denom = 10n ** BigInt(token.decimals);
-  // Convert via Number for cap-comparison purposes; precision loss is acceptable
-  // here (cap is dollar-denominated, not token-denominated).
   const wholeUnits = Number(amountRaw) / Number(denom);
   return wholeUnits * price;
+}
+
+/** USD value of `amount` (raw base units) for `symbol`, resolved against
+ *  the legacy Base registry. Returns 0 for unknown symbols. */
+export async function tokenAmountUsd(symbol: TokenSymbol, amountRaw: bigint): Promise<number> {
+  return tokenAmountUsdForToken(TOKENS[symbol], amountRaw);
 }

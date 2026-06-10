@@ -9,12 +9,24 @@
  * RPC URL) is keyed by chainId in the modules that own each concern.
  */
 
-import { baseSepolia, type Chain } from "viem/chains";
+import { arcTestnet, baseSepolia, type Chain } from "viem/chains";
 
 export const BASE_MAINNET_CHAIN_ID = 8453 as const;
 export const BASE_SEPOLIA_CHAIN_ID = 84532 as const;
+export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
 
-export const SUPPORTED_TESTNET_CHAIN_IDS = [BASE_SEPOLIA_CHAIN_ID] as const;
+/**
+ * Arc Testnet — Circle's public testnet (chain id 5042002), where USDC
+ * is the native gas token: native gas uses 18 decimals, while the USDC
+ * ERC-20 (0x3600…0000 in `tokens.ts`) uses 6. viem ships this chain
+ * natively, so we re-export it for the Privy config + per-chain RPC.
+ */
+export { arcTestnet };
+
+export const SUPPORTED_TESTNET_CHAIN_IDS = [
+  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
+] as const;
 
 export type SupportedTestnetChainId = (typeof SUPPORTED_TESTNET_CHAIN_IDS)[number];
 
@@ -46,6 +58,16 @@ export const CHAIN_INFO: Record<SupportedTestnetChainId, ChainInfo> = {
     explorerUrl: "https://sepolia.basescan.org",
     explorerName: "BaseScan",
     dotColor: "#0052ff",
+  },
+  [ARC_TESTNET_CHAIN_ID]: {
+    id: ARC_TESTNET_CHAIN_ID,
+    shortName: "Arc",
+    displayName: "Arc Testnet",
+    viemChain: arcTestnet,
+    defaultRpcUrl: "https://rpc.testnet.arc.network",
+    explorerUrl: "https://testnet.arcscan.app",
+    explorerName: "ArcScan",
+    dotColor: "#4a6fa5",
   },
 };
 
@@ -88,10 +110,10 @@ export const NETWORK_OPTIONS: NetworkOption[] = [
   },
   {
     key: "arc",
-    shortName: "Arc",
-    displayName: "Arc",
-    dotColor: "#4a6fa5",
-    dataChainId: null,
+    shortName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].shortName,
+    displayName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].displayName,
+    dotColor: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].dotColor,
+    dataChainId: ARC_TESTNET_CHAIN_ID,
   },
 ];
 
@@ -117,7 +139,12 @@ export function getExplorerAddressUrl(
  * overridable by setting `VITE_BASE_RPC_URL` in `client/.env.local`.
  */
 export function getRpcUrl(chainId: SupportedTestnetChainId): string {
-  void chainId;
+  if (chainId === ARC_TESTNET_CHAIN_ID) {
+    return (
+      (import.meta.env.VITE_ARC_RPC_URL as string | undefined) ??
+      CHAIN_INFO[ARC_TESTNET_CHAIN_ID].defaultRpcUrl
+    );
+  }
   return (
     (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
     CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].defaultRpcUrl

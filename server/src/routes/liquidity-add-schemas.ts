@@ -1,15 +1,25 @@
 import { z } from "zod";
-import { BASE_SEPOLIA_CHAIN_ID } from "../lib/chains.ts";
+import { BASE_SEPOLIA_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
+import { isAnyChainTokenSymbol } from "../lib/tokens.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
 
 const hookSchema = z.enum(HOOK_NAMES);
 
-const chainIdSchema = z.literal(BASE_SEPOLIA_CHAIN_ID).default(BASE_SEPOLIA_CHAIN_ID);
+const chainIdSchema = z
+  .number()
+  .int()
+  .refine(isSupportedTestnetChainId, "Unsupported chainId")
+  .default(BASE_SEPOLIA_CHAIN_ID);
+
+// Narrows to `TokenSymbol` (per-chain validity is still enforced by the
+// route's getToken call). Replaces bare z.string() so downstream calls
+// that expect TokenSymbol type-check.
+const tokenSymbolSchema = z.string().refine(isAnyChainTokenSymbol, "Unknown token symbol");
 
 export const calldataSchema = z.object({
   chainId: chainIdSchema,
-  tokenA: z.string(),
-  tokenB: z.string(),
+  tokenA: tokenSymbolSchema,
+  tokenB: tokenSymbolSchema,
   fee: z.number().int().refine(isFeeTier, "Fee tier must be 100/500/3000/10000"),
   /** Optional hook binding — must match the hook the pool was created
    *  with so the reconstructed PoolKey matches on-chain (hooks like
@@ -29,8 +39,8 @@ export const calldataSchema = z.object({
 export const recordSchema = z.object({
   chainId: chainIdSchema,
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
-  tokenA: z.string(),
-  tokenB: z.string(),
+  tokenA: tokenSymbolSchema,
+  tokenB: tokenSymbolSchema,
   fee: z.number().int().refine(isFeeTier),
   hook: hookSchema.nullable().optional(),
   amountARaw: z.string().regex(/^\d+$/),
