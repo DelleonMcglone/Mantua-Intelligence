@@ -1,6 +1,7 @@
 import { base, baseSepolia } from "viem/chains";
 import type { PrivyClientConfig } from "@privy-io/react-auth";
 import { IS_MAINNET } from "../tokens.ts";
+import { arcTestnet } from "../chains.ts";
 
 /**
  * Privy app configuration.
@@ -11,7 +12,7 @@ import { IS_MAINNET } from "../tokens.ts";
  *    (`VITE_MANTUA_NETWORK=mainnet`) switches to Base Mainnet —
  *    mainnet redeploys are launch-gating, separate work.
  */
-const SUPPORTED_TESTNET_CHAINS = [baseSepolia];
+const SUPPORTED_TESTNET_CHAINS = [baseSepolia, arcTestnet];
 
 const DEFAULT_CHAIN = IS_MAINNET ? base : baseSepolia;
 const SUPPORTED_CHAINS = IS_MAINNET ? [base] : SUPPORTED_TESTNET_CHAINS;

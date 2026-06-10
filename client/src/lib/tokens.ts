@@ -5,6 +5,7 @@
  */
 
 import {
+  ARC_TESTNET_CHAIN_ID,
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
@@ -30,6 +31,10 @@ export const BASESCAN_TX = `${BASESCAN_URL}/tx/`;
 
 const V4_POSITION_MANAGER_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}`> = {
   [BASE_SEPOLIA_CHAIN_ID]: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
+  // TODO: replace with the real Arc Testnet v4 PositionManager once Uniswap
+  // v4 is deployed there. Placeholder so on-chain pool ops on Arc fail loudly
+  // rather than the registry being type-incomplete.
+  [ARC_TESTNET_CHAIN_ID]: "0x0000000000000000000000000000000000000000",
 };
 
 /**
@@ -72,12 +77,25 @@ const TOKENS_BASE_SEPOLIA = {
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x808456652fdb597867f38412077A9182bf77359F", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: BASE_SEPOLIA_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
+// Arc Testnet token set (addresses per Circle's use-arc skill / Arc docs).
+// On Arc, USDC is the native gas token — native gas uses 18 decimals,
+// while the USDC ERC-20 below (0x3600…0000) uses 6. cirBTC is not in
+// Circle's official token table; address is caller-provided and has no
+// CoinGecko listing yet (empty id → unpriced, shows "—").
+const TOKENS_ARC_TESTNET = {
+  USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+} as const satisfies Record<string, Token>;
+
 export type TokenSymbol =
   | keyof typeof TOKENS_BASE_MAINNET
-  | keyof typeof TOKENS_BASE_SEPOLIA;
+  | keyof typeof TOKENS_BASE_SEPOLIA
+  | keyof typeof TOKENS_ARC_TESTNET;
 
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
   [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
+  [ARC_TESTNET_CHAIN_ID]: TOKENS_ARC_TESTNET,
 };
 
 export function getTokens(chainId: SupportedTestnetChainId): Record<string, Token> {

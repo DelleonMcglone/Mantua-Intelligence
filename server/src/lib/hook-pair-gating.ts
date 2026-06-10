@@ -13,6 +13,7 @@
  */
 
 import {
+  ARC_TESTNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
@@ -43,6 +44,9 @@ const HOOK_ALLOWLIST: Record<
     "stable-protection": { pairs: [["USDC", "EURC"]] },
     "dynamic-fee": { pairs: null },
   },
+  // No Mantua hooks deployed on Arc yet — empty entry → all hooks
+  // unavailable on Arc until the deployments land.
+  [ARC_TESTNET_CHAIN_ID]: {},
 };
 
 function lookupSymbol(

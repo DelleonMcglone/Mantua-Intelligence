@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { BASE_SEPOLIA_CHAIN_ID } from "../lib/chains.ts";
+import { BASE_SEPOLIA_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
 
 const hookSchema = z.enum(HOOK_NAMES);
 
-const chainIdSchema = z.literal(BASE_SEPOLIA_CHAIN_ID).default(BASE_SEPOLIA_CHAIN_ID);
+const chainIdSchema = z
+  .number()
+  .int()
+  .refine(isSupportedTestnetChainId, "Unsupported chainId")
+  .default(BASE_SEPOLIA_CHAIN_ID);
 
 export const calldataSchema = z.object({
   chainId: chainIdSchema,

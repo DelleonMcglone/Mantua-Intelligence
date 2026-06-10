@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
-import { TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getUserFacingTokenSymbols, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import {
   DEFAULT_FEE_TIER_FOR_PAIR,
@@ -110,6 +111,26 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
   const confirm = useConfirmedAction();
   const swap = useTestnetSwap();
   const portfolio = usePortfolio();
+  const chainId = useCurrentChainId();
+
+  // When the user switches networks, rescope the Sell/Buy pickers to
+  // valid, distinct tokens for the new chain (e.g. Base ETH/cbBTC don't
+  // exist on Arc). Keeps the user's picks when they're still valid.
+  useEffect(() => {
+    const valid = getUserFacingTokenSymbols(chainId);
+    if (valid.length === 0) return;
+    const nextIn = valid.includes(tokenIn) ? tokenIn : valid[0];
+    const nextOut =
+      valid.includes(tokenOut) && tokenOut !== nextIn
+        ? tokenOut
+        : (valid.find((s) => s !== nextIn) ?? nextIn);
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (nextIn !== tokenIn) setTokenIn(nextIn);
+    if (nextOut !== tokenOut) setTokenOut(nextOut);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // Rescope only when the chain changes — not on every token edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chainId]);
 
   const balanceIn = useMemo(() => {
     const b = portfolio.balances.find((x) => x.symbol === tokenIn);

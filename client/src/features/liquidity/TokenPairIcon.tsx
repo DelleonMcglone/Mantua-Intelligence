@@ -1,6 +1,6 @@
 import { AssetIcon, type AssetSymbol } from "@/features/portfolio/asset-icons.tsx";
 
-const KNOWN: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC"];
+const KNOWN: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC", "cirBTC"];
 
 function FallbackCoin({ symbol, size }: { symbol: string; size: number }) {
   const initial = symbol.slice(0, 1).toUpperCase();

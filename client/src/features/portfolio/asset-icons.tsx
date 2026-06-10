@@ -5,6 +5,8 @@
  * `client/src/lib/tokens.ts`): ETH, cbBTC, USDC, EURC.
  */
 
+import { useId } from "react";
+
 interface IconProps {
   size?: number;
 }
@@ -68,7 +70,27 @@ export function EurcIcon({ size = 28 }: IconProps) {
   );
 }
 
-export type AssetSymbol = "ETH" | "cbBTC" | "USDC" | "EURC";
+export function CirBtcIcon({ size = 28 }: IconProps) {
+  const uid = useId();
+  const gradId = `cirbtc-${uid}`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#5b8def" />
+          <stop offset="100%" stopColor="#8b6cf0" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="16" r="16" fill={`url(#${gradId})`} />
+      <path
+        d="M21 14.3c.3-1.9-1.2-2.9-3.2-3.6l.7-2.6-1.6-.4-.7 2.5c-.4-.1-.8-.2-1.3-.3l.7-2.6-1.6-.4-.7 2.6c-.4-.1-.7-.2-1-.2L10 9l-.4 1.7s1.2.3 1.1.3c.6.2.7.6.7.9l-.8 3c0 .1.1.1.2.1l-.2-.1-1.1 4.2c-.1.2-.3.5-.8.4.1.1-1.1-.3-1.1-.3L7 20.8l2.1.5c.4.1.8.2 1.1.3l-.7 2.6 1.6.4.7-2.6 1.3.3-.7 2.6 1.6.4.7-2.6c2.8.5 4.8.3 5.7-2.2.7-2-.1-3.1-1.5-3.8 1-.3 1.8-1 2.1-2.4zm-3.7 5.1c-.5 2-3.9.9-5 .6l.9-3.5c1.1.3 4.6.8 4.1 2.9zm.5-5.1c-.5 1.8-3.3.9-4.2.6l.8-3.2c1 .2 3.9.7 3.4 2.6z"
+        fill="#fff"
+      />
+    </svg>
+  );
+}
+
+export type AssetSymbol = "ETH" | "cbBTC" | "USDC" | "EURC" | "cirBTC";
 
 export function AssetIcon({ symbol, size = 28 }: { symbol: AssetSymbol; size?: number }) {
   switch (symbol) {
@@ -80,5 +102,7 @@ export function AssetIcon({ symbol, size = 28 }: { symbol: AssetSymbol; size?: n
       return <UsdcIcon size={size} />;
     case "EURC":
       return <EurcIcon size={size} />;
+    case "cirBTC":
+      return <CirBtcIcon size={size} />;
   }
 }

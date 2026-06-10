@@ -17,6 +17,7 @@
  */
 
 import {
+  ARC_TESTNET_CHAIN_ID,
   BASE_MAINNET_CHAIN_ID,
   BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
@@ -51,13 +52,26 @@ const TOKENS_BASE_SEPOLIA = {
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x808456652fdb597867f38412077A9182bf77359F", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: BASE_SEPOLIA_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
+// Arc Testnet token set (addresses per Circle's use-arc skill / Arc docs).
+// On Arc, USDC is the native gas token — native gas uses 18 decimals,
+// while the USDC ERC-20 below (0x3600…0000) uses 6. cirBTC is not in
+// Circle's official token table; address is caller-provided, no CoinGecko
+// listing yet. Mirror of client/src/lib/tokens.ts — keep both in sync.
+const TOKENS_ARC_TESTNET = {
+  USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+} as const satisfies Record<string, Token>;
+
 /** Union of every token symbol across networks. */
 export type TokenSymbol =
   | keyof typeof TOKENS_BASE_MAINNET
-  | keyof typeof TOKENS_BASE_SEPOLIA;
+  | keyof typeof TOKENS_BASE_SEPOLIA
+  | keyof typeof TOKENS_ARC_TESTNET;
 
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
   [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
+  [ARC_TESTNET_CHAIN_ID]: TOKENS_ARC_TESTNET,
 };
 
 export function getTokens(chainId: SupportedTestnetChainId): Record<string, Token> {
@@ -86,7 +100,10 @@ export function isTokenSymbol(
  */
 export function isAnyChainTokenSymbol(s: string): s is TokenSymbol {
   if (IS_MAINNET) return Object.prototype.hasOwnProperty.call(TOKENS_BASE_MAINNET, s);
-  return Object.prototype.hasOwnProperty.call(TOKENS_BASE_SEPOLIA, s);
+  return (
+    Object.prototype.hasOwnProperty.call(TOKENS_BASE_SEPOLIA, s) ||
+    Object.prototype.hasOwnProperty.call(TOKENS_ARC_TESTNET, s)
+  );
 }
 
 /**

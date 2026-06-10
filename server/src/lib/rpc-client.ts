@@ -1,12 +1,17 @@
 import { createPublicClient, http, type PublicClient } from "viem";
-import { base, baseSepolia } from "viem/chains";
-import { type SupportedTestnetChainId } from "./chains.ts";
+import { arcTestnet, base, baseSepolia } from "viem/chains";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { IS_MAINNET } from "./constants.ts";
 import { env } from "../env.ts";
 
 const baseClient: PublicClient = createPublicClient({
   chain: IS_MAINNET ? base : baseSepolia,
   transport: http(env.BASE_RPC_URL),
+});
+
+const arcClient: PublicClient = createPublicClient({
+  chain: arcTestnet,
+  transport: http(env.ARC_RPC_URL),
 });
 
 /**
@@ -16,6 +21,6 @@ const baseClient: PublicClient = createPublicClient({
 export const baseRpcClient = baseClient;
 
 export function getRpcClient(chainId: SupportedTestnetChainId): PublicClient {
-  void chainId;
+  if (!IS_MAINNET && chainId === ARC_TESTNET_CHAIN_ID) return arcClient;
   return baseClient;
 }

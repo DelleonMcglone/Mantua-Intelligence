@@ -583,7 +583,7 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC"];
+const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC", "cirBTC"];
 
 function AssetRowIcon({ symbol }: { symbol: string }) {
   const norm = symbol === "WETH" ? "ETH" : symbol;

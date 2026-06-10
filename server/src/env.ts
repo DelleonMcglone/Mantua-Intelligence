@@ -27,6 +27,10 @@ const schema = z.object({
         : "https://sepolia.base.org",
     ),
 
+  /** Arc Testnet RPC URL — used for server-side reads (portfolio
+   *  balances, etc.) when the active chain is Arc. */
+  ARC_RPC_URL: z.url().default("https://rpc.testnet.arc.network"),
+
   /** The Graph decentralized-network API key. Required for /api/positions
    *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
    *  Mantua-opened positions are returned). */
