@@ -53,12 +53,14 @@ const TOKENS_BASE_SEPOLIA = {
 } as const satisfies Record<string, Token>;
 
 // Arc Testnet token set (addresses per Circle's use-arc skill / Arc docs).
-// On Arc, USDC is the native gas token — native gas uses 18 decimals,
-// while the USDC ERC-20 below (0x3600…0000) uses 6. cirBTC is not in
-// Circle's official token table; address is caller-provided, no CoinGecko
-// listing yet. Mirror of client/src/lib/tokens.ts — keep both in sync.
+// USDC is Arc's NATIVE gas token (like ETH on Base): the user's spendable
+// balance is the native balance, read via getBalance with 18 decimals —
+// NOT balanceOf on the 0x3600…0000 precompile (which isn't a standard
+// ERC-20 and returns 0). EURC and cirBTC are regular ERC-20s. cirBTC is
+// not in Circle's official token table (caller-provided, no CoinGecko id).
+// Mirror of client/src/lib/tokens.ts — keep both in sync.
 const TOKENS_ARC_TESTNET = {
-  USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 18, coingeckoId: "usd-coin", native: true, chainId: ARC_TESTNET_CHAIN_ID },
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
   cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "", native: false, chainId: ARC_TESTNET_CHAIN_ID },
 } as const satisfies Record<string, Token>;

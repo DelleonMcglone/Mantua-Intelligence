@@ -7,7 +7,7 @@ import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { logger } from "./logger.ts";
 import { getRpcClient } from "./rpc-client.ts";
 import { getTokens, type Token, type TokenSymbol } from "./tokens.ts";
-import { tokenAmountUsd } from "./usd-pricing.ts";
+import { tokenAmountUsdForToken } from "./usd-pricing.ts";
 
 const ERC20_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
 
@@ -56,8 +56,9 @@ export async function getUserPortfolio(
 
   const balances = await Promise.all(
     tokens.map(async ([symbol, t]) => {
+      let raw: bigint;
       try {
-        const raw = t.native
+        raw = t.native
           ? await rpcClient.getBalance({ address: lower as Address })
           : await rpcClient.readContract({
               address: t.address,
@@ -65,24 +66,25 @@ export async function getUserPortfolio(
               functionName: "balanceOf",
               args: [lower as Address],
             });
-        const usdValue = await tokenAmountUsd(symbol, raw);
-        return {
-          symbol,
-          address: t.address,
-          decimals: t.decimals,
-          balanceRaw: raw.toString(),
-          usdValue,
-        };
       } catch (err) {
         logger.warn({ err, symbol, address: t.address }, "balance fetch failed; treating as 0");
-        return {
-          symbol,
-          address: t.address,
-          decimals: t.decimals,
-          balanceRaw: "0",
-          usdValue: 0,
-        };
+        return { symbol, address: t.address, decimals: t.decimals, balanceRaw: "0", usdValue: 0 };
       }
+      // Pricing is best-effort and MUST NOT zero out a real balance — a
+      // missing price (e.g. cirBTC has no CoinGecko id) just means usd=0.
+      let usdValue = 0;
+      try {
+        usdValue = await tokenAmountUsdForToken(t, raw);
+      } catch (err) {
+        logger.warn({ err, symbol }, "usd pricing failed; keeping balance, usd=0");
+      }
+      return {
+        symbol,
+        address: t.address,
+        decimals: t.decimals,
+        balanceRaw: raw.toString(),
+        usdValue,
+      };
     }),
   );
 
