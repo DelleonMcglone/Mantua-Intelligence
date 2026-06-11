@@ -62,12 +62,22 @@ own deployed PoolManager:
   its nested core is `59d3ecf5`).
 
 Building the periphery against the newer core would produce contracts that may not be
-ABI/storage-compatible with the `e50237c` PoolManager. Options:
-1. **Find the matching v4-periphery** whose nested core == `e50237c` and build against the
-   top-level core (correct, needs a bit of version archaeology).
-2. **Redeploy RWAGate cleanly** — PoolManager + ComplianceRegistry + hook + periphery from
-   one consistent v4 version (most robust).
-3. **Defer** — RWAGate is permissioned and the least demo-critical; ship the other three.
+ABI/storage-compatible with the `e50237c` PoolManager.
+
+**Verified (2026-06-11):** `RWAGate.sol` does NOT compile against the newer core
+(`59d3ecf5`) — `Error 7920: Identifier not found or not unique`. The hook builds only
+against its original `e50237c`. So a clean redeploy needs the **hook source ported** to a
+current v4 API (so it can sit on a PoolManager whose era has usable periphery), or a
+v4-periphery whose nested core == `e50237c`. Both are real work; neither is deploy glue.
+
+Options:
+1. **Port the hook** to a current v4 version in the RWAgate repo, then it deploys exactly
+   like the hero/dynamicfee/alo. Hook-logic surgery + its own tests — best done by the hook
+   maintainer.
+2. **Find the matching v4-periphery** whose nested core == `e50237c` (version archaeology),
+   build periphery against the existing PoolManager.
+3. **Defer** (recommended for the demo) — RWAGate is permissioned and least demo-critical;
+   ship StableProtection + DynamicFee + ALO, leave RWAGate resolve+gating-only.
 
 When deployed, the RWAGate PositionManager must be **allowlisted** in ComplianceRegistry
 `0x2978…556D` (`addToWhitelist(<PositionManager>, 0)`) before it can add liquidity, since
