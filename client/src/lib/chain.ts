@@ -1,13 +1,11 @@
-import { base, baseSepolia } from "viem/chains";
-import { BASE_CHAIN_ID, IS_MAINNET } from "./tokens.ts";
+import { arcTestnet } from "viem/chains";
+import { ARC_TESTNET_CHAIN_ID } from "./chains.ts";
 
 /**
- * The active viem `Chain` for the configured network. Use this everywhere
- * a wallet/public client needs a chain — never hard-code `base` because
- * the testnet build (`VITE_MANTUA_NETWORK=testnet`, default) targets Base
- * Sepolia and a mainnet chain on a Sepolia wallet would misroute calldata
- * and break the chainId checks that wallet providers do before signing.
+ * The active viem `Chain`. Mantua runs on Arc Testnet only — use this
+ * everywhere a wallet/public client needs a chain so the chainId checks
+ * wallet providers run before signing line up.
  */
-export const ACTIVE_CHAIN = IS_MAINNET ? base : baseSepolia;
+export const ACTIVE_CHAIN = arcTestnet;
 
-export const ACTIVE_CHAIN_ID: number = BASE_CHAIN_ID;
+export const ACTIVE_CHAIN_ID: number = ARC_TESTNET_CHAIN_ID;

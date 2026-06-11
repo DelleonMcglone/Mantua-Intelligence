@@ -12,56 +12,38 @@
  */
 import {
   ARC_TESTNET_CHAIN_ID,
-  BASE_MAINNET_CHAIN_ID,
-  BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 
-/** Placeholder until Uniswap v4 + Mantua hooks are deployed on Arc.
- *  Zero addresses make on-chain pool/swap ops on Arc fail loudly rather
- *  than the registry being type-incomplete. */
-const ZERO = "0x0000000000000000000000000000000000000000" as const;
-import { IS_MAINNET } from "./constants.ts";
 
 interface V4Addresses {
   poolManager: `0x${string}`;
   positionManager: `0x${string}`;
   stateView: `0x${string}`;
   quoter: `0x${string}`;
-  /** v4-core's PoolSwapTest helper — null when the testnet/mainnet
-   *  doesn't ship one (production routes via the Uniswap Trading API). */
+  /** v4-core's PoolSwapTest helper — null when the chain doesn't ship one. */
   poolSwapTest: `0x${string}` | null;
 }
 
+// Arc Testnet v4 stack — the StableProtection ("hero") deployment. The
+// PoolManager + PoolSwapTest were deployed by the stableprotection-hook
+// repo; PositionManager/StateView/V4Quoter were deployed against that same
+// PoolManager via deploy/arc-hero-periphery (tx batch, block 46501208).
+// NOTE: this single stack drives the StableProtection USDC/EURC pool only.
+// The DynamicFee/RWAGate/ALO hooks live on their OWN PoolManagers (see
+// HOOK_DEPLOYMENTS_ARC); executing those needs their own periphery deploy.
 const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
-  [BASE_SEPOLIA_CHAIN_ID]: {
-    poolManager: "0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408",
-    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
-    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
-    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
-    poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
-  },
-  // TODO: real Arc Testnet v4 deployment addresses (pending).
   [ARC_TESTNET_CHAIN_ID]: {
-    poolManager: ZERO,
-    positionManager: ZERO,
-    stateView: ZERO,
-    quoter: ZERO,
-    poolSwapTest: null,
+    poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
+    positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
+    stateView: "0x73Bb8E68c08C528770880c10223670f7aee13824",
+    quoter: "0xd57545f0a2C3A721Fc3F1F4f3007b2aA021f4567",
+    poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
   },
-};
-
-const V4_MAINNET: V4Addresses = {
-  poolManager: "0x498581ff718922c3f8e6a244956af099b2652b2b",
-  positionManager: "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
-  stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
-  quoter: "0x0d5e0f971ed27fbff6c2837bf31316121532048d",
-  poolSwapTest: null,
 };
 
 export function getV4Addresses(chainId: SupportedTestnetChainId): V4Addresses {
-  if (IS_MAINNET) return V4_MAINNET;
   return V4_BY_CHAIN[chainId];
 }
 
@@ -81,55 +63,55 @@ export function getPoolSwapTest(chainId: SupportedTestnetChainId): `0x${string}`
   return getV4Addresses(chainId).poolSwapTest;
 }
 
-/** Legacy single-chain export. Prefer `getV4PoolManager(chainId)`. */
-export const V4_POOL_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.poolManager
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolManager;
-/** Legacy single-chain export. Prefer `getV4PositionManager(chainId)`. */
-export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.positionManager
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].positionManager;
-/** Legacy single-chain export. Prefer `getV4StateView(chainId)`. */
-export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.stateView
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].stateView;
-/** Legacy single-chain export. Prefer `getV4Quoter(chainId)`. */
-export const V4_QUOTER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.quoter
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].quoter;
-/** Legacy single-chain export. Prefer `getPoolSwapTest(chainId)`. */
-export const POOL_SWAP_TEST: `0x${string}` | null = IS_MAINNET
-  ? null
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolSwapTest;
-
-void BASE_MAINNET_CHAIN_ID;
+/** Legacy single-chain exports. Prefer the per-chain getters. */
+export const V4_POOL_MANAGER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolManager;
+export const V4_POSITION_MANAGER: `0x${string}` =
+  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].positionManager;
+export const V4_STATE_VIEW: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].stateView;
+export const V4_QUOTER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].quoter;
+export const POOL_SWAP_TEST: `0x${string}` | null =
+  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolSwapTest;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 
 /**
- * Mantua hook addresses, per chain.
+ * Mantua hook addresses on Arc Testnet. Four hooks:
+ *  - Stable Protection — USDC/EURC FX-rate-aware peg defense.
+ *  - Dynamic Fee — volatile pairs, fee scales with volatility.
+ *  - RWAGate — permissioned/allowlisted pools (ComplianceRegistry
+ *    0x2978eA98Cc3c5c480d4C9D073DF8599BA761556D).
+ *  - ALO — Async Limit Orders.
  *
- * Scope:
- *  - Stable Protection: Base Sepolia only (USDC/EURC pair).
- *  - Dynamic Fee: Base Sepolia. Encodes `BEFORE_SWAP | AFTER_SWAP` in
- *    the lower 14 bits of the CREATE2-mined address (see
- *    DelleonMcglone/dynamic-fee README).
- *
- * Mainnet entries are `null` (launch-gating step).
+ * NOTE (deployment topology): each hook was deployed from its own repo
+ * against its OWN Uniswap v4 PoolManager, so there is no single canonical
+ * PoolManager on Arc testnet yet:
+ *   stable-protection → PoolManager 0x15B5f2c054b9DC788250131FCD1bcfCC34080a59
+ *   dynamic-fee       → PoolManager 0x7eA87A5919C119DC95855A0BE227fd3241c998F0
+ *   rwa-gate          → PoolManager 0xA29B7D158f2b2113Bd60eeD765866f794096D4Dc
+ *   alo               → PoolManager 0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b
+ * `V4_BY_CHAIN` still models a single stack (poolManager + periphery), so
+ * execution (add-liquidity/swap/state reads) remains blocked until we
+ * either (a) get the periphery — PositionManager/StateView/Quoter/
+ * PoolSwapTest — for one canonical PoolManager, or (b) refactor the
+ * registry to be per-hook. Hook resolution + pair gating work today.
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [BASE_SEPOLIA_CHAIN_ID]: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
-  // Not deployed on Arc yet — getHookAddress returns null → hook unavailable.
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
 };
-
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+};
+const RWAGATE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  // Clean redeploy (hook ported to current v4 + full periphery) — replaces the
+  // original 0xda48… whose v4-core/periphery versions were mismatched.
+  [ARC_TESTNET_CHAIN_ID]: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
+};
+const ALO_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [ARC_TESTNET_CHAIN_ID]: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
 };
 
-export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
+export const HOOK_NAMES = ["stable-protection", "dynamic-fee", "rwa-gate", "alo"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
 export { DEFAULT_CHAIN_ID };
@@ -138,19 +120,164 @@ export function getHookAddress(
   name: HookName,
   chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): `0x${string}` | null {
-  if (IS_MAINNET) return null;
-  if (name === "stable-protection") return STABLE_PROTECTION_BY_CHAIN[chainId];
-  return DYNAMIC_FEE_BY_CHAIN[chainId];
+  switch (name) {
+    case "stable-protection":
+      return STABLE_PROTECTION_BY_CHAIN[chainId];
+    case "dynamic-fee":
+      return DYNAMIC_FEE_BY_CHAIN[chainId];
+    case "rwa-gate":
+      return RWAGATE_BY_CHAIN[chainId];
+    case "alo":
+      return ALO_BY_CHAIN[chainId];
+  }
 }
 
-/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
-export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
-  ? null
-  : STABLE_PROTECTION_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
-/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
-export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
-  ? null
-  : DYNAMIC_FEE_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
+/**
+ * Per-hook Arc Testnet deployment manifest, extracted from the four hook
+ * repos (DelleonMcglone/{stableprotection-hook,dynamic-fee,RWAgate,
+ * limit-orders}) on 2026-06-10. Verified against each repo's
+ * broadcast/.../5042002/run-latest.json + deployments manifest + README.
+ *
+ * KEY FINDING — these are FOUR independent deployments, each with its own
+ * PoolManager and v4 **test routers** (PoolSwapTest + PoolModifyLiquidity-
+ * Test), NOT the production periphery. None of the repos deployed
+ * PositionManager, StateView, or V4Quoter on Arc (the v4 periphery isn't
+ * published on Arc testnet). Two pools also use MOCK tokens distinct from
+ * the canonical Circle tokens AND from the app's cirBTC registry entry.
+ *
+ * The app's calldata builders target PositionManager / V4Quoter /
+ * StateView, so on-chain execution against these pools is NOT yet wired —
+ * it needs either (a) a v4 periphery redeploy on one canonical
+ * PoolManager + canonical tokens, or (b) a rewrite of the swap/liquidity/
+ * state paths to the test-router model. Recorded as data pending that
+ * decision; `null` = not deployed / not found in the repo.
+ */
+export interface HookDeployment {
+  readonly poolManager: `0x${string}`;
+  readonly hook: `0x${string}`;
+  /** v4 test swap router actually used by this pool (no V4Quoter exists). */
+  readonly poolSwapTest: `0x${string}` | null;
+  /** v4 test liquidity router actually used (no PositionManager exists). */
+  readonly poolModifyLiquidityTest: `0x${string}` | null;
+  /** Production periphery — deployed per-hook via deploy/arc-*-periphery
+   *  (null where not yet deployed, e.g. rwa-gate). */
+  readonly positionManager: `0x${string}` | null;
+  readonly stateView: `0x${string}` | null;
+  readonly quoter: `0x${string}` | null;
+  /** Token addresses this specific pool was initialized with. */
+  readonly token0: `0x${string}`;
+  readonly token1: `0x${string}`;
+  /** Whether token0/token1 are the canonical Circle/app tokens or mocks. */
+  readonly tokensAreMocks: boolean;
+  /** Extra contracts (e.g. ComplianceRegistry for rwa-gate). */
+  readonly aux?: Readonly<Record<string, `0x${string}`>>;
+}
+
+export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = {
+  "stable-protection": {
+    poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
+    hook: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+    poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
+    poolModifyLiquidityTest: "0x4f81385fa50336e4cbA6718A803f3e2Baa09D1c0",
+    positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
+    stateView: "0x73Bb8E68c08C528770880c10223670f7aee13824",
+    quoter: "0xd57545f0a2C3A721Fc3F1F4f3007b2aA021f4567",
+    token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
+    token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
+    tokensAreMocks: false,
+  },
+  "dynamic-fee": {
+    poolManager: "0x7eA87A5919C119DC95855A0BE227fd3241c998F0",
+    hook: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+    poolSwapTest: "0xAa096011E6604df33762d611cbBdaA0671F19Bdb",
+    poolModifyLiquidityTest: "0xdD225f3B7b621287657B490B3bC945E3ecfC8EbA",
+    positionManager: "0xDa1bfA53fA93463fB9Abd349bad381667D29b88d",
+    stateView: "0x6F4eD6D86e8d770Dc7Ef027011d7cd6c12Db40c9",
+    quoter: "0x2CF521F13658FE57958D09B40Ee3420D974EE7eC",
+    token0: "0xFE3f00877d20Fb599351182EAef78DE3EF531dF6", // MOCK USDC (6dp)
+    token1: "0xAeE5a58b0ae058bfd358CeeB72e4804C16d94F5E", // MOCK cirBTC (8dp)
+    tokensAreMocks: true,
+  },
+  // Clean redeploy from one consistent v4 version (hook ported to current v4 so
+  // it can carry the periphery the app needs). Supersedes the original mismatched
+  // deployment (old hook 0xda48…, PoolManager 0xA29B…). See deploy/arc-rwagate-clean.
+  "rwa-gate": {
+    poolManager: "0xBC9C4e3e51E18Ea44c7363391d29ed300db57511",
+    hook: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
+    poolSwapTest: "0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00",
+    poolModifyLiquidityTest: "0xB8736964413a970186359089490f578191170AC0",
+    positionManager: "0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3",
+    stateView: "0xBecb1cd296675CFC3fC8e63c4838590A4C97196d",
+    quoter: "0x49ffeA1ECd7760fC55F3598D7A0d89239cfeAea9",
+    token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
+    token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
+    tokensAreMocks: false,
+    aux: { complianceRegistry: "0x5E33Ed3D77Ff22B9c6eD689a18a040E7633f9003" },
+  },
+  alo: {
+    poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",
+    hook: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
+    // Deployed via deploy/arc-alo-periphery/DeployAloSwapRouter (the ALO repo
+    // shipped no swap router); enables swaps on ALO pools.
+    poolSwapTest: "0xFCf895f7F5737b1D582a0bD4b131f88434a94433",
+    poolModifyLiquidityTest: null, // NOT FOUND in repo
+    positionManager: "0x7866e36b7576DF5167cf76770799096Ba6fcD882",
+    stateView: "0xbF8dC490E538a7749f9DF6B34Ee740650D325b15",
+    quoter: "0xA12B21D108Eb0ad982870d90CcB66976274d3b18",
+    token0: "0x1B056aDe32E5F1F782638e21bF1E665059F47971", // MOCK cirBTC (8dp)
+    token1: "0x3600000000000000000000000000000000000000", // USDC (native)
+    tokensAreMocks: true,
+  },
+};
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+/** The default v4 stack for no-hook pools = the StableProtection ("hero")
+ *  deployment. */
+const HERO_STACK: V4Addresses = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+
+/**
+ * Resolve the full v4 stack (PoolManager + periphery) for a pool by its
+ * HOOK ADDRESS — i.e. `PoolKey.hooks`. Each Mantua hook lives on its own
+ * PoolManager + periphery (see HOOK_DEPLOYMENTS_ARC), so the stack a pool
+ * routes to is determined by which hook it uses.
+ *
+ *  - zero address (no-hook pool) → the default hero stack.
+ *  - a known hook with deployed periphery → that hook's stack.
+ *  - a known hook whose periphery isn't deployed yet (e.g. rwa-gate) → throws.
+ *  - an unrecognized hook → the default hero stack (best effort).
+ *
+ * The StableProtection hook resolves to the hero stack itself, so existing
+ * StableProtection/no-hook flows are byte-for-byte unchanged.
+ */
+export function getV4StackForHook(hookAddress: string): V4Addresses {
+  const lower = hookAddress.toLowerCase();
+  if (lower === ZERO_ADDR) return HERO_STACK;
+  for (const name of HOOK_NAMES) {
+    const d = HOOK_DEPLOYMENTS_ARC[name];
+    if (d.hook.toLowerCase() === lower) {
+      if (!d.positionManager || !d.stateView || !d.quoter) {
+        throw new Error(
+          `Hook "${name}" periphery is not deployed on Arc yet — cannot route pool operations to it.`,
+        );
+      }
+      return {
+        poolManager: d.poolManager,
+        positionManager: d.positionManager,
+        stateView: d.stateView,
+        quoter: d.quoter,
+        poolSwapTest: d.poolSwapTest,
+      };
+    }
+  }
+  return HERO_STACK;
+}
+
+/** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
+export const STABLE_PROTECTION_HOOK: `0x${string}` | null =
+  STABLE_PROTECTION_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+export const DYNAMIC_FEE_HOOK: `0x${string}` | null =
+  DYNAMIC_FEE_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
 
 /**
  * v4 PoolKey hook permission flags encoded in the lower 14 bits of each
@@ -161,6 +288,9 @@ export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
 export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
   "stable-protection": ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
   "dynamic-fee": ["BEFORE_SWAP", "AFTER_SWAP"],
+  // TODO(Phase E): confirm from the deployed bytecode (npm run verify:hooks).
+  "rwa-gate": ["BEFORE_INITIALIZE", "BEFORE_SWAP"],
+  alo: ["BEFORE_SWAP", "AFTER_SWAP"],
 } as const;
 
 /**
@@ -177,8 +307,13 @@ export const DYNAMIC_FEE_FLAG = 0x800000;
  * user picked in the UI; the static tier still picks `tickSpacing`.
  */
 export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
-  "stable-protection": true,
-  "dynamic-fee": true,
+  "stable-protection": true, // SP pool: tickSpacing 1, dynamic fee (repo README)
+  "dynamic-fee": true, // fee scales with volatility
+  // Confirmed from the hook repos' deployed pools: RWAGate and ALO pools
+  // were both initialized with a STATIC fee tier (3000 / tickSpacing 60),
+  // so neither overrides the fee with DYNAMIC_FEE_FLAG.
+  "rwa-gate": false,
+  alo: false,
 };
 
 /**

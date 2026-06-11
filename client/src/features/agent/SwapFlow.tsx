@@ -81,7 +81,7 @@ export function SwapFlow({ onClose }: Props) {
   const payBal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
   const paySym = payBal?.symbol ?? "USDC";
   const payDisplay = payBal ? fmtUnits(payBal.balanceRaw, payBal.decimals) : "0";
-  const receiveSym = paySym === "ETH" ? "USDC" : "ETH";
+  const receiveSym = paySym === "USDC" ? "EURC" : "USDC";
 
   return (
     <>

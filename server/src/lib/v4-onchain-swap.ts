@@ -12,8 +12,7 @@ import {
   POOL_SWAP_TEST_ABI,
   V4_QUOTER_ABI,
   getHookAddress,
-  getPoolSwapTest,
-  getV4Quoter,
+  getV4StackForHook,
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
@@ -398,7 +397,7 @@ export async function quoteExactInputV4(
 
   try {
     const { result } = await getRpcClient(chainId).simulateContract({
-      address: getV4Quoter(chainId),
+      address: getV4StackForHook(key.hooks).quoter,
       abi: V4_QUOTER_ABI,
       functionName: "quoteExactInputSingle",
       args: [
@@ -457,10 +456,9 @@ export interface SwapCalldataResult {
  * checking is on the caller).
  */
 export function buildPoolSwapTestCalldata(args: SwapCalldataArgs): SwapCalldataResult {
-  const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
-  const poolSwapTest = getPoolSwapTest(chainId);
+  const poolSwapTest = getV4StackForHook(args.poolKey.hooks).poolSwapTest;
   if (!poolSwapTest) {
-    throw new Error("PoolSwapTest is not deployed on this network");
+    throw new Error("PoolSwapTest is not deployed for this pool's hook stack");
   }
   const sqrtPriceLimit = args.zeroForOne ? MIN_SQRT_PRICE_LIMIT : MAX_SQRT_PRICE_LIMIT;
   // amountSpecified: negative = exact-input (the convention v4-core uses).

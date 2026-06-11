@@ -17,7 +17,7 @@ import {
 } from "./v4-actions.ts";
 import {
   POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
-  getV4PositionManager,
+  getV4StackForHook,
   type FeeTier,
   type HookName,
 } from "./v4-contracts.ts";
@@ -153,7 +153,8 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
   );
 
   return {
-    to: getV4PositionManager(chainId),
+    // Route to the PositionManager for this pool's hook stack.
+    to: getV4StackForHook(key.hooks).positionManager,
     data,
     value,
     liquidity: liquidity.toString(),

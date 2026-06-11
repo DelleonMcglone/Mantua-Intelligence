@@ -63,8 +63,6 @@ export function ArcLogo({ size = 16 }: LogoProps) {
 
 export function NetworkLogo({ network, size = 16 }: { network: NetworkKey; size?: number }) {
   switch (network) {
-    case "base":
-      return <BaseLogo size={size} />;
     case "arc":
       return <ArcLogo size={size} />;
   }

@@ -123,6 +123,8 @@ liquidityAddRouter.post(
       const permit2Build = await buildPermit2BatchTypedData({
         owner,
         chainId,
+        // result.to is the per-hook PositionManager — approve THAT as spender.
+        positionManager: result.to,
         tokens: [
           { address: result.currency0, amountNeeded: BigInt(result.amount0Max) },
           { address: result.currency1, amountNeeded: BigInt(result.amount1Max) },

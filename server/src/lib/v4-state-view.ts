@@ -2,7 +2,7 @@ import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { computePoolId } from "./pool-id.ts";
 import type { PoolKey } from "./pool-key.ts";
 import { getRpcClient } from "./rpc-client.ts";
-import { STATE_VIEW_ABI, getV4StateView } from "./v4-contracts.ts";
+import { STATE_VIEW_ABI, getV4StackForHook } from "./v4-contracts.ts";
 
 export interface Slot0 {
   sqrtPriceX96: bigint;
@@ -22,8 +22,10 @@ export async function readSlot0(
   chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): Promise<Slot0 | null> {
   const poolId = computePoolId(key);
+  // Each hook lives on its own PoolManager + StateView; resolve by the
+  // pool's hook (no-hook → hero stack).
   const [sqrtPriceX96, tick, protocolFee, lpFee] = await getRpcClient(chainId).readContract({
-    address: getV4StateView(chainId),
+    address: getV4StackForHook(key.hooks).stateView,
     abi: STATE_VIEW_ABI,
     functionName: "getSlot0",
     args: [poolId],

@@ -41,8 +41,8 @@ import {
   type PoolEarning,
 } from "./earnings.ts";
 
-const NETWORK_ORDER: EarningsNetwork[] = ["base", "arc"];
-const NETWORK_LABEL: Record<EarningsNetwork, string> = { base: "Base", arc: "Arc" };
+const NETWORK_ORDER: EarningsNetwork[] = ["arc"];
+const NETWORK_LABEL: Record<EarningsNetwork, string> = { arc: "Arc" };
 
 /** Mock receipt hash for the optional sweep flow (no fee-distribution
  *  backend on testnet yet — the real tx hash lands when it ships). */

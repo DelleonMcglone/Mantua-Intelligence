@@ -112,14 +112,10 @@ export function CirBtcIcon({ size = 28 }: IconProps) {
   );
 }
 
-export type AssetSymbol = "ETH" | "cbBTC" | "USDC" | "EURC" | "cirBTC";
+export type AssetSymbol = "USDC" | "EURC" | "cirBTC";
 
 export function AssetIcon({ symbol, size = 28 }: { symbol: AssetSymbol; size?: number }) {
   switch (symbol) {
-    case "ETH":
-      return <EthIcon size={size} />;
-    case "cbBTC":
-      return <CbBtcIcon size={size} />;
     case "USDC":
       return <UsdcIcon size={size} />;
     case "EURC":

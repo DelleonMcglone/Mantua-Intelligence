@@ -34,53 +34,6 @@ interface PortfolioPosition {
   src?: LocalPosition;
 }
 
-const POSITIONS: PortfolioPosition[] = [
-  {
-    a: "ETH",
-    b: "USDC",
-    fee: "0.05%",
-    value: "$12,840.20",
-    pnl: "+$340.18",
-    pct: "+2.71%",
-    up: true,
-    source: "mantua",
-    hook: "Dynamic Fee",
-  },
-  {
-    a: "cbBTC",
-    b: "ETH",
-    fee: "0.30%",
-    value: "$8,210.55",
-    pnl: "+$104.40",
-    pct: "+1.28%",
-    up: true,
-    source: "mantua",
-    hook: "Dynamic Fee",
-  },
-  {
-    a: "USDC",
-    b: "EURC",
-    fee: "0.01%",
-    value: "$2,104.00",
-    pnl: "−$22.10",
-    pct: "−1.04%",
-    up: false,
-    source: "external",
-    hook: "Stable Protection",
-  },
-  {
-    a: "ETH",
-    b: "EURC",
-    fee: "0.01%",
-    value: "$540.21",
-    pnl: "+$8.40",
-    pct: "+1.58%",
-    up: true,
-    source: "external",
-    hook: "Dynamic Fee",
-  },
-];
-
 const SORTS = ["Descending", "Ascending", "Alphabetical"] as const;
 type Sort = (typeof SORTS)[number];
 
@@ -183,9 +136,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   // the production positions backend lights up.
   const positionsAvailable = !portfolio.walletAddress
     ? []
-    : IS_MAINNET
-      ? POSITIONS
-      : localPositions.map(localPositionToRow);
+    : localPositions.map(localPositionToRow);
   const visiblePositions = positionsAvailable;
 
   const tabs = [
@@ -583,7 +534,7 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-const KNOWN_ASSETS: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC", "cirBTC"];
+const KNOWN_ASSETS: AssetSymbol[] = ["USDC", "EURC", "cirBTC"];
 
 function AssetRowIcon({ symbol }: { symbol: string }) {
   const norm = symbol === "WETH" ? "ETH" : symbol;

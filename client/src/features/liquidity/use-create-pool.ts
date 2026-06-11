@@ -7,7 +7,7 @@ import { ApiError, api } from "@/lib/api.ts";
 import { type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 
-export type HookName = "stable-protection" | "dynamic-fee";
+export type HookName = "stable-protection" | "dynamic-fee" | "rwa-gate" | "alo";
 
 interface CalldataReq {
   tokenA: TokenSymbol;

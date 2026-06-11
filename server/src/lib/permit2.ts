@@ -1,6 +1,6 @@
 import { baseRpcClient } from "./rpc-client.ts";
 import { ZERO_ADDRESS } from "./tokens.ts";
-import { PERMIT2, PERMIT2_ABI, V4_POSITION_MANAGER } from "./v4-contracts.ts";
+import { PERMIT2, PERMIT2_ABI } from "./v4-contracts.ts";
 
 /** type(uint160).max — the max amount Permit2 stores in a single allowance. */
 export const PERMIT2_MAX_AMOUNT = (1n << 160n) - 1n;
@@ -21,12 +21,13 @@ export interface PermitDetailsLive {
 export async function readPermit2Allowance(
   owner: `0x${string}`,
   token: `0x${string}`,
+  positionManager: `0x${string}`,
 ): Promise<PermitDetailsLive> {
   const [amount, expiration, nonce] = await baseRpcClient.readContract({
     address: PERMIT2,
     abi: PERMIT2_ABI,
     functionName: "allowance",
-    args: [owner, token, V4_POSITION_MANAGER],
+    args: [owner, token, positionManager],
   });
   return { token, amount, expiration, nonce };
 }
@@ -91,6 +92,9 @@ const PERMIT_BATCH_TYPES: PermitBatchTypedData["types"] = {
 export async function buildPermit2BatchTypedData(args: {
   owner: `0x${string}`;
   chainId: number;
+  /** The PositionManager being approved as spender — per-hook (the pool's
+   *  hook determines which PositionManager its liquidity routes through). */
+  positionManager: `0x${string}`;
   tokens: { address: `0x${string}`; amountNeeded: bigint }[];
   nowSeconds: number;
 }): Promise<{ typedData: PermitBatchTypedData; permitBatch: PermitBatchInput } | null> {
@@ -101,7 +105,7 @@ export async function buildPermit2BatchTypedData(args: {
   const sigDeadline = BigInt(expiration);
 
   const liveDetails = await Promise.all(
-    erc20s.map((t) => readPermit2Allowance(args.owner, t.address)),
+    erc20s.map((t) => readPermit2Allowance(args.owner, t.address, args.positionManager)),
   );
 
   const allFresh = liveDetails.every((d, i) => {
@@ -119,7 +123,7 @@ export async function buildPermit2BatchTypedData(args: {
 
   const permitBatch: PermitBatchInput = {
     details,
-    spender: V4_POSITION_MANAGER,
+    spender: args.positionManager,
     sigDeadline,
   };
 

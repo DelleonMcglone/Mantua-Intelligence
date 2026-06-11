@@ -45,7 +45,7 @@ const POLL_MS = 15_000;
 
 /**
  * Live portfolio polling. Returns the real on-chain balances for the
- * connected Privy wallet on Base Sepolia (or null until login). Polls
+ * connected Privy wallet on Arc Testnet (or null until login). Polls
  * `/api/portfolio` every 15s so balances update without requiring a
  * full page refresh after the user receives more testnet tokens.
  */
@@ -143,9 +143,7 @@ export function toDisplayAssets(
   chainId: SupportedTestnetChainId,
 ): DisplayAsset[] {
   const tokens = getTokens(chainId);
-  return balances
-    .filter((b) => b.symbol !== "WETH") // user-facing list excludes WETH
-    .map((b) => {
+  return balances.map((b) => {
       const meta = tokens[b.symbol];
       const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
       const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;

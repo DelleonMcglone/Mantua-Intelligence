@@ -4,7 +4,6 @@ import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
-import { ARC_TESTNET_CHAIN_ID } from "@/lib/chains.ts";
 import { NetworkLogo } from "@/components/shell/network-icons.tsx";
 import { useTokenPrices } from "./use-token-prices.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
@@ -29,7 +28,7 @@ const STABLES = new Set(["USDC", "USDT", "DAI", "USDP", "FRAX", "TUSD"]);
 const MAJORS = new Set(["ETH", "WETH", "cbBTC", "WBTC", "BTC"]);
 const RWAS = new Set(["EURC", "EURS", "AGEUR"]);
 
-type PoolNetwork = "base" | "arc";
+type PoolNetwork = "arc";
 
 interface DerivedPool extends PoolSummary {
   pair: { a: string; b: string };
@@ -59,7 +58,7 @@ function classifyPool(p: PoolSummary): DerivedPool {
   // now; will light up once Mantua-managed pools land in the response.
   const hookLabel = "No Hook";
   // Remote (DefiLlama) pools are Base; local testnet pools carry chainId.
-  return { ...p, pair: { a, b }, category, hookLabel, hasHook: false, network: "base" };
+  return { ...p, pair: { a, b }, category, hookLabel, hasHook: false, network: "arc" };
 }
 
 /**
@@ -176,7 +175,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
         category,
         hookLabel,
         hasHook: p.hook !== null,
-        network: p.chainId === ARC_TESTNET_CHAIN_ID ? "arc" : "base",
+        network: "arc",
       };
     });
     return [...local, ...remote];
@@ -296,8 +295,8 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
         )}
         {!loading && !error && filtered.length === 0 && (
           <p className="px-1 py-8 text-xs text-text-dim text-center">
-            {!IS_MAINNET && enriched.length === 0
-              ? "No pools yet on Base Sepolia. Create one to get started."
+            {enriched.length === 0
+              ? "No pools yet on Arc Testnet. Create one to get started."
               : "No pools match your search."}
           </p>
         )}
@@ -312,7 +311,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
               <span className="text-right">APR</span>
             </div>
             <div className="flex-1 overflow-auto">
-              {(["base", "arc"] as const).map((net) => {
+              {(["arc"] as const).map((net) => {
                 const group = filtered.filter((p) => p.network === net).slice(0, 50);
                 if (group.length === 0) return null;
                 return (
@@ -320,7 +319,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
                     <div className="flex items-center gap-2 pt-3 pb-1.5">
                       <NetworkLogo network={net} size={14} />
                       <span className="text-[11px] text-text-mute uppercase tracking-wide font-medium">
-                        {net === "base" ? "Base" : "Arc"}
+                        Arc
                       </span>
                     </div>
                     <ul>

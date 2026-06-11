@@ -53,14 +53,16 @@ const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] =
   { value: "none", name: "No Hook", desc: "Standard execution" },
   { value: "stable-protection", name: HOOK_LABELS["stable-protection"], desc: HOOK_DESCRIPTIONS["stable-protection"] },
   { value: "dynamic-fee", name: HOOK_LABELS["dynamic-fee"], desc: HOOK_DESCRIPTIONS["dynamic-fee"] },
+  { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
+  { value: "alo", name: HOOK_LABELS.alo, desc: HOOK_DESCRIPTIONS.alo },
 ];
 
 function defaultPairForChain(
   chainId: SupportedTestnetChainId,
 ): [TokenSymbol, TokenSymbol] {
   void chainId;
-  // Base Sepolia (and the mainnet fallback path) defaults to USDC/EURC
-  // so the Stable Protection recommendation lights up.
+  // Arc Testnet defaults to USDC/EURC so the Stable Protection
+  // recommendation lights up.
   return ["USDC", "EURC"];
 }
 
@@ -68,9 +70,14 @@ function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
   return h ?? "none";
 }
 
+// Mirror of server `HOOK_REQUIRES_DYNAMIC_FEE` (v4-contracts.ts). Gate /
+// limit-order hooks keep a static fee tier; peg / volatility hooks override
+// it with DYNAMIC_FEE_FLAG.
 const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true,
   "dynamic-fee": true,
+  "rwa-gate": false,
+  alo: false,
 };
 
 function formatMirror(value: number): string {

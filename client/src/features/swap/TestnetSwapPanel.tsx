@@ -23,7 +23,7 @@ import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { formatTokenAmount, parseTokenAmount } from "./format.ts";
 import { useTestnetMaxInput, useTestnetQuote, useTestnetSwap } from "./use-testnet-swap.ts";
-import { BASE_SCAN_TX, DEFAULT_SLIPPAGE_BPS } from "./constants.ts";
+import { EXPLORER_TX_URL, DEFAULT_SLIPPAGE_BPS } from "./constants.ts";
 
 interface Props {
   onClose?: () => void;
@@ -35,6 +35,8 @@ const HOOK_OPTIONS: { value: HookName | "none"; label: string }[] = [
   { value: "none", label: "No Hook" },
   { value: "stable-protection", label: HOOK_LABELS["stable-protection"] },
   { value: "dynamic-fee", label: HOOK_LABELS["dynamic-fee"] },
+  { value: "rwa-gate", label: HOOK_LABELS["rwa-gate"] },
+  { value: "alo", label: HOOK_LABELS.alo },
 ];
 
 function safeParse(symbol: TokenSymbol, input: string): string {
@@ -411,7 +413,7 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
 
         {swap.state.approvalTx && (
           <a
-            href={`${BASE_SCAN_TX}${swap.state.approvalTx}`}
+            href={`${EXPLORER_TX_URL}${swap.state.approvalTx}`}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
@@ -421,12 +423,12 @@ export function TestnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: P
         )}
         {swap.state.txHash && (
           <a
-            href={`${BASE_SCAN_TX}${swap.state.txHash}`}
+            href={`${EXPLORER_TX_URL}${swap.state.txHash}`}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-3 w-full"
           >
-            View on BaseScan <ExternalLink className="h-3 w-3" />
+            View on ArcScan <ExternalLink className="h-3 w-3" />
           </a>
         )}
         {swap.state.status === "success" && (

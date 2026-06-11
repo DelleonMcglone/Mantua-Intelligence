@@ -4,19 +4,18 @@
  */
 
 /**
- * Phase 5b: testnet beta gate. `MANTUA_NETWORK=testnet` (default) targets
- * Base Sepolia (84532); `MANTUA_NETWORK=mainnet` targets Base Mainnet
- * (8453). One env var, multiple downstream effects (chain IDs, v4 contract
- * addresses, token registry, spending-cap default — see PR #2).
+ * Network gate. Mantua runs on **Arc Testnet only** — `MANTUA_NETWORK`
+ * stays `testnet`. `IS_MAINNET` is retained (always false) so the few
+ * launch-gated branches keep compiling until an Arc mainnet exists.
  */
 export const NETWORK = process.env.MANTUA_NETWORK === "mainnet" ? "mainnet" : "testnet";
 export const IS_MAINNET = NETWORK === "mainnet";
 export const IS_TESTNET = NETWORK === "testnet";
 
-export const BASE_MAINNET_CHAIN_ID = 8453;
-export const BASE_SEPOLIA_CHAIN_ID = 84532;
+export const ARC_TESTNET_CHAIN_ID = 5042002;
 
-export const BASE_CHAIN_ID: number = IS_MAINNET ? BASE_MAINNET_CHAIN_ID : BASE_SEPOLIA_CHAIN_ID;
+/** The single active chain id (Arc Testnet). */
+export const ACTIVE_CHAIN_ID: number = ARC_TESTNET_CHAIN_ID;
 
 // Spending caps — USD equivalent.
 // (D-009 ACCEPTED: $500 default, tiered raise by account age, $50k absolute ceiling.)

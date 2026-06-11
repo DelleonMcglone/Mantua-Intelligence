@@ -10,25 +10,14 @@ const schema = z.object({
 
   UNISWAP_TRADING_API_KEY: z.string().min(1).optional(),
 
-  /** Phase 5b: testnet beta gate. Default `testnet` targets Base Sepolia
-   *  (84532); set to `mainnet` to flip the entire app back to Base Mainnet
-   *  (8453). Drives chain ID, v4 contract addresses, token registry,
-   *  spending-cap default (PR #2), and explorer URLs. */
+  /** Network gate. Mantua runs on Arc Testnet only, so this stays
+   *  `testnet`; the `mainnet` option is retained for the shared
+   *  IS_MAINNET guard but there is no Arc mainnet to target. */
   MANTUA_NETWORK: z.enum(["mainnet", "testnet"]).default("testnet"),
 
-  /** Base RPC URL — used by server-side viem readContract calls
-   *  (StateView.getSlot0, etc.). Default tracks MANTUA_NETWORK; override
-   *  with Alchemy/QuickNode in production for headroom. */
-  BASE_RPC_URL: z
-    .url()
-    .default(
-      process.env.MANTUA_NETWORK === "mainnet"
-        ? "https://mainnet.base.org"
-        : "https://sepolia.base.org",
-    ),
-
-  /** Arc Testnet RPC URL — used for server-side reads (portfolio
-   *  balances, etc.) when the active chain is Arc. */
+  /** Arc Testnet RPC URL — used by all server-side viem reads
+   *  (StateView.getSlot0, portfolio balances, etc.). Override with a
+   *  private endpoint (Alchemy/QuickNode) in production for headroom. */
   ARC_RPC_URL: z.url().default("https://rpc.testnet.arc.network"),
 
   /** The Graph decentralized-network API key. Required for /api/positions

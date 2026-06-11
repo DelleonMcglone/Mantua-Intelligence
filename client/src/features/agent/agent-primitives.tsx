@@ -282,7 +282,7 @@ export function TxRow({
             textDecoration: "none",
           }}
         >
-          ↗ BaseScan
+          ↗ ArcScan
         </a>
       )}
     </div>

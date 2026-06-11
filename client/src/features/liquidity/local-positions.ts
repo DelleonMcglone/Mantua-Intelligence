@@ -1,5 +1,5 @@
 import {
-  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   isSupportedTestnetChainId,
   type SupportedTestnetChainId,
 } from "@/lib/chains.ts";
@@ -51,14 +51,14 @@ export function getLocalPositions(): LocalPosition[] {
         .filter((p) => isSupportedTestnetChainId(p.chainId))
         .sort((a, b) => b.createdAt - a.createdAt);
     }
-    // v1 → v2 migration: assign existing positions to Base Sepolia.
+    // v1 → v2 migration: assign existing positions to Arc Testnet.
     const legacyRaw = window.localStorage.getItem("mantua.localPositions.v1");
     if (!legacyRaw) return [];
     const legacy = JSON.parse(legacyRaw) as LegacyLocalPosition[];
     if (!Array.isArray(legacy)) return [];
     const migrated: LocalPosition[] = legacy.map((p) => ({
       ...p,
-      chainId: BASE_SEPOLIA_CHAIN_ID,
+      chainId: ARC_TESTNET_CHAIN_ID,
     }));
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     return migrated.sort((a, b) => b.createdAt - a.createdAt);
@@ -67,7 +67,7 @@ export function getLocalPositions(): LocalPosition[] {
   }
 }
 
-/** User-owned positions. The Positions tab shows Base Sepolia
+/** User-owned positions. The Positions tab shows Arc Testnet
  *  entries. */
 export function getUserLocalPositions(): LocalPosition[] {
   return getLocalPositions().filter((p) => (p.owner ?? "user") === "user");

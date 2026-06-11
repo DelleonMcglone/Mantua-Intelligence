@@ -3,7 +3,7 @@ import { z } from "zod";
 import { encodeFunctionData } from "viem";
 import { db } from "../db/client.ts";
 import { pools as poolsTable } from "../db/schema/trading.ts";
-import { BASE_SEPOLIA_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
+import { ARC_TESTNET_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
 import { resolveHookForPool } from "../lib/hook-pair-gating.ts";
 import { logAudit } from "../lib/audit.ts";
 import { logger } from "../lib/logger.ts";
@@ -15,7 +15,7 @@ import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
-  getV4PoolManager,
+  getV4StackForHook,
   isFeeTier,
 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -31,7 +31,7 @@ const chainIdSchema = z
   .number()
   .int()
   .refine(isSupportedTestnetChainId, "Unsupported chainId")
-  .default(BASE_SEPOLIA_CHAIN_ID);
+  .default(ARC_TESTNET_CHAIN_ID);
 
 const calldataSchema = z.object({
   chainId: chainIdSchema,
@@ -139,7 +139,8 @@ poolCreateRouter.post(
         args: [key, sqrtPriceX96],
       });
       res.json({
-        to: getV4PoolManager(chainId),
+        // Initialize on the PoolManager for this pool's hook stack.
+        to: getV4StackForHook(key.hooks).poolManager,
         chainId,
         data,
         value: "0",

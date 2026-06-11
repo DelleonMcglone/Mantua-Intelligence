@@ -4,7 +4,7 @@ import { getSqrtRatioAtTick } from "./tick-math.ts";
 import { Action, encodeActions, encodeSweep, encodeUnlockData } from "./v4-actions.ts";
 import {
   POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
-  V4_POSITION_MANAGER,
+  getV4StackForHook,
 } from "./v4-contracts.ts";
 
 const SLIPPAGE_DENOM = 10_000n;
@@ -19,6 +19,9 @@ export interface BuildRemoveLiquidityArgs {
   sqrtPriceX96: bigint;
   currency0: `0x${string}`;
   currency1: `0x${string}`;
+  /** The position's pool hook — routes to that hook's PositionManager
+   *  (null / omitted → the default hero stack). */
+  hookAddress?: `0x${string}` | null;
   slippageBps: number;
   recipient: `0x${string}`;
   deadlineSeconds: number;
@@ -121,7 +124,7 @@ export function buildRemoveLiquidityCalldata(
   });
 
   return {
-    to: V4_POSITION_MANAGER,
+    to: getV4StackForHook(args.hookAddress ?? ZERO).positionManager,
     data,
     amount0Min: amount0Min.toString(),
     amount1Min: amount1Min.toString(),

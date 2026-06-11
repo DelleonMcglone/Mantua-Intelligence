@@ -23,19 +23,20 @@ import {
 
 describe("extractWalletTokens", () => {
   it("returns tokens in left-to-right order", () => {
-    const got = extractWalletTokens("swap ETH for cbBTC").map((m) => m.sym);
-    assert.deepEqual(got, ["ETH", "cbBTC"]);
+    const got = extractWalletTokens("swap USDC for cirBTC").map((m) => m.sym);
+    assert.deepEqual(got, ["USDC", "cirBTC"]);
   });
 
   it("forgives common transposition typos", () => {
-    const got = extractWalletTokens("swap ETH for cbBCT").map((m) => m.sym);
-    assert.deepEqual(got, ["ETH", "cbBTC"]);
+    // 'cbBCT' is a common transposition of the cirBTC alias 'cbbtc'.
+    const got = extractWalletTokens("swap USDC for cbBCT").map((m) => m.sym);
+    assert.deepEqual(got, ["USDC", "cirBTC"]);
   });
 
   it("does not double-count overlapping aliases", () => {
     // 'cbbtc' should not also produce a separate 'btc' hit
     const got = extractWalletTokens("how much cbBTC").map((m) => m.sym);
-    assert.deepEqual(got, ["cbBTC"]);
+    assert.deepEqual(got, ["cirBTC"]);
   });
 
   it("returns empty when no known token is present", () => {
@@ -155,19 +156,19 @@ describe("detectIntent: token-price", () => {
 });
 
 describe("detectIntent: swap", () => {
-  it("'swap ETH for cbBTC' extracts tokenIn=ETH, tokenOut=cbBTC", () => {
-    assert.deepEqual(detectIntent("swap ETH for cbBTC"), {
+  it("'swap USDC for cirBTC' extracts tokenIn=USDC, tokenOut=cirBTC", () => {
+    assert.deepEqual(detectIntent("swap USDC for cirBTC"), {
       kind: "swap",
-      tokenIn: "ETH",
-      tokenOut: "cbBTC",
+      tokenIn: "USDC",
+      tokenOut: "cirBTC",
     });
   });
 
-  it("'swap ETH for cbBCT' (typo) still extracts cbBTC", () => {
-    assert.deepEqual(detectIntent("swap ETH for cbBCT"), {
+  it("'swap USDC for cbBCT' (typo) still extracts cirBTC", () => {
+    assert.deepEqual(detectIntent("swap USDC for cbBCT"), {
       kind: "swap",
-      tokenIn: "ETH",
-      tokenOut: "cbBTC",
+      tokenIn: "USDC",
+      tokenOut: "cirBTC",
     });
   });
 
@@ -180,9 +181,9 @@ describe("detectIntent: swap", () => {
   });
 
   it("single-token swap → tokenIn pre-filled", () => {
-    assert.deepEqual(detectIntent("swap eth"), {
+    assert.deepEqual(detectIntent("swap usdc"), {
       kind: "swap",
-      tokenIn: "ETH",
+      tokenIn: "USDC",
     });
   });
 
@@ -199,10 +200,10 @@ describe("detectIntent: add-liquidity", () => {
     });
   });
 
-  it("'add liquidity to ETH cbBCT' (typo) extracts both tokens", () => {
-    assert.deepEqual(detectIntent("add liquidity to a ETH cbBCT pool"), {
+  it("'add liquidity to USDC cbBCT' (typo) extracts both tokens", () => {
+    assert.deepEqual(detectIntent("add liquidity to a USDC cbBCT pool"), {
       kind: "add-liquidity",
-      ctx: { tokenA: "ETH", tokenB: "cbBTC", fee: 500, hook: null },
+      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: null },
     });
   });
 
@@ -217,12 +218,12 @@ describe("detectIntent: add-liquidity", () => {
     assert.deepEqual(detectIntent("add liquidity"), { kind: "pools" });
   });
 
-  it("'add liquidity to a ETH USDC pool with a dynamic fee' → carries hook", () => {
+  it("'add liquidity to a USDC cirBTC pool with a dynamic fee' → carries hook", () => {
     assert.deepEqual(
-      detectIntent("add liquidity to a ETH USDC pool with a dynamic fee"),
+      detectIntent("add liquidity to a USDC cirBTC pool with a dynamic fee"),
       {
         kind: "add-liquidity",
-        ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: "dynamic-fee" },
+        ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "dynamic-fee" },
       },
     );
   });
@@ -265,10 +266,10 @@ describe("detectIntent: create-pool", () => {
     });
   });
 
-  it("'Make a new ETH USDC pool with volatility-based fees' → create-pool ctx", () => {
-    assert.deepEqual(detectIntent("Make a new ETH USDC pool with volatility-based fees"), {
+  it("'Make a new USDC cirBTC pool with volatility-based fees' → create-pool ctx", () => {
+    assert.deepEqual(detectIntent("Make a new USDC cirBTC pool with volatility-based fees"), {
       kind: "create-pool",
-      ctx: { tokenA: "ETH", tokenB: "USDC", fee: 500, hook: null },
+      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: null },
     });
   });
 
@@ -288,9 +289,9 @@ describe("detectIntent: remove-liquidity", () => {
     );
   });
 
-  it("'Withdraw from my ETH/USDC position' → remove-liquidity", () => {
+  it("'Withdraw from my USDC/cirBTC position' → remove-liquidity", () => {
     assert.deepEqual(
-      detectIntent("Withdraw from my ETH/USDC position"),
+      detectIntent("Withdraw from my USDC/cirBTC position"),
       { kind: "remove-liquidity" },
     );
   });

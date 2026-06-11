@@ -1,17 +1,15 @@
 import { AssetIcon, type AssetSymbol } from "@/features/portfolio/asset-icons.tsx";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 
-const KNOWN: AssetSymbol[] = ["ETH", "cbBTC", "USDC", "EURC", "cirBTC"];
+const KNOWN: AssetSymbol[] = ["USDC", "EURC", "cirBTC"];
 
 /**
  * Renders the matching `AssetIcon` for the given token symbol; falls
- * back to a neutral coin-with-initial badge for symbols that don't
- * have a brand icon (e.g. WETH).
+ * back to a neutral coin-with-initial badge for unknown symbols.
  */
 export function TokenIcon({ symbol, size = 20 }: { symbol: TokenSymbol; size?: number }) {
-  const norm = symbol === "WETH" ? "ETH" : symbol;
-  if ((KNOWN as readonly string[]).includes(norm)) {
-    return <AssetIcon symbol={norm as AssetSymbol} size={size} />;
+  if ((KNOWN as readonly string[]).includes(symbol)) {
+    return <AssetIcon symbol={symbol as AssetSymbol} size={size} />;
   }
   const initial = symbol.slice(0, 1).toUpperCase();
   return (
