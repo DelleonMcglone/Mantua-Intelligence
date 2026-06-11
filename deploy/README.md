@@ -85,6 +85,33 @@ the hook sees the router as `sender`.
 
 ---
 
+## All-in enablers (after periphery is deployed)
+
+Run as the **hook owner** (`0xceeD79…dd56` — your deployer). Both verified
+(compile + simulate against live Arc).
+
+**B) ALO swap router** — ALO had no PoolSwapTest, so swaps couldn't route:
+```bash
+cd /Users/delleonmcglone/limit-orders && forge script script/DeployAloSwapRouter.s.sol:DeployAloSwapRouter \
+  --rpc-url https://rpc.testnet.arc.network --via-ir --optimizer-runs 200 --broadcast --private-key 0xYOUR_KEY
+```
+Send me the printed `PoolSwapTest` address → I wire it into `HOOK_DEPLOYMENTS_ARC.alo.poolSwapTest`.
+
+**C) DynamicFee canonical pools** — create + `configurePool` the USDC/cirBTC and
+EURC/cirBTC pools with the app's canonical tokens (owner-gated, ~0.024 USDC):
+```bash
+cd /Users/delleonmcglone/dynamic-fee && forge script script/ConfigureDynamicFeePools.s.sol:ConfigureDynamicFeePools \
+  --rpc-url https://rpc.testnet.arc.network --via-ir --optimizer-runs 200 --broadcast --private-key 0xYOUR_KEY
+```
+After this, the DynamicFee pools exist + are configured; users add liquidity and
+swap them through the app. (ALO canonical pools need no owner step — create them
+via the app once the router from B is deployed.)
+
+> Follow-up (client): `extract-token-id.ts` still scans the hero PositionManager
+> for the minted NFT; for DynamicFee/ALO LP it should use the per-hook PM from the
+> add-liquidity response so the position records correctly. The LP tx itself
+> succeeds regardless.
+
 ## After each deploy
 
 Paste the printed **PositionManager / StateView / V4Quoter** back so they can be wired into
