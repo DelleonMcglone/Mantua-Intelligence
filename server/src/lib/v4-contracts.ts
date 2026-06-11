@@ -77,21 +77,34 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  * Mantua hook addresses on Arc Testnet. Four hooks:
  *  - Stable Protection — USDC/EURC FX-rate-aware peg defense.
  *  - Dynamic Fee — volatile pairs, fee scales with volatility.
- *  - RWAGate — permissioned/allowlisted pools.
+ *  - RWAGate — permissioned/allowlisted pools (ComplianceRegistry
+ *    0x2978eA98Cc3c5c480d4C9D073DF8599BA761556D).
  *  - ALO — Async Limit Orders.
- * Real Arc addresses land in Phase E; `null` → hook unavailable.
+ *
+ * NOTE (deployment topology): each hook was deployed from its own repo
+ * against its OWN Uniswap v4 PoolManager, so there is no single canonical
+ * PoolManager on Arc testnet yet:
+ *   stable-protection → PoolManager 0x15B5f2c054b9DC788250131FCD1bcfCC34080a59
+ *   dynamic-fee       → PoolManager 0x7eA87A5919C119DC95855A0BE227fd3241c998F0
+ *   rwa-gate          → PoolManager 0xA29B7D158f2b2113Bd60eeD765866f794096D4Dc
+ *   alo               → PoolManager 0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b
+ * `V4_BY_CHAIN` still models a single stack (poolManager + periphery), so
+ * execution (add-liquidity/swap/state reads) remains blocked until we
+ * either (a) get the periphery — PositionManager/StateView/Quoter/
+ * PoolSwapTest — for one canonical PoolManager, or (b) refactor the
+ * registry to be per-hook. Hook resolution + pair gating work today.
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
 };
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
 };
 const RWAGATE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0xda483a6374AEeB3ffA6D8a2772D6c2e64d314a80",
 };
 const ALO_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: null,
+  [ARC_TESTNET_CHAIN_ID]: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
 };
 
 export const HOOK_NAMES = ["stable-protection", "dynamic-fee", "rwa-gate", "alo"] as const;

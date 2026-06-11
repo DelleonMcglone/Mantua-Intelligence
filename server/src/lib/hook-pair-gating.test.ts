@@ -101,11 +101,21 @@ describe("resolveHookForPool", () => {
     assert.equal(resolveHookForPool(null, USDC, EURC), ZERO_ADDRESS);
     assert.equal(resolveHookForPool(undefined, USDC, CIRBTC), ZERO_ADDRESS);
   });
-  // Arc hook addresses are placeholders until Phase E; any hook request
-  // therefore fails fast with "not deployed". Swap to address assertions
-  // once the real Arc deployments land.
-  it("throws while hook addresses are unset", () => {
-    assert.throws(() => resolveHookForPool("stable-protection", USDC, EURC));
-    assert.throws(() => resolveHookForPool("dynamic-fee", USDC, CIRBTC));
+  // Arc hook addresses are wired (Phase E). resolveHookForPool returns
+  // the deployed hook address for an allowed pair.
+  it("returns the deployed hook address for an allowed pair", () => {
+    assert.equal(
+      resolveHookForPool("stable-protection", USDC, EURC),
+      "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+    );
+    assert.equal(
+      resolveHookForPool("dynamic-fee", USDC, CIRBTC),
+      "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+    );
+  });
+
+  it("still throws when the pair is not allowed for the hook", () => {
+    // dynamic-fee does not support the stable USDC/EURC pair.
+    assert.throws(() => resolveHookForPool("dynamic-fee", USDC, EURC));
   });
 });
