@@ -51,15 +51,10 @@ contract DeployHeroPeriphery is Script {
     /// periphery deployments.
     uint256 constant UNSUBSCRIBE_GAS_LIMIT = 300_000;
 
-    function run()
-        external
-        returns (
-            PositionDescriptor descriptor,
-            PositionManager positionManager,
-            StateView stateView,
-            V4Quoter quoter
-        )
-    {
+    /// @dev Returns nothing on purpose: a script `run()` that returns values
+    ///      breaks Foundry's `--broadcast` serialization ("encode length
+    ///      mismatch"). The deployed addresses are emitted via console2.log.
+    function run() external {
         require(
             address(POOL_MANAGER).code.length > 0,
             "PoolManager has no code on this chain (wrong RPC?)"
@@ -69,7 +64,7 @@ contract DeployHeroPeriphery is Script {
 
         // PositionDescriptor is cosmetic (NFT art / ratio sorting). Arc has no
         // canonical WETH, so wrappedNative = address(0); the label is the gas token.
-        descriptor = new PositionDescriptor(
+        PositionDescriptor descriptor = new PositionDescriptor(
             POOL_MANAGER,
             address(0), // wrappedNative — no WETH on Arc
             bytes32("USDC") // native currency label (Arc gas token), cosmetic only
@@ -77,7 +72,7 @@ contract DeployHeroPeriphery is Script {
 
         // WETH9 = address(0): NativeWrapper only calls it for explicit WRAP/UNWRAP
         // actions, which Arc flows never use, so address(0) is never invoked.
-        positionManager = new PositionManager(
+        PositionManager positionManager = new PositionManager(
             POOL_MANAGER,
             PERMIT2,
             UNSUBSCRIBE_GAS_LIMIT,
@@ -85,8 +80,8 @@ contract DeployHeroPeriphery is Script {
             IWETH9(address(0))
         );
 
-        stateView = new StateView(POOL_MANAGER);
-        quoter = new V4Quoter(POOL_MANAGER);
+        StateView stateView = new StateView(POOL_MANAGER);
+        V4Quoter quoter = new V4Quoter(POOL_MANAGER);
 
         vm.stopBroadcast();
 
