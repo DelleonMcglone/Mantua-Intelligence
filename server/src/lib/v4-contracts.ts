@@ -157,10 +157,11 @@ export interface HookDeployment {
   readonly poolSwapTest: `0x${string}` | null;
   /** v4 test liquidity router actually used (no PositionManager exists). */
   readonly poolModifyLiquidityTest: `0x${string}` | null;
-  /** Production periphery — absent on Arc for every repo. */
-  readonly positionManager: null;
-  readonly stateView: null;
-  readonly quoter: null;
+  /** Production periphery — deployed per-hook via deploy/arc-*-periphery
+   *  (null where not yet deployed, e.g. rwa-gate). */
+  readonly positionManager: `0x${string}` | null;
+  readonly stateView: `0x${string}` | null;
+  readonly quoter: `0x${string}` | null;
   /** Token addresses this specific pool was initialized with. */
   readonly token0: `0x${string}`;
   readonly token1: `0x${string}`;
@@ -176,9 +177,9 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
     hook: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
     poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
     poolModifyLiquidityTest: "0x4f81385fa50336e4cbA6718A803f3e2Baa09D1c0",
-    positionManager: null,
-    stateView: null,
-    quoter: null,
+    positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
+    stateView: "0x73Bb8E68c08C528770880c10223670f7aee13824",
+    quoter: "0xd57545f0a2C3A721Fc3F1F4f3007b2aA021f4567",
     token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
     token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
     tokensAreMocks: false,
@@ -188,9 +189,9 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
     hook: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
     poolSwapTest: "0xAa096011E6604df33762d611cbBdaA0671F19Bdb",
     poolModifyLiquidityTest: "0xdD225f3B7b621287657B490B3bC945E3ecfC8EbA",
-    positionManager: null,
-    stateView: null,
-    quoter: null,
+    positionManager: "0xDa1bfA53fA93463fB9Abd349bad381667D29b88d",
+    stateView: "0x6F4eD6D86e8d770Dc7Ef027011d7cd6c12Db40c9",
+    quoter: "0x2CF521F13658FE57958D09B40Ee3420D974EE7eC",
     token0: "0xFE3f00877d20Fb599351182EAef78DE3EF531dF6", // MOCK USDC (6dp)
     token1: "0xAeE5a58b0ae058bfd358CeeB72e4804C16d94F5E", // MOCK cirBTC (8dp)
     tokensAreMocks: true,
@@ -211,11 +212,11 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
   alo: {
     poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",
     hook: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
-    poolSwapTest: null, // NOT FOUND in repo
+    poolSwapTest: null, // NOT FOUND in repo (no swap router deployed for ALO)
     poolModifyLiquidityTest: null, // NOT FOUND in repo
-    positionManager: null,
-    stateView: null,
-    quoter: null,
+    positionManager: "0x7866e36b7576DF5167cf76770799096Ba6fcD882",
+    stateView: "0xbF8dC490E538a7749f9DF6B34Ee740650D325b15",
+    quoter: "0xA12B21D108Eb0ad982870d90CcB66976274d3b18",
     token0: "0x1B056aDe32E5F1F782638e21bF1E665059F47971", // MOCK cirBTC (8dp)
     token1: "0x3600000000000000000000000000000000000000", // USDC (native)
     tokensAreMocks: true,
