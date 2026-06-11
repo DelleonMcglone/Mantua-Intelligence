@@ -225,8 +225,9 @@ export function useAddLiquidity() {
 
       // Extract the minted PositionManager NFT tokenId from receipt logs
       // so the remove-liquidity flow can reference this position later.
+      // calldata.to is the per-hook PositionManager that minted the NFT.
       const tokenId =
-        outcome === "success" ? extractMintedTokenId(receipt, owner) : null;
+        outcome === "success" ? extractMintedTokenId(receipt, owner, calldata.to) : null;
 
       void api.post("/api/liquidity/add/record", {
         chainId,

@@ -11,17 +11,18 @@ const TRANSFER_TOPIC =
  * receipt and return the tokenId as a decimal string. Returns null if
  * no mint event was found (failed tx, or different recipient).
  *
- * `V4_POSITION_MANAGER` is network-driven (mainnet vs Sepolia have
- * different deployments) — using a hardcoded mainnet address here
- * was a real bug on testnet that silently dropped tokenIds and
- * skipped position breadcrumbs.
+ * `positionManager` is per-hook: each Mantua hook has its own
+ * PositionManager, so the mint event comes from the pool's hook stack.
+ * Pass the add-liquidity calldata `to` (the resolved per-hook PM);
+ * defaults to the hero PositionManager when omitted.
  */
 export function extractMintedTokenId(
   receipt: TransactionReceipt,
   owner: `0x${string}`,
+  positionManager: `0x${string}` = V4_POSITION_MANAGER,
 ): string | null {
   const ownerTopic = `0x${"0".repeat(24)}${owner.slice(2).toLowerCase()}`;
-  const positionManagerLower = V4_POSITION_MANAGER.toLowerCase();
+  const positionManagerLower = positionManager.toLowerCase();
   const mint = receipt.logs.find(
     (l: Log) =>
       l.address.toLowerCase() === positionManagerLower &&
