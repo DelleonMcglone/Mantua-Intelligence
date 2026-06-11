@@ -295,8 +295,8 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
         )}
         {!loading && !error && filtered.length === 0 && (
           <p className="px-1 py-8 text-xs text-text-dim text-center">
-            {!IS_MAINNET && enriched.length === 0
-              ? "No pools yet on Base Sepolia. Create one to get started."
+            {enriched.length === 0
+              ? "No pools yet on Arc Testnet. Create one to get started."
               : "No pools match your search."}
           </p>
         )}

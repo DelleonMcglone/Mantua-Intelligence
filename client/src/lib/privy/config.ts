@@ -1,6 +1,4 @@
-import { base, baseSepolia } from "viem/chains";
 import type { PrivyClientConfig } from "@privy-io/react-auth";
-import { IS_MAINNET } from "../tokens.ts";
 import { arcTestnet } from "../chains.ts";
 
 /**
@@ -8,14 +6,11 @@ import { arcTestnet } from "../chains.ts";
  *  - D-005 ACCEPTED: email + Google + Apple + passkey + external wallet
  *  - D-006 ACCEPTED: createOnLogin = 'users-without-wallets'
  *  - D-007 ACCEPTED: WalletConnect enabled with project ID
- *  - Testnet beta runs on Base Sepolia (84532). Mainnet
- *    (`VITE_MANTUA_NETWORK=mainnet`) switches to Base Mainnet —
- *    mainnet redeploys are launch-gating, separate work.
+ *  - Mantua runs on Arc Testnet (5042002) only — Circle's USDC-gas
+ *    chain. No Base / mainnet path.
  */
-const SUPPORTED_TESTNET_CHAINS = [baseSepolia, arcTestnet];
-
-const DEFAULT_CHAIN = IS_MAINNET ? base : baseSepolia;
-const SUPPORTED_CHAINS = IS_MAINNET ? [base] : SUPPORTED_TESTNET_CHAINS;
+const DEFAULT_CHAIN = arcTestnet;
+const SUPPORTED_CHAINS = [arcTestnet];
 
 export const privyConfig: PrivyClientConfig = {
   appearance: { theme: "dark", accentColor: "#8b6cf0" },
@@ -24,13 +19,7 @@ export const privyConfig: PrivyClientConfig = {
     ethereum: { createOnLogin: "users-without-wallets" },
   },
   walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-  // viem `Chain` type drifts between our copy and Privy's bundled
-  // (porto-vendored) copy under `exactOptionalPropertyTypes: true`.
-  // Runtime value is identical; @ts-expect-error silences the
-  // structural mismatch.
-  // @ts-expect-error -- viem Chain version drift (Privy vendors its own viem)
   defaultChain: DEFAULT_CHAIN,
-  // @ts-expect-error -- viem Chain version drift (Privy vendors its own viem)
   supportedChains: SUPPORTED_CHAINS,
 };
 

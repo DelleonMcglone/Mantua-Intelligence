@@ -17,7 +17,7 @@ import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { ChartRange } from "./types.ts";
 import type { Position } from "./positions-types.ts";
 
-const BASESCAN = EXPLORER_URL;
+const EXPLORER = EXPLORER_URL;
 
 interface Props {
   poolId: string;
@@ -192,7 +192,7 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
               {data.pool.underlyingTokens.map((addr) => (
                 <a
                   key={addr}
-                  href={`${BASESCAN}/address/${addr}`}
+                  href={`${EXPLORER}/address/${addr}`}
                   target="_blank"
                   rel="noreferrer"
                   className="font-mono text-text-dim hover:text-accent inline-flex items-center gap-1"

@@ -8,13 +8,11 @@ interface WalletMenuProps {
   onDisconnect: () => void;
 }
 
-const CDP_FAUCET_URL =
-  "https://portal.cdp.coinbase.com/entity_e7c091a8-58d4-54ec-81ba-0146dec8ff74/onchain-tools/faucet?project=9813a4a0-187c-4540-9685-410bf73463ab&network=base-sepolia&token=ETH";
 const ARC_FAUCET_URL = "https://faucet.circle.com/";
 
 /**
  * Connected-wallet pill in the header. Click toggles a dropdown with
- * Copy address / View on BaseScan / Get testnet ETH (CDP) / Refresh
+ * Copy address / View on ArcScan / Get testnet USDC (Circle) / Refresh
  * balances / Disconnect. Refresh dispatches `mantua:refresh-portfolio`
  * on the window — the portfolio hooks listen and re-poll immediately.
  */
@@ -83,12 +81,8 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
             View on {explorerName}
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
-          <MenuLink href={CDP_FAUCET_URL}>
-            Get testnet ETH (CDP)
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </MenuLink>
           <MenuLink href={ARC_FAUCET_URL}>
-            Get testnet USDC (ARC)
+            Get testnet USDC (Circle)
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
           <MenuItem onClick={handleRefresh}>Refresh balances</MenuItem>

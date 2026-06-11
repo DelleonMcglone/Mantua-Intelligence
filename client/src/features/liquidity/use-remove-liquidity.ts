@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
+import { ARC_TESTNET_CHAIN_ID, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { IS_MAINNET } from "@/lib/tokens.ts";
 
-const baseRpcUrl: string =
-  (import.meta.env.VITE_BASE_RPC_URL as string | undefined) ??
-  (IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org");
-const publicClient = createPublicClient({ chain: ACTIVE_CHAIN, transport: http(baseRpcUrl) });
+const publicClient = createPublicClient({
+  chain: ACTIVE_CHAIN,
+  transport: http(getRpcUrl(ARC_TESTNET_CHAIN_ID)),
+});
 
 export interface RemoveArgs {
   /** Either the DB UUID (Mantua-tracked) … */

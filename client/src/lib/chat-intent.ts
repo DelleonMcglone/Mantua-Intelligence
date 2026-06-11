@@ -50,7 +50,7 @@ export type Intent =
     };
 
 const WALLET_TOKEN_ALIASES: { sym: TokenSymbol; aliases: string[] }[] = [
-  { sym: "cirBTC", aliases: ["cirbtc", "cir-btc", "cbbtc", "cb-btc", "cbtc", "btc", "bitcoin"] },
+  { sym: "cirBTC", aliases: ["cirbtc", "cir-btc", "cbbtc", "cbbct", "cb-btc", "cb-bct", "cbtc", "btc", "bitcoin"] },
   { sym: "EURC", aliases: ["eurc", "eucr"] },
   { sym: "USDC", aliases: ["usdc", "uscd"] },
 ];

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Shield, Zap, Layers, Check } from "lucide-react";
+import { ChevronDown, Shield, Zap, Layers, Lock, Clock, Check } from "lucide-react";
 import { HOOK_OPTIONS, HOOK_META, type HookOption } from "./hook-types.ts";
 
 interface HookSelectorProps {
@@ -11,6 +11,8 @@ const HOOK_ICONS: Record<HookOption, React.ReactNode> = {
   none: null,
   "stable-protection": <Shield className="h-3.5 w-3.5" />,
   "dynamic-fee": <Zap className="h-3.5 w-3.5" />,
+  "rwa-gate": <Lock className="h-3.5 w-3.5" />,
+  alo: <Clock className="h-3.5 w-3.5" />,
 };
 
 export function HookSelector({ value, onChange }: HookSelectorProps) {

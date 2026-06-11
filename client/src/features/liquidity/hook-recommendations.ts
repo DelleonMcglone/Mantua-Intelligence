@@ -4,11 +4,15 @@ import type { HookName } from "./use-create-pool.ts";
 export const HOOK_LABELS: Record<HookName, string> = {
   "stable-protection": "Stable Protection",
   "dynamic-fee": "Dynamic Fee",
+  "rwa-gate": "RWA Gate",
+  alo: "Async Limit Order",
 };
 
 export const HOOK_DESCRIPTIONS: Record<HookName, string> = {
   "stable-protection": "Minimizes depeg & slippage on stable pairs.",
   "dynamic-fee": "Adjusts fees in real time based on volatility.",
+  "rwa-gate": "Permissioned pool — only allowlisted addresses may trade.",
+  alo: "Queue async limit orders that fill at your target price.",
 };
 
 interface PairRecommendation {
@@ -17,14 +21,45 @@ interface PairRecommendation {
 }
 
 /**
- * Canonical pool/hook pairings. MVP scope:
+ * Canonical pool/hook pairings (Arc Testnet). Defaults only — users can
+ * still pick any hook the pair is allowed for (see `ALLOWED_PAIRS`).
  *  - USDC/EURC defaults to Stable Protection.
- *  - Every other pair has no default hook; users can still choose
- *    Dynamic Fee (any pair) from the hook dropdown.
+ *  - cirBTC pairs default to Dynamic Fee.
  */
 export const PAIR_HOOK_RECOMMENDATIONS: readonly PairRecommendation[] = [
   { pair: ["USDC", "EURC"], hook: "stable-protection" },
+  { pair: ["USDC", "cirBTC"], hook: "dynamic-fee" },
+  { pair: ["EURC", "cirBTC"], hook: "dynamic-fee" },
 ];
+
+/**
+ * Hook → allowed token pairs, mirroring `server/src/lib/hook-pair-gating.ts`
+ * `HOOK_ALLOWLIST[ARC_TESTNET_CHAIN_ID]`. Keep the two in exact sync; the
+ * server is canonical and re-checks on every calldata request.
+ */
+const ALLOWED_PAIRS: Record<HookName, readonly (readonly [TokenSymbol, TokenSymbol])[]> = {
+  "stable-protection": [["USDC", "EURC"]],
+  "dynamic-fee": [
+    ["USDC", "cirBTC"],
+    ["EURC", "cirBTC"],
+  ],
+  "rwa-gate": [
+    ["USDC", "EURC"],
+    ["USDC", "cirBTC"],
+  ],
+  alo: [
+    ["USDC", "cirBTC"],
+    ["EURC", "cirBTC"],
+  ],
+};
+
+function pairMatches(
+  a: TokenSymbol,
+  b: TokenSymbol,
+  [pa, pb]: readonly [TokenSymbol, TokenSymbol],
+): boolean {
+  return (a === pa && b === pb) || (a === pb && b === pa);
+}
 
 export function recommendedHookForPair(
   a: TokenSymbol,
@@ -50,12 +85,8 @@ export function hookCompatibilityError(
   hook: HookName | null,
 ): string | null {
   if (!hook) return null;
-  if (hook === "stable-protection") {
-    const isUsdcEurc =
-      (a === "USDC" && b === "EURC") || (a === "EURC" && b === "USDC");
-    if (!isUsdcEurc) {
-      return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
-    }
-  }
-  return null;
+  const allowed = ALLOWED_PAIRS[hook];
+  if (allowed.some((p) => pairMatches(a, b, p))) return null;
+  const pairs = allowed.map(([x, y]) => `${x}/${y}`).join(", ");
+  return `${HOOK_LABELS[hook]} only supports ${pairs}. Pick a supported pair or create the pool without a hook.`;
 }

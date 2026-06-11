@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 /**
- * Testnet swap path. Uniswap's Trading API doesn't index Base Sepolia,
- * so the production `useSwap` flow can't quote or build calldata
- * there. This hook talks to our `/api/v4/quote` and
- * `/api/v4/swap/calldata` endpoints (which call `V4Quoter` and build
- * `PoolSwapTest.swap` calldata respectively) and runs the
- * approve-if-needed → swap sequence in the user's wallet.
- *
- * For mainnet the existing `useSwap` is still the path; this is
- * proof-of-concept-only and stays scoped to testnet via SwapPanel.
+ * Arc Testnet swap path — the only swap path. Uniswap's Trading API
+ * doesn't index Arc, so swaps quote and execute on-chain: this hook
+ * talks to our `/api/v4/quote` and `/api/v4/swap/calldata` endpoints
+ * (which call `V4Quoter` and build `PoolSwapTest.swap` calldata
+ * respectively) and runs the approve-if-needed → swap sequence in the
+ * user's wallet.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";

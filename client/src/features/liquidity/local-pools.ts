@@ -50,7 +50,7 @@ interface LegacyLocalPool {
 
 /**
  * Read pools, migrating any legacy v1 entries (no chainId) into the v2
- * shape by assigning them to Base Sepolia. v1 storage key is cleared
+ * shape by assigning them to Arc Testnet. v1 storage key is cleared
  * after migration so we don't double-read on next mount.
  */
 export function getLocalPools(): LocalPool[] {
@@ -64,7 +64,7 @@ export function getLocalPools(): LocalPool[] {
         .filter((p) => isSupportedTestnetChainId(p.chainId))
         .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
     }
-    // v1 fallback — migrate to v2 with chainId = Base Sepolia.
+    // v1 fallback — migrate to v2 with chainId = Arc Testnet.
     const legacyRaw = window.localStorage.getItem("mantua.localPools.v1");
     if (!legacyRaw) return [];
     const legacy = JSON.parse(legacyRaw) as LegacyLocalPool[];

@@ -9,4 +9,4 @@ import { EXPLORER_TX } from "@/lib/tokens.ts";
 export const DEFAULT_SLIPPAGE_BPS = 50;
 export const MAX_SLIPPAGE_BPS = 500;
 /** Re-export so existing call sites keep importing from this module. */
-export const BASE_SCAN_TX = EXPLORER_TX;
+export const EXPLORER_TX_URL = EXPLORER_TX;

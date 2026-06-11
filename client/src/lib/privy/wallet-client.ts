@@ -2,14 +2,11 @@ import { useCallback } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "../chain.ts";
-import { IS_MAINNET } from "../tokens.ts";
-
-const BASE_RPC_FALLBACK = IS_MAINNET ? "https://mainnet.base.org" : "https://sepolia.base.org";
+import { ARC_TESTNET_CHAIN_ID, getRpcUrl } from "../chains.ts";
 
 /**
- * Public viem client for read-only chain calls on the active network
- * (Base Mainnet or Base Sepolia, driven by VITE_MANTUA_NETWORK). Swap to
- * a private RPC (Alchemy, QuickNode) via VITE_BASE_RPC_URL.
+ * Public viem client for read-only chain calls on Arc Testnet. Override
+ * the default Arc RPC with a private endpoint via VITE_ARC_RPC_URL.
  *
  * Bug fix: explicit `PublicClient` / `WalletClient` type annotations clash
  * with Privy's bundled (porto-vendored) viem under
@@ -18,7 +15,7 @@ const BASE_RPC_FALLBACK = IS_MAINNET ? "https://mainnet.base.org" : "https://sep
  */
 export const publicClient = createPublicClient({
   chain: ACTIVE_CHAIN,
-  transport: http(import.meta.env.VITE_BASE_RPC_URL ?? BASE_RPC_FALLBACK),
+  transport: http(getRpcUrl(ARC_TESTNET_CHAIN_ID)),
 });
 
 /**
@@ -27,10 +24,9 @@ export const publicClient = createPublicClient({
  * waiting on the Privy `ready` flag before invoking.
  *
  * Chain assertion: throws if the active wallet is on anything other than
- * the active Base network (mainnet or sepolia). The provider attempts an
- * automatic switch first.
+ * Arc Testnet. The provider attempts an automatic switch first.
  */
-export function useBaseWalletClient() {
+export function useArcWalletClient() {
   const { wallets } = useWallets();
 
   return useCallback(async () => {

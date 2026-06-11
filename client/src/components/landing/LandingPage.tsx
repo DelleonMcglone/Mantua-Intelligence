@@ -214,20 +214,9 @@ const FAQS: FAQItem[] = [
       <>
         <p>
           Connect your wallet in the app and navigate to the Liquidity tab to create a pool or add
-          to an existing one. To get testnet tokens on Base Sepolia, visit these faucets:
+          to an existing one. To get testnet tokens on Arc Testnet, use the Circle Faucet:
         </p>
         <ul className="mt-3 space-y-1.5 list-disc list-outside pl-5 marker:text-text-mute">
-          <li>
-            <a
-              href="https://portal.cdp.coinbase.com/entity_e7c091a8-58d4-54ec-81ba-0146dec8ff74/onchain-tools/faucet?project=9813a4a0-187c-4540-9685-410bf73463ab&network=base-sepolia"
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:text-accent-2 underline"
-            >
-              Coinbase CDP Faucet
-            </a>{" "}
-            — ETH, USDC, EURC and cbBTC
-          </li>
           <li>
             <a
               href="https://faucet.circle.com/"
@@ -237,7 +226,8 @@ const FAQS: FAQItem[] = [
             >
               Circle Faucet
             </a>{" "}
-            — USDC, EURC and cirBTC
+            — USDC and EURC on Arc Testnet (Arc USDC also pays for gas). cirBTC is available in-app
+            for demo pools.
           </li>
         </ul>
       </>

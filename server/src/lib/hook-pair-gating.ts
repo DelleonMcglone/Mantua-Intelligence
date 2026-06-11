@@ -1,15 +1,13 @@
 /**
- * Hook ↔ token-pair allowlist, chain-aware.
- *
- * MVP scope (PR #101):
- *  - Stable Protection: USDC/EURC only AND Base Sepolia only. The
- *    deployed hook at `0xe5e6…20C0` hard-codes a 1:1 peg in
- *    `PegMonitor.classifyZone`; USDC and EURC aren't actually 1:1 but
- *    the demo treats this pair as the canonical peg-protected pool.
- *    Broaden when the hook is upgraded to accept a `targetRatio`.
- *  - Dynamic Fee: unrestricted pair on any supported chain — but the
- *    hook must actually be deployed (calling on a chain without a
- *    deployment throws "hook not deployed").
+ * Hook ↔ token-pair allowlist, chain-aware. Mantua runs on Arc Testnet
+ * only; the allowlist below is the canonical hook→pair matrix:
+ *  - Stable Protection: USDC/EURC (the peg-protected stable pool).
+ *  - Dynamic Fee:       USDC/cirBTC, EURC/cirBTC (volatile pairs).
+ *  - RWA Gate:          USDC/EURC (a second, gated pool — distinct
+ *                       PoolKey via the hook address) + USDC/cirBTC.
+ *  - ALO:               USDC/cirBTC, EURC/cirBTC (async limit orders).
+ * A hook must also be deployed on-chain (getHookAddress) before it can
+ * be used — calling one whose address is unset throws "not deployed".
  */
 
 import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
@@ -105,15 +103,18 @@ export function isHookPairAllowed(
 function hookIncompatibilityReason(hook: HookName, chainId: SupportedTestnetChainId): string {
   const allow = listAllowedPairs(hook, chainId);
   if (allow === undefined) {
-    if (hook === "stable-protection") {
-      return "Stable Protection is only available on Base Sepolia (USDC/EURC). Switch to Base Sepolia or pick a different hook.";
-    }
-    return `Hook "${hook}" is not deployed on chain ${String(chainId)} yet. Pick a different hook or switch chains.`;
+    return `Hook "${hook}" is not available on Arc Testnet yet. Pick a different hook.`;
   }
   if (hook === "stable-protection") {
     return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
   }
-  return `Hook "${hook}" does not support this pair on chain ${String(chainId)}.`;
+  // allow === null means unrestricted (any pair), in which case this
+  // reason function wouldn't be reached; guard for the type-checker.
+  if (allow === null) {
+    return `Hook "${hook}" does not support this pair. Pick a supported pair or create the pool without a hook.`;
+  }
+  const pairs = allow.map(([a, b]) => `${a}/${b}`).join(", ");
+  return `Hook "${hook}" supports ${pairs}. Pick a supported pair or create the pool without a hook.`;
 }
 
 export class HookPairNotAllowedError extends Error {
