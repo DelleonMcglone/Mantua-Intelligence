@@ -254,10 +254,11 @@ export const DYNAMIC_FEE_FLAG = 0x800000;
  * user picked in the UI; the static tier still picks `tickSpacing`.
  */
 export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
-  "stable-protection": true,
-  "dynamic-fee": true,
-  // TODO(Phase E): confirm from the hook repos. Gate/limit-order hooks
-  // typically keep a static fee tier.
+  "stable-protection": true, // SP pool: tickSpacing 1, dynamic fee (repo README)
+  "dynamic-fee": true, // fee scales with volatility
+  // Confirmed from the hook repos' deployed pools: RWAGate and ALO pools
+  // were both initialized with a STATIC fee tier (3000 / tickSpacing 60),
+  // so neither overrides the fee with DYNAMIC_FEE_FLAG.
   "rwa-gate": false,
   alo: false,
 };
