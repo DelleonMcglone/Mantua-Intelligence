@@ -212,7 +212,9 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
   alo: {
     poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",
     hook: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
-    poolSwapTest: null, // NOT FOUND in repo (no swap router deployed for ALO)
+    // Deployed via deploy/arc-alo-periphery/DeployAloSwapRouter (the ALO repo
+    // shipped no swap router); enables swaps on ALO pools.
+    poolSwapTest: "0xFCf895f7F5737b1D582a0bD4b131f88434a94433",
     poolModifyLiquidityTest: null, // NOT FOUND in repo
     positionManager: "0x7866e36b7576DF5167cf76770799096Ba6fcD882",
     stateView: "0xbF8dC490E538a7749f9DF6B34Ee740650D325b15",
