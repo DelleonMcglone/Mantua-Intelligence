@@ -29,6 +29,13 @@ import {V4Quoter} from "v4-periphery/src/lens/V4Quoter.sol";
 ///         The script performs NO token transfers (only contract deploys), so it
 ///         is safe under `forge script` local simulation despite Arc's native-fiat
 ///         transfer precompiles.
+///
+///         BUILD FLAGS (verified): run forge with `--via-ir --optimizer-runs 200`.
+///         PositionManager needs via-ir; runs=200 keeps PositionManager +
+///         PositionDescriptor under the EIP-170 24576-byte limit while still
+///         letting the whole project compile under via-ir. Do NOT edit
+///         foundry.toml — pass the flags on the CLI (periphery uses plain CREATE,
+///         so its bytecode settings are independent of the live PoolManager).
 contract DeployHeroPeriphery is Script {
     /// Existing StableProtection-stack PoolManager on Arc Testnet (chainId 5042002).
     IPoolManager constant POOL_MANAGER =
