@@ -128,6 +128,98 @@ export function getHookAddress(
   }
 }
 
+/**
+ * Per-hook Arc Testnet deployment manifest, extracted from the four hook
+ * repos (DelleonMcglone/{stableprotection-hook,dynamic-fee,RWAgate,
+ * limit-orders}) on 2026-06-10. Verified against each repo's
+ * broadcast/.../5042002/run-latest.json + deployments manifest + README.
+ *
+ * KEY FINDING — these are FOUR independent deployments, each with its own
+ * PoolManager and v4 **test routers** (PoolSwapTest + PoolModifyLiquidity-
+ * Test), NOT the production periphery. None of the repos deployed
+ * PositionManager, StateView, or V4Quoter on Arc (the v4 periphery isn't
+ * published on Arc testnet). Two pools also use MOCK tokens distinct from
+ * the canonical Circle tokens AND from the app's cirBTC registry entry.
+ *
+ * The app's calldata builders target PositionManager / V4Quoter /
+ * StateView, so on-chain execution against these pools is NOT yet wired —
+ * it needs either (a) a v4 periphery redeploy on one canonical
+ * PoolManager + canonical tokens, or (b) a rewrite of the swap/liquidity/
+ * state paths to the test-router model. Recorded as data pending that
+ * decision; `null` = not deployed / not found in the repo.
+ */
+export interface HookDeployment {
+  readonly poolManager: `0x${string}`;
+  readonly hook: `0x${string}`;
+  /** v4 test swap router actually used by this pool (no V4Quoter exists). */
+  readonly poolSwapTest: `0x${string}` | null;
+  /** v4 test liquidity router actually used (no PositionManager exists). */
+  readonly poolModifyLiquidityTest: `0x${string}` | null;
+  /** Production periphery — absent on Arc for every repo. */
+  readonly positionManager: null;
+  readonly stateView: null;
+  readonly quoter: null;
+  /** Token addresses this specific pool was initialized with. */
+  readonly token0: `0x${string}`;
+  readonly token1: `0x${string}`;
+  /** Whether token0/token1 are the canonical Circle/app tokens or mocks. */
+  readonly tokensAreMocks: boolean;
+  /** Extra contracts (e.g. ComplianceRegistry for rwa-gate). */
+  readonly aux?: Readonly<Record<string, `0x${string}`>>;
+}
+
+export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = {
+  "stable-protection": {
+    poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
+    hook: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+    poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
+    poolModifyLiquidityTest: "0x4f81385fa50336e4cbA6718A803f3e2Baa09D1c0",
+    positionManager: null,
+    stateView: null,
+    quoter: null,
+    token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
+    token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
+    tokensAreMocks: false,
+  },
+  "dynamic-fee": {
+    poolManager: "0x7eA87A5919C119DC95855A0BE227fd3241c998F0",
+    hook: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+    poolSwapTest: "0xAa096011E6604df33762d611cbBdaA0671F19Bdb",
+    poolModifyLiquidityTest: "0xdD225f3B7b621287657B490B3bC945E3ecfC8EbA",
+    positionManager: null,
+    stateView: null,
+    quoter: null,
+    token0: "0xFE3f00877d20Fb599351182EAef78DE3EF531dF6", // MOCK USDC (6dp)
+    token1: "0xAeE5a58b0ae058bfd358CeeB72e4804C16d94F5E", // MOCK cirBTC (8dp)
+    tokensAreMocks: true,
+  },
+  "rwa-gate": {
+    poolManager: "0xA29B7D158f2b2113Bd60eeD765866f794096D4Dc",
+    hook: "0xda483a6374AEeB3ffA6D8a2772D6c2e64d314a80",
+    poolSwapTest: "0x97dA0bEf8FCa63D9B597AF54b76B25d4f89FbD14",
+    poolModifyLiquidityTest: "0xa9A1c3BC2acB424b0e688B8a19E0a4Af76bA43e5",
+    positionManager: null,
+    stateView: null,
+    quoter: null,
+    token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
+    token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
+    tokensAreMocks: false,
+    aux: { complianceRegistry: "0x2978eA98Cc3c5c480d4C9D073DF8599BA761556D" },
+  },
+  alo: {
+    poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",
+    hook: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
+    poolSwapTest: null, // NOT FOUND in repo
+    poolModifyLiquidityTest: null, // NOT FOUND in repo
+    positionManager: null,
+    stateView: null,
+    quoter: null,
+    token0: "0x1B056aDe32E5F1F782638e21bF1E665059F47971", // MOCK cirBTC (8dp)
+    token1: "0x3600000000000000000000000000000000000000", // USDC (native)
+    tokensAreMocks: true,
+  },
+};
+
 /** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
 export const STABLE_PROTECTION_HOOK: `0x${string}` | null =
   STABLE_PROTECTION_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
