@@ -1,7 +1,6 @@
 # Mantua.AI
 
-**Mantua.AI** is an agent-driven liquidity protocol that lets anyone interact with crypto
-markets by simply typing what they want. It combines a custom suite of **Uniswap v4 hooks**,
+**Mantua.AI** is an agent-driven liquidity protocol for stablecoins. It combines a custom suite of **Uniswap v4 hooks**,
 autonomous **AI agents** (Circle CDP AgentKit), and real-time blockchain access into a single
 programmable liquidity layer.
 
