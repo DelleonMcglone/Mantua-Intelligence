@@ -27,8 +27,10 @@ export const EXPLORER_URL = CHAIN_INFO[ARC_TESTNET_CHAIN_ID].explorerUrl;
 export const EXPLORER_TX = `${EXPLORER_URL}/tx/`;
 
 const V4_POSITION_MANAGER_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}`> = {
-  // TODO(Phase E): real Arc Testnet v4 PositionManager address.
-  [ARC_TESTNET_CHAIN_ID]: "0x0000000000000000000000000000000000000000",
+  // StableProtection hero stack — deployed against PoolManager 0x15B5…0a59
+  // via deploy/arc-hero-periphery (block 46501208). Server mirror:
+  // server/src/lib/v4-contracts.ts V4_BY_CHAIN[arc].
+  [ARC_TESTNET_CHAIN_ID]: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
 };
 
 /** v4 PositionManager for the given chain. */

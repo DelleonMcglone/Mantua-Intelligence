@@ -16,10 +16,6 @@ import {
   type SupportedTestnetChainId,
 } from "./chains.ts";
 
-/** Placeholder until the Uniswap v4 stack + Mantua hooks are wired with
- *  real Arc Testnet addresses (Phase E). Zero/null make on-chain ops fail
- *  loudly rather than the registry being type-incomplete. */
-const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
 interface V4Addresses {
   poolManager: `0x${string}`;
@@ -30,14 +26,20 @@ interface V4Addresses {
   poolSwapTest: `0x${string}` | null;
 }
 
-// TODO(Phase E): real Arc Testnet v4 deployment addresses.
+// Arc Testnet v4 stack — the StableProtection ("hero") deployment. The
+// PoolManager + PoolSwapTest were deployed by the stableprotection-hook
+// repo; PositionManager/StateView/V4Quoter were deployed against that same
+// PoolManager via deploy/arc-hero-periphery (tx batch, block 46501208).
+// NOTE: this single stack drives the StableProtection USDC/EURC pool only.
+// The DynamicFee/RWAGate/ALO hooks live on their OWN PoolManagers (see
+// HOOK_DEPLOYMENTS_ARC); executing those needs their own periphery deploy.
 const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
   [ARC_TESTNET_CHAIN_ID]: {
-    poolManager: ZERO,
-    positionManager: ZERO,
-    stateView: ZERO,
-    quoter: ZERO,
-    poolSwapTest: null,
+    poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
+    positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
+    stateView: "0x73Bb8E68c08C528770880c10223670f7aee13824",
+    quoter: "0xd57545f0a2C3A721Fc3F1F4f3007b2aA021f4567",
+    poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
   },
 };
 
