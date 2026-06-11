@@ -103,7 +103,9 @@ const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null
   [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
 };
 const RWAGATE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: "0xda483a6374AEeB3ffA6D8a2772D6c2e64d314a80",
+  // Clean redeploy (hook ported to current v4 + full periphery) — replaces the
+  // original 0xda48… whose v4-core/periphery versions were mismatched.
+  [ARC_TESTNET_CHAIN_ID]: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
 };
 const ALO_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [ARC_TESTNET_CHAIN_ID]: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
@@ -196,18 +198,21 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
     token1: "0xAeE5a58b0ae058bfd358CeeB72e4804C16d94F5E", // MOCK cirBTC (8dp)
     tokensAreMocks: true,
   },
+  // Clean redeploy from one consistent v4 version (hook ported to current v4 so
+  // it can carry the periphery the app needs). Supersedes the original mismatched
+  // deployment (old hook 0xda48…, PoolManager 0xA29B…). See deploy/arc-rwagate-clean.
   "rwa-gate": {
-    poolManager: "0xA29B7D158f2b2113Bd60eeD765866f794096D4Dc",
-    hook: "0xda483a6374AEeB3ffA6D8a2772D6c2e64d314a80",
-    poolSwapTest: "0x97dA0bEf8FCa63D9B597AF54b76B25d4f89FbD14",
-    poolModifyLiquidityTest: "0xa9A1c3BC2acB424b0e688B8a19E0a4Af76bA43e5",
-    positionManager: null,
-    stateView: null,
-    quoter: null,
+    poolManager: "0xBC9C4e3e51E18Ea44c7363391d29ed300db57511",
+    hook: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
+    poolSwapTest: "0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00",
+    poolModifyLiquidityTest: "0xB8736964413a970186359089490f578191170AC0",
+    positionManager: "0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3",
+    stateView: "0xBecb1cd296675CFC3fC8e63c4838590A4C97196d",
+    quoter: "0x49ffeA1ECd7760fC55F3598D7A0d89239cfeAea9",
     token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
     token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
     tokensAreMocks: false,
-    aux: { complianceRegistry: "0x2978eA98Cc3c5c480d4C9D073DF8599BA761556D" },
+    aux: { complianceRegistry: "0x5E33Ed3D77Ff22B9c6eD689a18a040E7633f9003" },
   },
   alo: {
     poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",

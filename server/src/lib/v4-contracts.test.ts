@@ -49,8 +49,12 @@ describe("getV4StackForHook — per-hook stack routing", () => {
     assert.equal(s.poolManager, "0x7eA87A5919C119DC95855A0BE227fd3241c998F0");
   });
 
-  it("rwa-gate (periphery not deployed) → throws", () => {
-    assert.throws(() => getV4StackForHook(HOOK_DEPLOYMENTS_ARC["rwa-gate"].hook));
+  it("RWAGate hook → the RWAGate stack (clean redeploy, full periphery)", () => {
+    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["rwa-gate"].hook);
+    assert.equal(s.poolManager, "0xBC9C4e3e51E18Ea44c7363391d29ed300db57511");
+    assert.equal(s.positionManager, "0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3");
+    assert.equal(s.stateView, "0xBecb1cd296675CFC3fC8e63c4838590A4C97196d");
+    assert.equal(s.poolSwapTest, "0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00");
   });
 
   it("unrecognized hook → falls back to the hero stack", () => {
