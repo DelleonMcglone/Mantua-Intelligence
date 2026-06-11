@@ -1,0 +1,112 @@
+diff --git a/remappings.txt b/remappings.txt
+index 8b5a63b..ca10775 100644
+--- a/remappings.txt
++++ b/remappings.txt
+@@ -1,6 +1,7 @@
+-forge-std/=lib/forge-std/src/
+-@uniswap/v4-core/=lib/v4-core/
+-v4-core/=lib/v4-core/
++v4-core/=lib/v4-periphery/lib/v4-core/
++@uniswap/v4-core/=lib/v4-periphery/lib/v4-core/
+ v4-periphery/=lib/v4-periphery/
+-solmate/=lib/v4-core/lib/solmate/
++permit2/=lib/v4-periphery/lib/permit2/
++solmate/=lib/v4-periphery/lib/v4-core/lib/solmate/
+ @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
++forge-std/=lib/forge-std/src/
+diff --git a/script/SeedAndSwapArc.s.sol b/script/SeedAndSwapArc.s.sol
+index 2362f5b..79b6278 100644
+--- a/script/SeedAndSwapArc.s.sol
++++ b/script/SeedAndSwapArc.s.sol
+@@ -12,6 +12,7 @@ import {TickMath} from "v4-core/src/libraries/TickMath.sol";
+ import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
+ import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
+ import {PoolModifyLiquidityTest} from "v4-core/src/test/PoolModifyLiquidityTest.sol";
++import {SwapParams, ModifyLiquidityParams} from "v4-core/src/types/PoolOperation.sol";
+ 
+ interface IERC20 {
+     function approve(address, uint256) external returns (bool);
+@@ -47,7 +48,7 @@ contract SeedAndSwapArc is Script {
+ 
+         // Add liquidity in the ±120 tick band around 1:1.
+         // L = 1e9 over this band needs ~6 base units * 1e6 ≈ ~6 USDC and ~6 EURC (6-decimal tokens).
+-        IPoolManager.ModifyLiquidityParams memory lp = IPoolManager.ModifyLiquidityParams({
++        ModifyLiquidityParams memory lp = ModifyLiquidityParams({
+             tickLower: -120, tickUpper: 120, liquidityDelta: 1e9, salt: bytes32(0)
+         });
+         lpRouter.modifyLiquidity(key, lp, "");
+@@ -55,7 +56,7 @@ contract SeedAndSwapArc is Script {
+ 
+         // Execute a small swap: 0.1 USDC (exact-in), token0 -> token1.
+         bool zeroForOne = true; // USDC is currency0 (lower address)
+-        IPoolManager.SwapParams memory sp = IPoolManager.SwapParams({
++        SwapParams memory sp = SwapParams({
+             zeroForOne: zeroForOne,
+             amountSpecified: -100_000, // 0.1 USDC exact input (6 decimals)
+             sqrtPriceLimitX96: TickMath.MIN_SQRT_PRICE + 1
+diff --git a/src/RWAGate.sol b/src/RWAGate.sol
+index 3539d93..c631811 100644
+--- a/src/RWAGate.sol
++++ b/src/RWAGate.sol
+@@ -6,6 +6,7 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+ import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+ import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
+ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
++import {SwapParams, ModifyLiquidityParams} from "v4-core/src/types/PoolOperation.sol";
+ import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+ import {ComplianceRegistry} from "./lib/ComplianceRegistry.sol";
+ import {ComplianceChecker} from "./lib/ComplianceChecker.sol";
+@@ -59,7 +60,7 @@ contract RWAGate is IHooks {
+ 
+     // ─── Hook Callbacks ──────────────────────────────────────────────────
+ 
+-    function beforeSwap(address sender, PoolKey calldata, IPoolManager.SwapParams calldata, bytes calldata)
++    function beforeSwap(address sender, PoolKey calldata, SwapParams calldata, bytes calldata)
+         external
+         onlyPoolManager
+         returns (bytes4, BeforeSwapDelta, uint24)
+@@ -71,7 +72,7 @@ contract RWAGate is IHooks {
+     function beforeAddLiquidity(
+         address sender,
+         PoolKey calldata,
+-        IPoolManager.ModifyLiquidityParams calldata,
++        ModifyLiquidityParams calldata,
+         bytes calldata
+     ) external onlyPoolManager returns (bytes4) {
+         registry.checkCompliance(sender);
+@@ -81,7 +82,7 @@ contract RWAGate is IHooks {
+     function beforeRemoveLiquidity(
+         address sender,
+         PoolKey calldata,
+-        IPoolManager.ModifyLiquidityParams calldata,
++        ModifyLiquidityParams calldata,
+         bytes calldata
+     ) external onlyPoolManager returns (bytes4) {
+         registry.checkCompliance(sender);
+@@ -101,7 +102,7 @@ contract RWAGate is IHooks {
+     function afterAddLiquidity(
+         address,
+         PoolKey calldata,
+-        IPoolManager.ModifyLiquidityParams calldata,
++        ModifyLiquidityParams calldata,
+         BalanceDelta,
+         BalanceDelta,
+         bytes calldata
+@@ -112,7 +113,7 @@ contract RWAGate is IHooks {
+     function afterRemoveLiquidity(
+         address,
+         PoolKey calldata,
+-        IPoolManager.ModifyLiquidityParams calldata,
++        ModifyLiquidityParams calldata,
+         BalanceDelta,
+         BalanceDelta,
+         bytes calldata
+@@ -120,7 +121,7 @@ contract RWAGate is IHooks {
+         revert HookNotImplemented();
+     }
+ 
+-    function afterSwap(address, PoolKey calldata, IPoolManager.SwapParams calldata, BalanceDelta, bytes calldata)
++    function afterSwap(address, PoolKey calldata, SwapParams calldata, BalanceDelta, bytes calldata)
+         external
+         pure
+         returns (bytes4, int128)
