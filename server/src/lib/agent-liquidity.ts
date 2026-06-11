@@ -14,7 +14,7 @@ import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "./v4-add-liquidity.ts";
-import { PERMIT2, V4_POSITION_MANAGER, type FeeTier } from "./v4-contracts.ts";
+import { PERMIT2, type FeeTier } from "./v4-contracts.ts";
 import { buildRemoveLiquidityCalldata } from "./v4-remove-liquidity.ts";
 import { readSlot0 } from "./v4-state-view.ts";
 
@@ -84,9 +84,13 @@ interface MintedReceiptLog {
  * agent path produces the same `tokenId` shape recorded by user-side
  * adds. Returns null on a failed mint or different recipient.
  */
-function extractMintedTokenId(logs: readonly MintedReceiptLog[], owner: string): string | null {
+function extractMintedTokenId(
+  logs: readonly MintedReceiptLog[],
+  owner: string,
+  positionManager: string,
+): string | null {
   const ownerTopic = `0x${"0".repeat(24)}${owner.slice(2).toLowerCase()}`;
-  const pm = V4_POSITION_MANAGER.toLowerCase();
+  const pm = positionManager.toLowerCase();
   for (const l of logs) {
     if (l.address.toLowerCase() !== pm) continue;
     if (l.topics[0] !== TRANSFER_TOPIC) continue;
@@ -223,6 +227,8 @@ export async function addLiquidityFromAgentWallet(
   const permit2Build = await buildPermit2BatchTypedData({
     owner: wallet.address as Address,
     chainId: ACTIVE_CHAIN_ID,
+    // calldata.to is the per-hook PositionManager.
+    positionManager: calldata.to,
     tokens: [
       { address: calldata.currency0, amountNeeded: BigInt(calldata.amount0Max) },
       { address: calldata.currency1, amountNeeded: BigInt(calldata.amount1Max) },
@@ -254,7 +260,7 @@ export async function addLiquidityFromAgentWallet(
       functionName: "multicall",
       args: [[permitBatchCalldata, calldata.data]],
     });
-    to = V4_POSITION_MANAGER;
+    to = calldata.to;
   }
 
   const tx = await networked.sendTransaction({
@@ -262,7 +268,7 @@ export async function addLiquidityFromAgentWallet(
   });
   const receipt = await networked.waitForTransactionReceipt(tx);
 
-  const tokenId = extractMintedTokenId(receipt.logs, wallet.address);
+  const tokenId = extractMintedTokenId(receipt.logs, wallet.address, calldata.to);
 
   await recordSpending(wallet.address, usdValue);
 
@@ -412,6 +418,7 @@ export async function removeLiquidityFromAgentWallet(
     sqrtPriceX96: slot0.sqrtPriceX96,
     currency0: pos.token0 as Address,
     currency1: pos.token1 as Address,
+    hookAddress: (pos.hookAddress ?? null) as `0x${string}` | null,
     slippageBps,
     recipient: wallet.address as Address,
     deadlineSeconds,

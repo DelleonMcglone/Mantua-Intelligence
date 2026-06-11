@@ -202,6 +202,7 @@ liquidityRemoveRouter.post(
         sqrtPriceX96: slot0.sqrtPriceX96,
         currency0: pos.token0,
         currency1: pos.token1,
+        hookAddress: pos.hookAddress,
         slippageBps: parsed.data.slippageBps,
         recipient: ctx.walletAddress as `0x${string}`,
         deadlineSeconds: parsed.data.deadlineSeconds,

@@ -223,6 +223,49 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
   },
 };
 
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+/** The default v4 stack for no-hook pools = the StableProtection ("hero")
+ *  deployment. */
+const HERO_STACK: V4Addresses = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+
+/**
+ * Resolve the full v4 stack (PoolManager + periphery) for a pool by its
+ * HOOK ADDRESS — i.e. `PoolKey.hooks`. Each Mantua hook lives on its own
+ * PoolManager + periphery (see HOOK_DEPLOYMENTS_ARC), so the stack a pool
+ * routes to is determined by which hook it uses.
+ *
+ *  - zero address (no-hook pool) → the default hero stack.
+ *  - a known hook with deployed periphery → that hook's stack.
+ *  - a known hook whose periphery isn't deployed yet (e.g. rwa-gate) → throws.
+ *  - an unrecognized hook → the default hero stack (best effort).
+ *
+ * The StableProtection hook resolves to the hero stack itself, so existing
+ * StableProtection/no-hook flows are byte-for-byte unchanged.
+ */
+export function getV4StackForHook(hookAddress: string): V4Addresses {
+  const lower = hookAddress.toLowerCase();
+  if (lower === ZERO_ADDR) return HERO_STACK;
+  for (const name of HOOK_NAMES) {
+    const d = HOOK_DEPLOYMENTS_ARC[name];
+    if (d.hook.toLowerCase() === lower) {
+      if (!d.positionManager || !d.stateView || !d.quoter) {
+        throw new Error(
+          `Hook "${name}" periphery is not deployed on Arc yet — cannot route pool operations to it.`,
+        );
+      }
+      return {
+        poolManager: d.poolManager,
+        positionManager: d.positionManager,
+        stateView: d.stateView,
+        quoter: d.quoter,
+        poolSwapTest: d.poolSwapTest,
+      };
+    }
+  }
+  return HERO_STACK;
+}
+
 /** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
 export const STABLE_PROTECTION_HOOK: `0x${string}` | null =
   STABLE_PROTECTION_BY_CHAIN[ARC_TESTNET_CHAIN_ID];

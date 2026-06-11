@@ -8,10 +8,56 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   DYNAMIC_FEE_FLAG,
+  HOOK_DEPLOYMENTS_ARC,
   HOOK_REQUIRES_DYNAMIC_FEE,
   effectivePoolFee,
+  getV4StackForHook,
   isFeeTier,
 } from "./v4-contracts.ts";
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+describe("getV4StackForHook — per-hook stack routing", () => {
+  it("no-hook (zero address) → the StableProtection hero stack", () => {
+    const s = getV4StackForHook(ZERO);
+    assert.equal(s.poolManager, "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59");
+    assert.equal(s.positionManager, "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78");
+  });
+
+  it("StableProtection hook → its own (== hero) stack", () => {
+    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["stable-protection"].hook);
+    assert.equal(s.poolManager, "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59");
+    assert.equal(s.stateView, "0x73Bb8E68c08C528770880c10223670f7aee13824");
+  });
+
+  it("DynamicFee hook → the DynamicFee stack (own PoolManager + periphery)", () => {
+    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["dynamic-fee"].hook);
+    assert.equal(s.poolManager, "0x7eA87A5919C119DC95855A0BE227fd3241c998F0");
+    assert.equal(s.positionManager, "0xDa1bfA53fA93463fB9Abd349bad381667D29b88d");
+    assert.equal(s.quoter, "0x2CF521F13658FE57958D09B40Ee3420D974EE7eC");
+  });
+
+  it("ALO hook → the ALO stack, with null poolSwapTest (no router deployed)", () => {
+    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC.alo.hook);
+    assert.equal(s.poolManager, "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b");
+    assert.equal(s.positionManager, "0x7866e36b7576DF5167cf76770799096Ba6fcD882");
+    assert.equal(s.poolSwapTest, null);
+  });
+
+  it("is case-insensitive on the hook address", () => {
+    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["dynamic-fee"].hook.toLowerCase());
+    assert.equal(s.poolManager, "0x7eA87A5919C119DC95855A0BE227fd3241c998F0");
+  });
+
+  it("rwa-gate (periphery not deployed) → throws", () => {
+    assert.throws(() => getV4StackForHook(HOOK_DEPLOYMENTS_ARC["rwa-gate"].hook));
+  });
+
+  it("unrecognized hook → falls back to the hero stack", () => {
+    const s = getV4StackForHook("0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead");
+    assert.equal(s.poolManager, "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59");
+  });
+});
 
 describe("isFeeTier", () => {
   it("accepts the four canonical v4 tiers", () => {

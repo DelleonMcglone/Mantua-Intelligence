@@ -15,7 +15,7 @@ import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
   HOOK_NAMES,
   POOL_MANAGER_INITIALIZE_ABI,
-  getV4PoolManager,
+  getV4StackForHook,
   isFeeTier,
 } from "../lib/v4-contracts.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -139,7 +139,8 @@ poolCreateRouter.post(
         args: [key, sqrtPriceX96],
       });
       res.json({
-        to: getV4PoolManager(chainId),
+        // Initialize on the PoolManager for this pool's hook stack.
+        to: getV4StackForHook(key.hooks).poolManager,
         chainId,
         data,
         value: "0",
