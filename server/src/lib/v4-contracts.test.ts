@@ -37,11 +37,11 @@ describe("getV4StackForHook — per-hook stack routing", () => {
     assert.equal(s.quoter, "0x2CF521F13658FE57958D09B40Ee3420D974EE7eC");
   });
 
-  it("ALO hook → the ALO stack, with null poolSwapTest (no router deployed)", () => {
+  it("ALO hook → the ALO stack (incl. its separately-deployed PoolSwapTest)", () => {
     const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC.alo.hook);
     assert.equal(s.poolManager, "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b");
     assert.equal(s.positionManager, "0x7866e36b7576DF5167cf76770799096Ba6fcD882");
-    assert.equal(s.poolSwapTest, null);
+    assert.equal(s.poolSwapTest, "0xFCf895f7F5737b1D582a0bD4b131f88434a94433");
   });
 
   it("is case-insensitive on the hook address", () => {
