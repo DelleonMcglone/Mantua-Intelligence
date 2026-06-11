@@ -1,5 +1,5 @@
 import {
-  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   isSupportedTestnetChainId,
   type SupportedTestnetChainId,
 } from "@/lib/chains.ts";
@@ -58,7 +58,7 @@ export function getLocalPositions(): LocalPosition[] {
     if (!Array.isArray(legacy)) return [];
     const migrated: LocalPosition[] = legacy.map((p) => ({
       ...p,
-      chainId: BASE_SEPOLIA_CHAIN_ID,
+      chainId: ARC_TESTNET_CHAIN_ID,
     }));
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     return migrated.sort((a, b) => b.createdAt - a.createdAt);

@@ -3,7 +3,7 @@ import { ExternalLink, Trash2 } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { BASESCAN_URL, IS_MAINNET, TOKENS, ZERO_ADDRESS } from "@/lib/tokens.ts";
+import { EXPLORER_URL, IS_MAINNET, TOKENS, ZERO_ADDRESS } from "@/lib/tokens.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
@@ -17,7 +17,7 @@ import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { ChartRange } from "./types.ts";
 import type { Position } from "./positions-types.ts";
 
-const BASESCAN = BASESCAN_URL;
+const BASESCAN = EXPLORER_URL;
 
 interface Props {
   poolId: string;

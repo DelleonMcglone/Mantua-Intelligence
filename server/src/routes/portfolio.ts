@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { userPreferences, users } from "../db/schema/users.ts";
 import {
-  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   isSupportedTestnetChainId,
   type SupportedTestnetChainId,
 } from "../lib/chains.ts";
@@ -21,7 +21,7 @@ function readChainId(req: Request): SupportedTestnetChainId {
     const n = Number(raw);
     if (isSupportedTestnetChainId(n)) return n;
   }
-  return BASE_SEPOLIA_CHAIN_ID;
+  return ARC_TESTNET_CHAIN_ID;
 }
 
 export const portfolioRouter = Router();

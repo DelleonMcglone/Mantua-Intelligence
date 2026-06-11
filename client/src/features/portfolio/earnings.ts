@@ -24,8 +24,8 @@ export const PERIOD_LABEL: Record<EarningsPeriod, string> = {
   "1Y": "past year",
 };
 
-/** Section grouping — same network keys as the chain switcher. */
-export type EarningsNetwork = "base" | "arc";
+/** Section grouping — same network key as the chain chip. */
+export type EarningsNetwork = "arc";
 
 export interface PoolEarning {
   id: string;
@@ -89,7 +89,7 @@ export function getEarnings(
   const pools: PoolEarning[] = [
     {
       id: "base-usdc-eurc-001",
-      network: "base",
+      network: "arc",
       a: "USDC",
       b: "EURC",
       fee: "0.01%",
@@ -103,10 +103,10 @@ export function getEarnings(
       lowVolume: false,
     },
     {
-      id: "base-eth-usdc-005",
-      network: "base",
-      a: "ETH",
-      b: "USDC",
+      id: "arc-usdc-cirbtc-005",
+      network: "arc",
+      a: "USDC",
+      b: "cirBTC",
       fee: "0.05%",
       hook: "Dynamic Fee",
       accruedUsdc: 4.8067,
@@ -118,10 +118,10 @@ export function getEarnings(
       lowVolume: false,
     },
     {
-      id: "base-cbbtc-usdc-030",
-      network: "base",
-      a: "cbBTC",
-      b: "USDC",
+      id: "arc-eurc-cirbtc-030",
+      network: "arc",
+      a: "EURC",
+      b: "cirBTC",
       fee: "0.30%",
       hook: "Dynamic Fee",
       accruedUsdc: 0.0142,

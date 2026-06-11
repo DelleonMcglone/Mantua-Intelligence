@@ -65,8 +65,8 @@ export function SwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPane
 }
 
 function MainnetSwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPanelProps = {}) {
-  const [tokenIn, setTokenIn] = useState<TokenSymbol>(initialTokenIn ?? "ETH");
-  const [tokenOut, setTokenOut] = useState<TokenSymbol>(initialTokenOut ?? "USDC");
+  const [tokenIn, setTokenIn] = useState<TokenSymbol>(initialTokenIn ?? "USDC");
+  const [tokenOut, setTokenOut] = useState<TokenSymbol>(initialTokenOut ?? "EURC");
   const [amount, setAmount] = useState("");
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const [hook, setHook] = useState<HookOption>("none");

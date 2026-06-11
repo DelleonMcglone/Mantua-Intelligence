@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { logAudit } from "../lib/audit.ts";
-import { BASE_CHAIN_ID } from "../lib/constants.ts";
+import { ACTIVE_CHAIN_ID } from "../lib/constants.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { recordSpending } from "../lib/spending-cap.ts";
 import { isTokenSymbol } from "../lib/tokens.ts";
@@ -93,7 +93,7 @@ swapRouter.post(
       walletAddress: wallet,
       action: "swap",
       txHash,
-      chainId: BASE_CHAIN_ID,
+      chainId: ACTIVE_CHAIN_ID,
       params,
       outcome,
       usdValue: usdValue > 0 ? String(usdValue.toFixed(2)) : null,

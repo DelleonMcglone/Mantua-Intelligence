@@ -8,11 +8,10 @@ import type { PoolSummary } from "./types.ts";
  * fall back to a disabled Add button.
  */
 const SYMBOL_ALIASES: Record<string, TokenSymbol> = {
-  ETH: "ETH",
-  WETH: "ETH",
-  CBBTC: "cbBTC",
   USDC: "USDC",
   EURC: "EURC",
+  CBBTC: "cirBTC",
+  CIRBTC: "cirBTC",
 };
 
 const FEE_TIER_BY_LABEL: Record<string, FeeTier> = {

@@ -4,7 +4,7 @@ import { db } from "../db/client.ts";
 import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { logAudit } from "../lib/audit.ts";
-import { BASE_CHAIN_ID } from "../lib/constants.ts";
+import { ACTIVE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
 import { ZERO_ADDRESS } from "../lib/tokens.ts";
 import { getRequestContext } from "../lib/request-context.ts";
@@ -251,7 +251,7 @@ liquidityRemoveRouter.post(
       walletAddress: ctx.walletAddress,
       action: "remove_liquidity",
       txHash: v.txHash,
-      chainId: BASE_CHAIN_ID,
+      chainId: ACTIVE_CHAIN_ID,
       params: {
         ...(v.positionId ? { positionId: v.positionId } : {}),
         ...(v.tokenId ? { tokenId: v.tokenId } : {}),

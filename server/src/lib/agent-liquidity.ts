@@ -6,7 +6,7 @@ import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { getCdpClient } from "./cdp/client.ts";
-import { BASE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
+import { ACTIVE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
 import { buildPermit2BatchTypedData } from "./permit2.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { baseRpcClient } from "./rpc-client.ts";
@@ -222,7 +222,7 @@ export async function addLiquidityFromAgentWallet(
 
   const permit2Build = await buildPermit2BatchTypedData({
     owner: wallet.address as Address,
-    chainId: BASE_CHAIN_ID,
+    chainId: ACTIVE_CHAIN_ID,
     tokens: [
       { address: calldata.currency0, amountNeeded: BigInt(calldata.amount0Max) },
       { address: calldata.currency1, amountNeeded: BigInt(calldata.amount1Max) },
@@ -290,7 +290,7 @@ export async function addLiquidityFromAgentWallet(
       walletAddress: wallet.address,
       action: "add_liquidity",
       txHash: tx.transactionHash,
-      chainId: BASE_CHAIN_ID,
+      chainId: ACTIVE_CHAIN_ID,
       params,
       outcome: "success",
       usdValue: usdValue > 0 ? usdValue.toFixed(2) : null,
@@ -434,7 +434,7 @@ export async function removeLiquidityFromAgentWallet(
     walletAddress: wallet.address,
     action: "remove_liquidity",
     txHash: tx.transactionHash,
-    chainId: BASE_CHAIN_ID,
+    chainId: ACTIVE_CHAIN_ID,
     params: {
       positionId,
       liquidityRemoved: liquidityToRemove.toString(),

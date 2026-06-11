@@ -13,35 +13,55 @@ import { TOKENS, ZERO_ADDRESS } from "./tokens.ts";
 
 const USDC = TOKENS.USDC.address;
 const EURC = TOKENS.EURC.address;
-const ETH = TOKENS.ETH.address;
+const CIRBTC = TOKENS.cirBTC.address;
 const UNKNOWN = "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead";
 
-// MVP gating: Stable Protection is the only hook and is restricted to
-// the USDC/EURC pair. Every other pair (with or without a hook arg)
-// must resolve to a no-hook pool.
+// Arc Testnet hook → pair matrix:
+//  - stable-protection: USDC/EURC
+//  - dynamic-fee:       USDC/cirBTC, EURC/cirBTC
+//  - rwa-gate:          USDC/EURC, USDC/cirBTC
+//  - alo:               USDC/cirBTC, EURC/cirBTC
 describe("isHookPairAllowed — stable-protection (USDC/EURC only)", () => {
   it("accepts USDC/EURC (either order)", () => {
     assert.equal(isHookPairAllowed("stable-protection", USDC, EURC), true);
     assert.equal(isHookPairAllowed("stable-protection", EURC, USDC), true);
     assert.equal(isHookPairAllowedBySymbol("stable-protection", "USDC", "EURC"), true);
-    assert.equal(isHookPairAllowedBySymbol("stable-protection", "EURC", "USDC"), true);
   });
-
-  it("rejects USDC/ETH (volatile pair)", () => {
-    assert.equal(isHookPairAllowed("stable-protection", USDC, ETH), false);
+  it("rejects USDC/cirBTC", () => {
+    assert.equal(isHookPairAllowed("stable-protection", USDC, CIRBTC), false);
   });
-
   it("rejects unknown token addresses", () => {
     assert.equal(isHookPairAllowed("stable-protection", USDC, UNKNOWN), false);
   });
 });
 
-describe("isHookPairAllowed — unrestricted hooks", () => {
-  it("returns true for any pair on dynamic-fee", () => {
-    assert.equal(isHookPairAllowed("dynamic-fee", USDC, ETH), true);
-    assert.equal(isHookPairAllowed("dynamic-fee", USDC, EURC), true);
-    assert.equal(isHookPairAllowed("dynamic-fee", UNKNOWN, UNKNOWN), true);
-    assert.equal(isHookPairAllowedBySymbol("dynamic-fee", "USDC", "EURC"), true);
+describe("isHookPairAllowed — dynamic-fee (volatile pairs)", () => {
+  it("accepts USDC/cirBTC and EURC/cirBTC", () => {
+    assert.equal(isHookPairAllowed("dynamic-fee", USDC, CIRBTC), true);
+    assert.equal(isHookPairAllowed("dynamic-fee", EURC, CIRBTC), true);
+  });
+  it("rejects USDC/EURC (stable pair)", () => {
+    assert.equal(isHookPairAllowed("dynamic-fee", USDC, EURC), false);
+  });
+});
+
+describe("isHookPairAllowed — rwa-gate (gated USDC/EURC + USDC/cirBTC)", () => {
+  it("accepts USDC/EURC and USDC/cirBTC", () => {
+    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "USDC", "EURC"), true);
+    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "USDC", "cirBTC"), true);
+  });
+  it("rejects EURC/cirBTC", () => {
+    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "EURC", "cirBTC"), false);
+  });
+});
+
+describe("isHookPairAllowed — alo (volatile pairs)", () => {
+  it("accepts USDC/cirBTC and EURC/cirBTC", () => {
+    assert.equal(isHookPairAllowedBySymbol("alo", "USDC", "cirBTC"), true);
+    assert.equal(isHookPairAllowedBySymbol("alo", "EURC", "cirBTC"), true);
+  });
+  it("rejects USDC/EURC", () => {
+    assert.equal(isHookPairAllowedBySymbol("alo", "USDC", "EURC"), false);
   });
 });
 
@@ -49,74 +69,43 @@ describe("listAllowedPairs", () => {
   it("returns [['USDC','EURC']] for stable-protection", () => {
     assert.deepEqual(listAllowedPairs("stable-protection"), [["USDC", "EURC"]]);
   });
-
-  it("returns null for dynamic-fee (no restriction)", () => {
-    assert.equal(listAllowedPairs("dynamic-fee"), null);
+  it("returns the volatile pairs for dynamic-fee", () => {
+    assert.deepEqual(listAllowedPairs("dynamic-fee"), [
+      ["USDC", "cirBTC"],
+      ["EURC", "cirBTC"],
+    ]);
   });
 });
 
 describe("assertHookPairAllowed", () => {
-  it("does not throw on USDC/EURC", () => {
+  it("does not throw on an allowed pair", () => {
     assert.doesNotThrow(() => {
       assertHookPairAllowed("stable-protection", USDC, EURC);
     });
     assert.doesNotThrow(() => {
-      assertHookPairAllowedBySymbol("stable-protection", "USDC", "EURC");
+      assertHookPairAllowedBySymbol("alo", "USDC", "cirBTC");
     });
   });
-
-  it("throws HookPairNotAllowedError for stable-protection on other pairs", () => {
+  it("throws HookPairNotAllowedError for a disallowed pair", () => {
     assert.throws(() => {
-      assertHookPairAllowed("stable-protection", USDC, ETH);
+      assertHookPairAllowed("stable-protection", USDC, CIRBTC);
     }, HookPairNotAllowedError);
     assert.throws(() => {
-      assertHookPairAllowedBySymbol("stable-protection", "USDC", "cbBTC");
+      assertHookPairAllowedBySymbol("alo", "USDC", "EURC");
     }, HookPairNotAllowedError);
-  });
-
-  it("does not throw for dynamic-fee on any pair", () => {
-    assert.doesNotThrow(() => {
-      assertHookPairAllowed("dynamic-fee", USDC, ETH);
-    });
-    assert.doesNotThrow(() => {
-      assertHookPairAllowed("dynamic-fee", USDC, EURC);
-    });
-    assert.doesNotThrow(() => {
-      assertHookPairAllowedBySymbol("dynamic-fee", "ETH", "cbBTC");
-    });
-  });
-
-  it("surfaces a USDC/EURC-specific reason in the error message", () => {
-    try {
-      assertHookPairAllowed("stable-protection", USDC, ETH);
-      assert.fail("expected throw");
-    } catch (err) {
-      assert.ok(err instanceof HookPairNotAllowedError);
-      assert.match(err.message, /USDC\/EURC/);
-    }
   });
 });
 
 describe("resolveHookForPool", () => {
   it("returns ZERO_ADDRESS when no hook is requested", () => {
     assert.equal(resolveHookForPool(null, USDC, EURC), ZERO_ADDRESS);
-    assert.equal(resolveHookForPool(undefined, USDC, EURC), ZERO_ADDRESS);
-    assert.equal(resolveHookForPool(null, USDC, ETH), ZERO_ADDRESS);
+    assert.equal(resolveHookForPool(undefined, USDC, CIRBTC), ZERO_ADDRESS);
   });
-
-  it("resolves stable-protection on USDC/EURC", () => {
-    const addr = resolveHookForPool("stable-protection", USDC, EURC);
-    assert.equal(addr.toLowerCase(), "0xe5e6a9e09ad1e536788f0c142ad5bc69e8b020c0");
-  });
-
-  it("throws for stable-protection on non-USDC/EURC pairs", () => {
-    assert.throws(() => {
-      resolveHookForPool("stable-protection", USDC, ETH);
-    }, HookPairNotAllowedError);
-  });
-
-  it("resolves dynamic-fee for any pair (no allowlist)", () => {
-    const addr = resolveHookForPool("dynamic-fee", USDC, ETH);
-    assert.equal(addr.toLowerCase(), "0x9788b8495ebcec1c1d1436681b0f56c6fc0140c0");
+  // Arc hook addresses are placeholders until Phase E; any hook request
+  // therefore fails fast with "not deployed". Swap to address assertions
+  // once the real Arc deployments land.
+  it("throws while hook addresses are unset", () => {
+    assert.throws(() => resolveHookForPool("stable-protection", USDC, EURC));
+    assert.throws(() => resolveHookForPool("dynamic-fee", USDC, CIRBTC));
   });
 });

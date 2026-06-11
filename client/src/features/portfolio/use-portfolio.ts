@@ -143,9 +143,7 @@ export function toDisplayAssets(
   chainId: SupportedTestnetChainId,
 ): DisplayAsset[] {
   const tokens = getTokens(chainId);
-  return balances
-    .filter((b) => b.symbol !== "WETH") // user-facing list excludes WETH
-    .map((b) => {
+  return balances.map((b) => {
       const meta = tokens[b.symbol];
       const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
       const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;

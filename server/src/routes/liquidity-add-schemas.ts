@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BASE_SEPOLIA_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
+import { ARC_TESTNET_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
 import { isAnyChainTokenSymbol } from "../lib/tokens.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
 
@@ -9,7 +9,7 @@ const chainIdSchema = z
   .number()
   .int()
   .refine(isSupportedTestnetChainId, "Unsupported chainId")
-  .default(BASE_SEPOLIA_CHAIN_ID);
+  .default(ARC_TESTNET_CHAIN_ID);
 
 // Narrows to `TokenSymbol` (per-chain validity is still enforced by the
 // route's getToken call). Replaces bare z.string() so downstream calls

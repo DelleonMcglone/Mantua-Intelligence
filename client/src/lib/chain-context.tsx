@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import {
-  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   DEFAULT_NETWORK_KEY,
   isNetworkKey,
   isSupportedTestnetChainId,
@@ -35,15 +35,15 @@ const STORAGE_KEY = "mantua.selectedChainId";
 const STORAGE_KEY_NETWORK = "mantua.selectedNetwork";
 
 function readStoredChainId(): SupportedTestnetChainId {
-  if (typeof window === "undefined") return BASE_SEPOLIA_CHAIN_ID;
+  if (typeof window === "undefined") return ARC_TESTNET_CHAIN_ID;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return BASE_SEPOLIA_CHAIN_ID;
+    if (!raw) return ARC_TESTNET_CHAIN_ID;
     const n = Number(raw);
     if (isSupportedTestnetChainId(n)) return n;
-    return BASE_SEPOLIA_CHAIN_ID;
+    return ARC_TESTNET_CHAIN_ID;
   } catch {
-    return BASE_SEPOLIA_CHAIN_ID;
+    return ARC_TESTNET_CHAIN_ID;
   }
 }
 
@@ -171,7 +171,7 @@ export function useCurrentChainId(): SupportedTestnetChainId {
   if (!ctx) {
     // Sensible fallback outside the provider — keeps tests + storybook
     // happy and means non-multichain code paths default to Base Sepolia.
-    return BASE_SEPOLIA_CHAIN_ID;
+    return ARC_TESTNET_CHAIN_ID;
   }
   return ctx.chainId;
 }

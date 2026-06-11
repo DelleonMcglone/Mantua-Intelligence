@@ -3,7 +3,7 @@ import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom, http, type WalletClient } from "viem";
 import { ACTIVE_CHAIN } from "@/lib/chain.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { BASE_CHAIN_ID, IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
+import { ACTIVE_CHAIN_ID, IS_MAINNET, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import type { QuoteResponse, SwapTx } from "./types.ts";
 
 const publicClient = createPublicClient({
@@ -40,8 +40,8 @@ export function useSwap() {
     try {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId && wallet.chainId !== `eip155:${String(BASE_CHAIN_ID)}`) {
-        await wallet.switchChain(BASE_CHAIN_ID);
+      if (wallet.chainId && wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
+        await wallet.switchChain(ACTIVE_CHAIN_ID);
       }
       const provider = await wallet.getEthereumProvider();
       const walletClient: WalletClient = createWalletClient({

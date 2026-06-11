@@ -1,5 +1,5 @@
 import {
-  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
   isSupportedTestnetChainId,
   type SupportedTestnetChainId,
 } from "@/lib/chains.ts";
@@ -71,8 +71,8 @@ export function getLocalPools(): LocalPool[] {
     if (!Array.isArray(legacy)) return [];
     const migrated: LocalPool[] = legacy.map((p) => ({
       ...p,
-      chainId: BASE_SEPOLIA_CHAIN_ID,
-      key: localPoolKey(BASE_SEPOLIA_CHAIN_ID, p.tokenA, p.tokenB, p.fee, p.hook),
+      chainId: ARC_TESTNET_CHAIN_ID,
+      key: localPoolKey(ARC_TESTNET_CHAIN_ID, p.tokenA, p.tokenB, p.fee, p.hook),
     }));
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
     return migrated.sort((a, b) => b.lastSeenAt - a.lastSeenAt);

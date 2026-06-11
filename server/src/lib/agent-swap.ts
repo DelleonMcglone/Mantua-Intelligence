@@ -6,7 +6,7 @@ import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { getCdpClient } from "./cdp/client.ts";
-import { BASE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
+import { ACTIVE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
 import { fetchQuote, fetchSwapTx } from "./uniswap.ts";
@@ -83,7 +83,7 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
   await checkSpendingCap(wallet.address, usdValue);
 
   const quote = await fetchQuote({
-    chainId: BASE_CHAIN_ID,
+    chainId: ACTIVE_CHAIN_ID,
     tokenIn: tokenForApi(tokenIn),
     tokenOut: tokenForApi(tokenOut),
     amount: amountAtomic.toString(),
@@ -137,7 +137,7 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
       walletAddress: wallet.address,
       action: "swap",
       txHash: tx.transactionHash,
-      chainId: BASE_CHAIN_ID,
+      chainId: ACTIVE_CHAIN_ID,
       params: {
         tokenIn,
         tokenOut,

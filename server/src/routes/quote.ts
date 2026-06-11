@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { logAudit } from "../lib/audit.ts";
-import { BASE_CHAIN_ID } from "../lib/constants.ts";
+import { ACTIVE_CHAIN_ID } from "../lib/constants.ts";
 import { SafetyError } from "../lib/errors.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { classifySlippage } from "../lib/slippage.ts";
@@ -58,7 +58,7 @@ quoteRouter.post(
         slippageBps !== undefined ? slippageBps / 100 : undefined;
 
       const quote = await fetchQuote({
-        chainId: BASE_CHAIN_ID,
+        chainId: ACTIVE_CHAIN_ID,
         tokenIn: tokenInAddr,
         tokenOut: tokenOutAddr,
         amount: amountRaw,

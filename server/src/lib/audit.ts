@@ -4,7 +4,7 @@ import {
   type AuditOutcome,
   mantuaAuditLog,
 } from "../db/schema/safety.ts";
-import { BASE_CHAIN_ID } from "./constants.ts";
+import { ACTIVE_CHAIN_ID } from "./constants.ts";
 import { logger } from "./logger.ts";
 
 export interface AuditEntry {
@@ -32,7 +32,7 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
     outcome: entry.outcome,
     params: entry.params ?? {},
     txHash: entry.txHash ?? null,
-    chainId: entry.chainId ?? BASE_CHAIN_ID,
+    chainId: entry.chainId ?? ACTIVE_CHAIN_ID,
     reason: entry.reason ?? null,
     ipAddress: entry.ipAddress ?? null,
     userAgent: entry.userAgent ?? null,

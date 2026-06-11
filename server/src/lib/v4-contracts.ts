@@ -12,37 +12,26 @@
  */
 import {
   ARC_TESTNET_CHAIN_ID,
-  BASE_MAINNET_CHAIN_ID,
-  BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 
-/** Placeholder until Uniswap v4 + Mantua hooks are deployed on Arc.
- *  Zero addresses make on-chain pool/swap ops on Arc fail loudly rather
- *  than the registry being type-incomplete. */
+/** Placeholder until the Uniswap v4 stack + Mantua hooks are wired with
+ *  real Arc Testnet addresses (Phase E). Zero/null make on-chain ops fail
+ *  loudly rather than the registry being type-incomplete. */
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
-import { IS_MAINNET } from "./constants.ts";
 
 interface V4Addresses {
   poolManager: `0x${string}`;
   positionManager: `0x${string}`;
   stateView: `0x${string}`;
   quoter: `0x${string}`;
-  /** v4-core's PoolSwapTest helper — null when the testnet/mainnet
-   *  doesn't ship one (production routes via the Uniswap Trading API). */
+  /** v4-core's PoolSwapTest helper — null when the chain doesn't ship one. */
   poolSwapTest: `0x${string}` | null;
 }
 
+// TODO(Phase E): real Arc Testnet v4 deployment addresses.
 const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
-  [BASE_SEPOLIA_CHAIN_ID]: {
-    poolManager: "0x05e73354cfdd6745c338b50bcfdfa3aa6fa03408",
-    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
-    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
-    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
-    poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
-  },
-  // TODO: real Arc Testnet v4 deployment addresses (pending).
   [ARC_TESTNET_CHAIN_ID]: {
     poolManager: ZERO,
     positionManager: ZERO,
@@ -52,16 +41,7 @@ const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
   },
 };
 
-const V4_MAINNET: V4Addresses = {
-  poolManager: "0x498581ff718922c3f8e6a244956af099b2652b2b",
-  positionManager: "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
-  stateView: "0xa3c0c9b65bad0b08107aa264b0f3db444b867a71",
-  quoter: "0x0d5e0f971ed27fbff6c2837bf31316121532048d",
-  poolSwapTest: null,
-};
-
 export function getV4Addresses(chainId: SupportedTestnetChainId): V4Addresses {
-  if (IS_MAINNET) return V4_MAINNET;
   return V4_BY_CHAIN[chainId];
 }
 
@@ -81,55 +61,40 @@ export function getPoolSwapTest(chainId: SupportedTestnetChainId): `0x${string}`
   return getV4Addresses(chainId).poolSwapTest;
 }
 
-/** Legacy single-chain export. Prefer `getV4PoolManager(chainId)`. */
-export const V4_POOL_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.poolManager
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolManager;
-/** Legacy single-chain export. Prefer `getV4PositionManager(chainId)`. */
-export const V4_POSITION_MANAGER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.positionManager
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].positionManager;
-/** Legacy single-chain export. Prefer `getV4StateView(chainId)`. */
-export const V4_STATE_VIEW: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.stateView
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].stateView;
-/** Legacy single-chain export. Prefer `getV4Quoter(chainId)`. */
-export const V4_QUOTER: `0x${string}` = IS_MAINNET
-  ? V4_MAINNET.quoter
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].quoter;
-/** Legacy single-chain export. Prefer `getPoolSwapTest(chainId)`. */
-export const POOL_SWAP_TEST: `0x${string}` | null = IS_MAINNET
-  ? null
-  : V4_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID].poolSwapTest;
-
-void BASE_MAINNET_CHAIN_ID;
+/** Legacy single-chain exports. Prefer the per-chain getters. */
+export const V4_POOL_MANAGER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolManager;
+export const V4_POSITION_MANAGER: `0x${string}` =
+  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].positionManager;
+export const V4_STATE_VIEW: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].stateView;
+export const V4_QUOTER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].quoter;
+export const POOL_SWAP_TEST: `0x${string}` | null =
+  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolSwapTest;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
 
 /**
- * Mantua hook addresses, per chain.
- *
- * Scope:
- *  - Stable Protection: Base Sepolia only (USDC/EURC pair).
- *  - Dynamic Fee: Base Sepolia. Encodes `BEFORE_SWAP | AFTER_SWAP` in
- *    the lower 14 bits of the CREATE2-mined address (see
- *    DelleonMcglone/dynamic-fee README).
- *
- * Mainnet entries are `null` (launch-gating step).
+ * Mantua hook addresses on Arc Testnet. Four hooks:
+ *  - Stable Protection — USDC/EURC FX-rate-aware peg defense.
+ *  - Dynamic Fee — volatile pairs, fee scales with volatility.
+ *  - RWAGate — permissioned/allowlisted pools.
+ *  - ALO — Async Limit Orders.
+ * Real Arc addresses land in Phase E; `null` → hook unavailable.
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [BASE_SEPOLIA_CHAIN_ID]: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
-  // Not deployed on Arc yet — getHookAddress returns null → hook unavailable.
   [ARC_TESTNET_CHAIN_ID]: null,
 };
-
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
+  [ARC_TESTNET_CHAIN_ID]: null,
+};
+const RWAGATE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [ARC_TESTNET_CHAIN_ID]: null,
+};
+const ALO_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [ARC_TESTNET_CHAIN_ID]: null,
 };
 
-export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
+export const HOOK_NAMES = ["stable-protection", "dynamic-fee", "rwa-gate", "alo"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
 export { DEFAULT_CHAIN_ID };
@@ -138,19 +103,23 @@ export function getHookAddress(
   name: HookName,
   chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): `0x${string}` | null {
-  if (IS_MAINNET) return null;
-  if (name === "stable-protection") return STABLE_PROTECTION_BY_CHAIN[chainId];
-  return DYNAMIC_FEE_BY_CHAIN[chainId];
+  switch (name) {
+    case "stable-protection":
+      return STABLE_PROTECTION_BY_CHAIN[chainId];
+    case "dynamic-fee":
+      return DYNAMIC_FEE_BY_CHAIN[chainId];
+    case "rwa-gate":
+      return RWAGATE_BY_CHAIN[chainId];
+    case "alo":
+      return ALO_BY_CHAIN[chainId];
+  }
 }
 
-/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
-export const STABLE_PROTECTION_HOOK: `0x${string}` | null = IS_MAINNET
-  ? null
-  : STABLE_PROTECTION_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
-/** Legacy single-chain export. Prefer `getHookAddress(name, chainId)`. */
-export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
-  ? null
-  : DYNAMIC_FEE_BY_CHAIN[BASE_SEPOLIA_CHAIN_ID];
+/** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
+export const STABLE_PROTECTION_HOOK: `0x${string}` | null =
+  STABLE_PROTECTION_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+export const DYNAMIC_FEE_HOOK: `0x${string}` | null =
+  DYNAMIC_FEE_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
 
 /**
  * v4 PoolKey hook permission flags encoded in the lower 14 bits of each
@@ -161,6 +130,9 @@ export const DYNAMIC_FEE_HOOK: `0x${string}` | null = IS_MAINNET
 export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
   "stable-protection": ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
   "dynamic-fee": ["BEFORE_SWAP", "AFTER_SWAP"],
+  // TODO(Phase E): confirm from the deployed bytecode (npm run verify:hooks).
+  "rwa-gate": ["BEFORE_INITIALIZE", "BEFORE_SWAP"],
+  alo: ["BEFORE_SWAP", "AFTER_SWAP"],
 } as const;
 
 /**
@@ -179,6 +151,10 @@ export const DYNAMIC_FEE_FLAG = 0x800000;
 export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true,
   "dynamic-fee": true,
+  // TODO(Phase E): confirm from the hook repos. Gate/limit-order hooks
+  // typically keep a static fee tier.
+  "rwa-gate": false,
+  alo: false,
 };
 
 /**
