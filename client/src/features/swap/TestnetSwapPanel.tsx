@@ -63,6 +63,9 @@ function humanizeRevertReason(decoded: string): string {
   if (/^PoolNotConfigured/.test(decoded)) {
     return "This Dynamic Fee pool hasn't been configured by the hook owner yet — swaps stay disabled until a one-time owner setup (configurePool) runs. Use a different hook for now.";
   }
+  if (/^NotWhitelisted/.test(decoded)) {
+    return "RWA Gate is a permissioned pool — your address isn't allowlisted in its compliance registry yet, so swaps are blocked. The hook owner must whitelist the account first.";
+  }
   if (/Stable Protection is only available on the USDC\/EURC pair/.test(decoded)) {
     return "Stable Protection works only on USDC/EURC. Pick that pair or choose a different hook.";
   }
