@@ -26,20 +26,24 @@ interface AnalyzeResponse {
 
 type Topic =
   | "eth-price"
+  | "cirbtc-price"
   | "eurc-peg"
   | "usdc-eurc-pool"
   | "top-stablecoins"
   | "cbbtc-24h-volume"
+  | "usdc-24h-volume"
+  | "market-summary"
+  | "arc-pools"
   | "mantua-hooks"
   | "token-price";
 
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
-  { topic: "top-stablecoins", question: "Show me top performing Stablecoins" },
-  { topic: "usdc-eurc-pool", question: "Analyze USDC/EURC pool health" },
-  { topic: "eth-price", question: "What is the current price of ETH?" },
-  { topic: "cbbtc-24h-volume", question: "What is cbBTC's 24h volume trend?" },
-  { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
+  { topic: "market-summary", question: "Stablecoin market summary for USDC and EURC" },
+  { topic: "cirbtc-price", question: "Show me cirBTC price" },
+  { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
+  { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
+  { topic: "usdc-24h-volume", question: "What is USDC's 24h volume trend?" },
 ];
 
 interface AnalyzePanelProps {
