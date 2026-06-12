@@ -2,10 +2,7 @@ import { BaseError, decodeAbiParameters, decodeErrorResult, encodeFunctionData }
 import { buildPoolKey, type PoolKey } from "./pool-key.ts";
 import { logger } from "./logger.ts";
 import { getRpcClient } from "./rpc-client.ts";
-import {
-  DEFAULT_CHAIN_ID,
-  type SupportedTestnetChainId,
-} from "./chains.ts";
+import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import {
   HOOK_NAMES,
@@ -26,12 +23,10 @@ import { readSlot0 } from "./v4-state-view.ts";
  */
 function extractRevertHex(err: unknown): `0x${string}` | null {
   if (!(err instanceof BaseError)) return null;
-  const found = err.walk(
-    (e): e is BaseError & { data?: unknown; cause?: unknown } => {
-      const candidate = e as { data?: unknown };
-      return typeof candidate.data === "string" && candidate.data.startsWith("0x");
-    },
-  ) as (BaseError & { data?: `0x${string}` }) | null;
+  const found = err.walk((e): e is BaseError & { data?: unknown; cause?: unknown } => {
+    const candidate = e as { data?: unknown };
+    return typeof candidate.data === "string" && candidate.data.startsWith("0x");
+  }) as (BaseError & { data?: `0x${string}` }) | null;
   return found?.data ?? null;
 }
 
@@ -55,10 +50,20 @@ interface DecodedQuoterRevert {
  * coming back through `WrappedError` into a readable name.
  */
 const STABLE_PROTECTION_HOOK_ERRORS = [
-  { type: "error", name: "CircuitBreakerTripped", inputs: [{ type: "uint8", name: "zone" }, { type: "uint256", name: "deviationBps" }] },
+  {
+    type: "error",
+    name: "CircuitBreakerTripped",
+    inputs: [
+      { type: "uint8", name: "zone" },
+      { type: "uint256", name: "deviationBps" },
+    ],
+  },
   { type: "error", name: "InvalidConfiguration", inputs: [{ type: "string", name: "reason" }] },
   { type: "error", name: "NotPoolManager", inputs: [] },
   { type: "error", name: "AlreadyInitialized", inputs: [] },
+  // DynamicFee hook: beforeSwap reverts PoolNotConfigured(poolId) when the
+  // pool wasn't set up via the owner-only configurePool() call.
+  { type: "error", name: "PoolNotConfigured", inputs: [{ type: "bytes32", name: "poolId" }] },
 ] as const;
 
 /**
@@ -150,7 +155,8 @@ function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
         outerHex,
         innerHex,
         innerSelector,
-        decoded: reasonDecoded ?? `WrappedError(hook=${target}, fn=${fnSelector}, reason=${reason})`,
+        decoded:
+          reasonDecoded ?? `WrappedError(hook=${target}, fn=${fnSelector}, reason=${reason})`,
         hookTarget: target,
         hookFnSelector: fnSelector,
         hookReasonHex: reason,
@@ -230,7 +236,9 @@ function friendlyQuoterError(err: unknown): Error {
     );
   }
   if (/PoolNotInitialized|0x[0-9a-f]+ not initialized/i.test(msg)) {
-    return new Error("Pool not initialized for this pair + fee + hook combination.", { cause: err });
+    return new Error("Pool not initialized for this pair + fee + hook combination.", {
+      cause: err,
+    });
   }
   if (err instanceof Error) return err;
   return new Error("Quote failed");
@@ -308,12 +316,10 @@ export async function findMaxQuotableInputV4(
     // `UnexpectedRevertBytes` wrapper from the upper-bound probe to
     // surface the actual inner selector + reason. Walks the original
     // viem error chained via `cause` from `friendlyQuoterError`.
-    const cause =
-      firstError instanceof Error && firstError.cause ? firstError.cause : firstError;
+    const cause = firstError instanceof Error && firstError.cause ? firstError.cause : firstError;
     const decodedRevert = decodeQuoterRevert(cause);
     const friendlyMessage = firstError instanceof Error ? firstError.message : "non-Error throw";
-    reason =
-      decodedRevert.hookReasonDecoded ?? decodedRevert.decoded ?? friendlyMessage;
+    reason = decodedRevert.hookReasonDecoded ?? decodedRevert.decoded ?? friendlyMessage;
     // When we couldn't decode a specific pool/hook reason, the generic
     // friendlyMessage ("pool may be missing liquidity…") is misleading
     // for a pool that actually exists. Disambiguate with a slot0 read so
@@ -370,9 +376,7 @@ export async function findMaxQuotableInputV4(
  * `eth_call`. Returns the simulated `amountOut` plus the constructed
  * `poolKey` (caller will reuse it to build PoolSwapTest calldata).
  */
-export async function quoteExactInputV4(
-  args: OnchainQuoteArgs,
-): Promise<OnchainQuoteResult> {
+export async function quoteExactInputV4(args: OnchainQuoteArgs): Promise<OnchainQuoteResult> {
   // Reject hook/pair combos the hook is known to reject on-chain
   // before burning an `eth_call`. Surfaces a clean reason instead of
   // V4Quoter's wrapped revert.
@@ -488,8 +492,7 @@ export function buildPoolSwapTestCalldata(args: SwapCalldataArgs): SwapCalldataR
   });
 
   const inputCurrency = args.zeroForOne ? args.poolKey.currency0 : args.poolKey.currency1;
-  const isNativeIn =
-    inputCurrency.toLowerCase() === "0x0000000000000000000000000000000000000000";
+  const isNativeIn = inputCurrency.toLowerCase() === "0x0000000000000000000000000000000000000000";
 
   return {
     to: poolSwapTest,
