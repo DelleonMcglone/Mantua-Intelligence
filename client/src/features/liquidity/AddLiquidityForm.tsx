@@ -104,8 +104,13 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
     if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
     return "none";
   }, [pairHook, cirBtcMode]);
-  // USDC/EURC → 0.01%; every cirBTC pool (Dynamic Fee or Volatile) → 0.30%.
-  const fee: FeeTier = useMemo(() => (hook === "stable-protection" ? 100 : 3000), [hook]);
+  // Fee tier follows the pool that actually exists on-chain: USDC/EURC
+  // Stable Protection → 0.01%; cirBTC Dynamic Fee → 0.05% (the funded,
+  // correct-price pools); Volatile (no-hook) → 0.30%.
+  const fee: FeeTier = useMemo(
+    () => (hook === "stable-protection" ? 100 : hook === "dynamic-fee" ? 500 : 3000),
+    [hook],
+  );
 
   // Chain-switch handling lives in the parent: App.tsx keys this component
   // on `chainId`, so a network change remounts the form and the useState

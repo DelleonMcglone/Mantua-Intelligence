@@ -122,7 +122,12 @@ export function TestnetSwapPanel({
     if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
     return "none";
   }, [pairHook, cirBtcMode]);
-  const fee: FeeTier = useMemo(() => (hook === "stable-protection" ? 100 : 3000), [hook]);
+  // USDC/EURC → 0.01%; cirBTC Dynamic Fee → 0.05% (funded, correct-price
+  // pools); Volatile (no-hook) → 0.30%.
+  const fee: FeeTier = useMemo(
+    () => (hook === "stable-protection" ? 100 : hook === "dynamic-fee" ? 500 : 3000),
+    [hook],
+  );
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 
   const confirm = useConfirmedAction();
