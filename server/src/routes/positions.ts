@@ -5,9 +5,46 @@ import { pools, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { logger } from "../lib/logger.ts";
 import { loadExternalPositions } from "../lib/external-positions.ts";
+import { readOnchainPositions } from "../lib/v4-onchain-positions.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  isSupportedTestnetChainId,
+  type SupportedTestnetChainId,
+} from "../lib/chains.ts";
 import { requireAuth } from "../middleware/auth.ts";
 
 export const positionsRouter = Router();
+
+function readChainId(req: Request): SupportedTestnetChainId {
+  const raw = req.query.chainId;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (isSupportedTestnetChainId(n)) return n;
+  }
+  return ARC_TESTNET_CHAIN_ID;
+}
+
+/**
+ * Authoritative LP positions for the connected wallet, read straight from
+ * the chain (PositionManager NFTs across every Mantua hook stack). Unlike
+ * `/api/positions` this needs no DB rows or subgraph — it reflects on-chain
+ * reality, so the Positions tab survives a cleared localStorage cache and
+ * shows positions opened from anywhere.
+ */
+positionsRouter.get("/api/positions/onchain", requireAuth, async (req: Request, res: Response) => {
+  if (!req.walletAddress) {
+    res.json({ positions: [] });
+    return;
+  }
+  try {
+    const chainId = readChainId(req);
+    const onchain = await readOnchainPositions(req.walletAddress as `0x${string}`, chainId);
+    res.json({ positions: onchain });
+  } catch (err) {
+    logger.error({ err }, "GET /api/positions/onchain failed");
+    res.status(502).json({ error: "Failed to read on-chain positions", code: "UPSTREAM_FAILURE" });
+  }
+});
 
 /**
  * P4-009 — list the user's open positions. Mantua-opened rows come from
@@ -26,6 +63,7 @@ positionsRouter.get("/api/positions", requireAuth, async (req: Request, res: Res
       .from(users)
       .where(eq(users.privyUserId, req.privyUserId))
       .limit(1);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user
     if (!user) {
       res.json({ positions: [] });
       return;

@@ -10,12 +10,7 @@
  * addresses sourced from developers.uniswap.org/contracts/v4/deployments
  * 2026-04-28.
  */
-import {
-  ARC_TESTNET_CHAIN_ID,
-  DEFAULT_CHAIN_ID,
-  type SupportedTestnetChainId,
-} from "./chains.ts";
-
+import { ARC_TESTNET_CHAIN_ID, DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 
 interface V4Addresses {
   poolManager: `0x${string}`;
@@ -65,12 +60,10 @@ export function getPoolSwapTest(chainId: SupportedTestnetChainId): `0x${string}`
 
 /** Legacy single-chain exports. Prefer the per-chain getters. */
 export const V4_POOL_MANAGER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolManager;
-export const V4_POSITION_MANAGER: `0x${string}` =
-  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].positionManager;
+export const V4_POSITION_MANAGER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].positionManager;
 export const V4_STATE_VIEW: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].stateView;
 export const V4_QUOTER: `0x${string}` = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].quoter;
-export const POOL_SWAP_TEST: `0x${string}` | null =
-  V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolSwapTest;
+export const POOL_SWAP_TEST: `0x${string}` | null = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID].poolSwapTest;
 
 /** Canonical Permit2 — same address on every chain (deterministic deploy). */
 export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
@@ -276,8 +269,7 @@ export function getV4StackForHook(hookAddress: string): V4Addresses {
 /** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
 export const STABLE_PROTECTION_HOOK: `0x${string}` | null =
   STABLE_PROTECTION_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
-export const DYNAMIC_FEE_HOOK: `0x${string}` | null =
-  DYNAMIC_FEE_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+export const DYNAMIC_FEE_HOOK: `0x${string}` | null = DYNAMIC_FEE_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
 
 /**
  * v4 PoolKey hook permission flags encoded in the lower 14 bits of each
@@ -321,10 +313,7 @@ export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
  * hook requires dynamic fees, returns `DYNAMIC_FEE_FLAG`; otherwise
  * returns the user's static fee tier as-is.
  */
-export function effectivePoolFee(
-  hook: HookName | null | undefined,
-  staticFee: number,
-): number {
+export function effectivePoolFee(hook: HookName | null | undefined, staticFee: number): number {
   if (hook && HOOK_REQUIRES_DYNAMIC_FEE[hook]) return DYNAMIC_FEE_FLAG;
   return staticFee;
 }
@@ -547,6 +536,15 @@ export const POSITION_MANAGER_VIEW_ABI = [
     stateMutability: "view",
     inputs: [{ type: "uint256", name: "tokenId" }],
     outputs: [{ type: "address" }],
+  },
+  {
+    // v4 PositionManager mints sequentially from tokenId 1; `nextTokenId`
+    // is the id the next mint will use, so live ids are [1, nextTokenId).
+    type: "function",
+    name: "nextTokenId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
   },
   {
     type: "function",

@@ -17,6 +17,7 @@ import { HOOK_TINT, type HookName } from "./hook-tint.ts";
 import { EarningsTabBody } from "./EarningsTab.tsx";
 import { useEarnings } from "./use-earnings.ts";
 import { earningPoolCount } from "./earnings.ts";
+import { useOnchainPositions } from "./use-onchain-positions.ts";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -55,8 +56,8 @@ function localHookLabel(h: LocalPosition["hook"]): HookName {
 
 function localPositionToRow(p: LocalPosition): PortfolioPosition {
   return {
-    a: p.tokenA as AssetSymbol,
-    b: p.tokenB as AssetSymbol,
+    a: p.tokenA,
+    b: p.tokenB,
     fee: FEE_TIER_LABELS[p.fee],
     // We don't track running PnL client-side. Show deposited
     // amounts in the value slot so the row stays informative.
@@ -102,6 +103,9 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   const portfolio = usePortfolio();
   const agent = useAgentPortfolio();
   const earnings = useEarnings(portfolio.walletAddress);
+  // Authoritative on-chain positions. While this loads (or if it errors)
+  // we fall back to the localStorage breadcrumb so the tab is never blank.
+  const onchainPositions = useOnchainPositions(portfolio.walletAddress);
   const assets = useMemo<DisplayAsset[]>(() => {
     if (!portfolio.walletAddress) return [];
     return toDisplayAssets(portfolio.balances, chainId);
@@ -130,13 +134,14 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
       return numVal(b.val) - numVal(a.val);
     });
 
-  // On testnet the LP rows come from our localStorage breadcrumb of
-  // freshly-minted positions (Postgres-backed reads are offline in
-  // the local dev env). Mainnet keeps the design-source mock until
-  // the production positions backend lights up.
+  // LP rows are read from on-chain PositionManager state (durable source
+  // of truth). The localStorage breadcrumb is only a fallback for the
+  // brief window before the on-chain fetch resolves, so a just-minted
+  // position still shows instantly and the tab is never blank mid-load.
+  const positionsSource = IS_MAINNET ? [] : (onchainPositions.data ?? localPositions);
   const positionsAvailable = !portfolio.walletAddress
     ? []
-    : localPositions.map(localPositionToRow);
+    : positionsSource.map(localPositionToRow);
   const visiblePositions = positionsAvailable;
 
   const tabs = [
