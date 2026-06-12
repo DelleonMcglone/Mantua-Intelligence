@@ -55,7 +55,8 @@ function localHookLabel(h: LocalPosition["hook"]): HookName {
     case "dynamic-fee":
       return "Dynamic Fee";
     default:
-      return "No Hook";
+      // No-hook pools in the two-hook model are Volatile cirBTC pools.
+      return "Volatile";
   }
 }
 

@@ -160,7 +160,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
       else if (aStable && bStable) category = "Stables";
       else if (aMajor || bMajor) category = "Majors";
       else category = "Majors";
-      const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "No Hook";
+      const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "Volatile";
       const tvlUsd = localTvlByKey[p.key] ?? 0;
       return {
         id: `local:${p.key}`,
