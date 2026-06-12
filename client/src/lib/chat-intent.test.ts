@@ -252,6 +252,34 @@ describe("detectIntent: add-liquidity", () => {
       ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "alo" },
     });
   });
+
+  it("'Add liquidity $10 USDC / $10 cirBTC ALO pool' → carries amounts + hook", () => {
+    assert.deepEqual(detectIntent("Add liquidity $10 USDC / $10 cirBTC ALO pool"), {
+      kind: "add-liquidity",
+      ctx: {
+        tokenA: "USDC",
+        tokenB: "cirBTC",
+        fee: 500,
+        hook: "alo",
+        amountA: "10",
+        amountB: "10",
+      },
+    });
+  });
+
+  it("'add 100 USDC and 85 EURC to the pool' → parses both amounts", () => {
+    assert.deepEqual(detectIntent("add 100 USDC and 85 EURC to the pool"), {
+      kind: "add-liquidity",
+      ctx: {
+        tokenA: "USDC",
+        tokenB: "EURC",
+        fee: 100,
+        hook: null,
+        amountA: "100",
+        amountB: "85",
+      },
+    });
+  });
 });
 
 describe("detectIntent: nav fallbacks", () => {
