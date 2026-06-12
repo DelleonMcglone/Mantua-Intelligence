@@ -133,3 +133,43 @@ export function buildRemoveLiquidityCalldata(
     isFullExit,
   };
 }
+
+/**
+ * Build calldata to COLLECT a position's accrued swap fees without touching
+ * its liquidity. In v4 a `DECREASE_LIQUIDITY` of zero settles the owed fees
+ * into the caller's delta; `TAKE_PAIR` then transfers them to the recipient.
+ * Routes to the per-hook PositionManager (null hook → hero stack).
+ */
+export function buildCollectFeesCalldata(args: {
+  tokenId: bigint;
+  currency0: `0x${string}`;
+  currency1: `0x${string}`;
+  hookAddress?: `0x${string}` | null;
+  recipient: `0x${string}`;
+  deadlineSeconds: number;
+}): { to: `0x${string}`; data: `0x${string}`; value: string } {
+  const decrease = encodeDecrease(args.tokenId, 0n, 0n, 0n);
+  const takePair = encodeTakePair(args.currency0, args.currency1, args.recipient);
+
+  // Arc pools use ERC-20 USDC (0x3600…), never the native sentinel, so there's
+  // normally no SWEEP leg — but keep the guard in case a native-side pool exists.
+  const nativeSide = args.currency0 === ZERO ? "0" : args.currency1 === ZERO ? "1" : null;
+  const ids = nativeSide
+    ? [Action.DECREASE_LIQUIDITY, Action.TAKE_PAIR, Action.SWEEP]
+    : [Action.DECREASE_LIQUIDITY, Action.TAKE_PAIR];
+  const params: `0x${string}`[] = [decrease, takePair];
+  if (nativeSide) params.push(encodeSweep(ZERO, args.recipient));
+
+  const unlockData = encodeUnlockData(encodeActions(ids), params);
+  const data = encodeFunctionData({
+    abi: POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
+    functionName: "modifyLiquidities",
+    args: [unlockData, BigInt(args.deadlineSeconds)],
+  });
+
+  return {
+    to: getV4StackForHook(args.hookAddress ?? ZERO).positionManager,
+    data,
+    value: "0",
+  };
+}

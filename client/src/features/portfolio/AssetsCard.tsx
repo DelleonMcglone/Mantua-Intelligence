@@ -150,7 +150,7 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
     {
       k: "earnings" as const,
       label: "Earnings",
-      count: earningPoolCount(earnings),
+      count: earningPoolCount(earnings.data),
     },
   ];
 
@@ -404,7 +404,9 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
         />
       )}
 
-      {tab === "earnings" && <EarningsTabBody data={earnings} />}
+      {tab === "earnings" && (
+        <EarningsTabBody earnings={earnings} walletAddress={portfolio.walletAddress} />
+      )}
     </div>
   );
 }

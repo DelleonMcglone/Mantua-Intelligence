@@ -622,6 +622,41 @@ export const STATE_VIEW_ABI = [
       { type: "uint24", name: "lpFee" },
     ],
   },
+  {
+    // Current cumulative fee growth inside a tick range, scaled by 2^128.
+    type: "function",
+    name: "getFeeGrowthInside",
+    stateMutability: "view",
+    inputs: [
+      { type: "bytes32", name: "poolId" },
+      { type: "int24", name: "tickLower" },
+      { type: "int24", name: "tickUpper" },
+    ],
+    outputs: [
+      { type: "uint256", name: "feeGrowthInside0X128" },
+      { type: "uint256", name: "feeGrowthInside1X128" },
+    ],
+  },
+  {
+    // A position's liquidity + the fee growth snapshot taken at its last
+    // update. PositionManager positions are keyed by owner=PositionManager,
+    // salt=bytes32(tokenId).
+    type: "function",
+    name: "getPositionInfo",
+    stateMutability: "view",
+    inputs: [
+      { type: "bytes32", name: "poolId" },
+      { type: "address", name: "owner" },
+      { type: "int24", name: "tickLower" },
+      { type: "int24", name: "tickUpper" },
+      { type: "bytes32", name: "salt" },
+    ],
+    outputs: [
+      { type: "uint128", name: "liquidity" },
+      { type: "uint256", name: "feeGrowthInside0LastX128" },
+      { type: "uint256", name: "feeGrowthInside1LastX128" },
+    ],
+  },
 ] as const;
 
 /** ERC-20 ABI fragments we need for the approval flow. */
