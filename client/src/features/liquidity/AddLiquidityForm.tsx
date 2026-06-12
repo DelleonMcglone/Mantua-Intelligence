@@ -8,7 +8,7 @@ import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerTxUrl, type SupportedTestnetChainId } from "@/lib/chains.ts";
 import { type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
-import { DEFAULT_FEE_TIER_FOR_PAIR, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
+import { FEE_TIER_LABELS, recommendedFeeTier, type FeeTier } from "./fee-tiers.ts";
 import { FeeTierPicker } from "./FeeTierPicker.tsx";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { isStable, safeParse } from "./create-helpers.ts";
@@ -121,17 +121,20 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const [defaultA, defaultB] = defaultPairForChain(chainId);
   const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? defaultA);
   const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? defaultB);
-  const [fee, setFee] = useState<FeeTier>(
-    ctx?.fee ??
-      DEFAULT_FEE_TIER_FOR_PAIR(
-        isStable(ctx?.tokenA ?? defaultA),
-        isStable(ctx?.tokenB ?? defaultB),
-      ),
-  );
-  const [hook, setHook] = useState<HookName | "none">(() => {
-    if (ctx?.hook !== undefined) return hookFromCtx(ctx.hook);
-    return recommendedHookForPair(defaultA, defaultB) ?? "none";
+  const seedHook: HookName | "none" =
+    ctx?.hook !== undefined
+      ? hookFromCtx(ctx.hook)
+      : (recommendedHookForPair(defaultA, defaultB) ?? "none");
+  const [fee, setFee] = useState<FeeTier>(() => {
+    const a = isStable(ctx?.tokenA ?? defaultA);
+    const b = isStable(ctx?.tokenB ?? defaultB);
+    // DynamicFee pools are only configured at 0.30%, so force that tier even
+    // if the chat intent passed a pair-based ctx.fee. Other hooks honor
+    // ctx.fee, then the hook/pair recommendation.
+    if (seedHook === "dynamic-fee") return 3000;
+    return ctx?.fee ?? recommendedFeeTier(seedHook === "none" ? null : seedHook, a, b);
   });
+  const [hook, setHook] = useState<HookName | "none">(() => seedHook);
 
   // Chain-switch handling lives in the parent: App.tsx keys this
   // component on `chainId`, so a network change remounts the form and
@@ -160,9 +163,14 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const recommended = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
   useEffect(() => {
     if (locked || hookTouched) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: re-suggest hook on pair change until the user picks one
-    setHook(recommended ?? "none");
-  }, [recommended, locked, hookTouched]);
+    const nextHook = recommended ?? "none";
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional: re-suggest hook + tier on pair change until the user picks one */
+    setHook(nextHook);
+    setFee(
+      recommendedFeeTier(nextHook === "none" ? null : nextHook, isStable(tokenA), isStable(tokenB)),
+    );
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [recommended, locked, hookTouched, tokenA, tokenB]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -408,6 +416,15 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
                         setHook(opt.value);
                         setHookTouched(true);
                         setShowHooks(false);
+                        // Steer the fee tier to the hook's swappable tier
+                        // (DynamicFee pools are only configured at 0.30%).
+                        setFee(
+                          recommendedFeeTier(
+                            opt.value === "none" ? null : opt.value,
+                            isStable(tokenA),
+                            isStable(tokenB),
+                          ),
+                        );
                       }}
                       className={`block w-full px-2.5 py-2 rounded-xs text-left ${
                         hook === opt.value ? "bg-chip" : "hover:bg-row-hover"

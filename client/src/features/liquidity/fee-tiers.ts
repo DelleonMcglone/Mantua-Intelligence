@@ -32,3 +32,19 @@ export const DEFAULT_FEE_TIER_FOR_PAIR = (aIsStable: boolean, bIsStable: boolean
   if (aIsStable || bIsStable) return 500;
   return 3000;
 };
+
+/**
+ * Recommended fee tier for a hook + pair. DynamicFee pools are configured
+ * (the hook's owner-only configurePool) at tickSpacing 60 — i.e. the 0.30%
+ * tier — so that's the ONLY swappable DynamicFee tier. Steer DynamicFee
+ * selections there; every other hook uses the pair-based default. `hook` is
+ * the server HookName ("dynamic-fee" / …) or null for no-hook.
+ */
+export const recommendedFeeTier = (
+  hook: string | null,
+  aIsStable: boolean,
+  bIsStable: boolean,
+): FeeTier => {
+  if (hook === "dynamic-fee") return 3000;
+  return DEFAULT_FEE_TIER_FOR_PAIR(aIsStable, bIsStable);
+};

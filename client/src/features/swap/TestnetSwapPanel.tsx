@@ -8,8 +8,8 @@ import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getUserFacingTokenSymbols, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import {
-  DEFAULT_FEE_TIER_FOR_PAIR,
   FEE_TIER_LABELS,
+  recommendedFeeTier,
   type FeeTier,
 } from "@/features/liquidity/fee-tiers.ts";
 import { FeeTierPicker } from "@/features/liquidity/FeeTierPicker.tsx";
@@ -67,6 +67,12 @@ function humanizeRevertReason(decoded: string): string {
     return "Stable Protection works only on USDC/EURC. Pick that pair or choose a different hook.";
   }
   if (/^Error:/.test(decoded)) return decoded.replace(/^Error:\s*/, "");
+  // Generic hook rejection we couldn't decode to a named error (e.g. the
+  // ALO async-limit-order hook, which doesn't fill a plain market swap).
+  // Surface a readable message instead of the raw WrappedError(0x…) hex.
+  if (/^WrappedError\(/.test(decoded)) {
+    return "The hook rejected this swap. The pool may need a one-time owner setup, or this hook doesn't support a direct market swap for this pair — try a different hook.";
+  }
   return decoded;
 }
 
@@ -111,15 +117,15 @@ export function TestnetSwapPanel({
 }: Props) {
   const seedIn: TokenSymbol = initialTokenIn ?? "USDC";
   const seedOut: TokenSymbol = initialTokenOut ?? "EURC";
+  const seedHook: HookName | "none" =
+    initialHook ?? recommendedHookForPair(seedIn, seedOut) ?? "none";
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
   const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
   const [fee, setFee] = useState<FeeTier>(() =>
-    DEFAULT_FEE_TIER_FOR_PAIR(isStable(seedIn), isStable(seedOut)),
+    recommendedFeeTier(seedHook === "none" ? null : seedHook, isStable(seedIn), isStable(seedOut)),
   );
-  const [hook, setHook] = useState<HookName | "none">(
-    () => initialHook ?? recommendedHookForPair(seedIn, seedOut) ?? "none",
-  );
+  const [hook, setHook] = useState<HookName | "none">(() => seedHook);
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 
   const confirm = useConfirmedAction();
@@ -374,7 +380,17 @@ export function TestnetSwapPanel({
           <select
             value={hook}
             onChange={(e) => {
-              setHook(e.target.value as HookName | "none");
+              const next = e.target.value as HookName | "none";
+              setHook(next);
+              // Steer the fee tier to the hook's swappable tier (DynamicFee
+              // pools are only configured at 0.30%).
+              setFee(
+                recommendedFeeTier(
+                  next === "none" ? null : next,
+                  isStable(tokenIn),
+                  isStable(tokenOut),
+                ),
+              );
             }}
             className="w-full px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md text-[13px] text-text"
           >
