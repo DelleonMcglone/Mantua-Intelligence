@@ -219,13 +219,38 @@ describe("detectIntent: add-liquidity", () => {
   });
 
   it("'add liquidity to a USDC cirBTC pool with a dynamic fee' → carries hook", () => {
-    assert.deepEqual(
-      detectIntent("add liquidity to a USDC cirBTC pool with a dynamic fee"),
-      {
-        kind: "add-liquidity",
-        ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "dynamic-fee" },
-      },
-    );
+    assert.deepEqual(detectIntent("add liquidity to a USDC cirBTC pool with a dynamic fee"), {
+      kind: "add-liquidity",
+      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "dynamic-fee" },
+    });
+  });
+
+  it("'add liquidity to a USDC cirBTC RWAgate pool' → carries rwa-gate hook", () => {
+    assert.deepEqual(detectIntent("add liquidity to a USDC cirBTC RWAgate pool"), {
+      kind: "add-liquidity",
+      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "rwa-gate" },
+    });
+  });
+
+  it("'add liquidity to a USDC EURC RWA gate pool' → carries rwa-gate hook", () => {
+    assert.deepEqual(detectIntent("add liquidity to a USDC EURC RWA gate pool"), {
+      kind: "add-liquidity",
+      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: "rwa-gate" },
+    });
+  });
+
+  it("'add liquidity to a EURC cirBTC ALO pool' → carries alo hook", () => {
+    assert.deepEqual(detectIntent("add liquidity to a EURC cirBTC ALO pool"), {
+      kind: "add-liquidity",
+      ctx: { tokenA: "EURC", tokenB: "cirBTC", fee: 500, hook: "alo" },
+    });
+  });
+
+  it("'add liquidity to USDC cirBTC with async limit order' → carries alo hook", () => {
+    assert.deepEqual(detectIntent("add liquidity to USDC cirBTC with async limit order"), {
+      kind: "add-liquidity",
+      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "alo" },
+    });
   });
 });
 
@@ -245,7 +270,9 @@ describe("detectIntent: nav fallbacks", () => {
 
 describe("extractEvmAddress", () => {
   it("pulls a 42-char 0x address out of free text", () => {
-    const addr = extractEvmAddress("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87 now");
+    const addr = extractEvmAddress(
+      "Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87 now",
+    );
     assert.equal(addr, "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87");
   });
 
@@ -283,30 +310,25 @@ describe("detectIntent: create-pool", () => {
 
 describe("detectIntent: remove-liquidity", () => {
   it("'Remove 50% of my liquidity from the USDC/EURC pool' → remove-liquidity", () => {
-    assert.deepEqual(
-      detectIntent("Remove 50% of my liquidity from the USDC/EURC pool"),
-      { kind: "remove-liquidity" },
-    );
+    assert.deepEqual(detectIntent("Remove 50% of my liquidity from the USDC/EURC pool"), {
+      kind: "remove-liquidity",
+    });
   });
 
   it("'Withdraw from my USDC/cirBTC position' → remove-liquidity", () => {
-    assert.deepEqual(
-      detectIntent("Withdraw from my USDC/cirBTC position"),
-      { kind: "remove-liquidity" },
-    );
+    assert.deepEqual(detectIntent("Withdraw from my USDC/cirBTC position"), {
+      kind: "remove-liquidity",
+    });
   });
 });
 
 describe("detectIntent: send", () => {
   it("'Send 10 USDC to 0xbaac…' → send with tokenIn + to", () => {
-    assert.deepEqual(
-      detectIntent("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87"),
-      {
-        kind: "send",
-        tokenIn: "USDC",
-        to: "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87",
-      },
-    );
+    assert.deepEqual(detectIntent("Send 10 USDC to 0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87"), {
+      kind: "send",
+      tokenIn: "USDC",
+      to: "0xbaacDCFfA93B984C914014F83Ee28B68dF88DC87",
+    });
   });
 
   it("'Send all my money to my friend' (no 0x address) → null", () => {
