@@ -16,6 +16,7 @@ import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
+import type { HookName } from "./features/liquidity/use-create-pool.ts";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 import { PositionsList } from "./features/liquidity/PositionsList.tsx";
@@ -36,6 +37,12 @@ type Route =
       kind: "swap";
       tokenIn?: TokenSymbol;
       tokenOut?: TokenSymbol;
+      hook?: HookName | null;
+      amountIn?: string;
+      /** Bumped on every chat command so the panel remounts and re-applies
+       *  the parsed tokens/hook/amount even when the route is otherwise
+       *  identical — otherwise a repeated "swap USDC for EURC" does nothing. */
+      nonce?: number;
     }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
@@ -161,8 +168,13 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "swap":
       return (
         <SwapPanel
+          // Remount per command so a fresh "swap …" re-applies tokens/hook/
+          // amount even when the resulting route looks identical.
+          key={`swap-${String(route.nonce ?? 0)}`}
           {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
           {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
+          {...(route.hook ? { initialHook: route.hook } : {})}
+          {...(route.amountIn ? { initialAmount: route.amountIn } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -311,6 +323,14 @@ function handleChatCommand(text: string, setRoute: (r: Route) => void) {
  * `case` here is the only place that needs to change — the parser
  * is already producing the richer intent.
  */
+// Monotonic id so each chat command yields a distinct swap route, forcing
+// the swap panel to remount and re-apply the parsed tokens/hook/amount.
+let swapNonce = 0;
+function nextSwapNonce(): number {
+  swapNonce += 1;
+  return swapNonce;
+}
+
 function intentToRoute(intent: Intent): Route {
   switch (intent.kind) {
     case "home":
@@ -320,6 +340,11 @@ function intentToRoute(intent: Intent): Route {
         kind: "swap",
         ...(intent.tokenIn ? { tokenIn: intent.tokenIn } : {}),
         ...(intent.tokenOut ? { tokenOut: intent.tokenOut } : {}),
+        // Only forward an explicitly-named hook; otherwise let the panel
+        // pick its pair recommendation.
+        ...(intent.hook ? { hook: intent.hook } : {}),
+        ...(intent.amountIn ? { amountIn: intent.amountIn } : {}),
+        nonce: nextSwapNonce(),
       };
     case "pools":
       return { kind: "pools" };

@@ -1,4 +1,5 @@
 import { type TokenSymbol } from "@/lib/tokens.ts";
+import type { HookName } from "@/features/liquidity/use-create-pool.ts";
 import { TestnetSwapPanel } from "./TestnetSwapPanel.tsx";
 
 interface SwapPanelProps {
@@ -8,6 +9,10 @@ interface SwapPanelProps {
    *  ("swap USDC for cirBTC" → tokenIn=USDC, tokenOut=cirBTC). */
   initialTokenIn?: TokenSymbol;
   initialTokenOut?: TokenSymbol;
+  /** Pre-select the hook and pre-fill the amount from a chat command
+   *  ("swap 10 USDC for EURC with stable protection"). */
+  initialHook?: HookName;
+  initialAmount?: string;
 }
 
 /**
@@ -17,12 +22,20 @@ interface SwapPanelProps {
  * is no mainnet/aggregator path — this component is a thin pass-through
  * that keeps the original `SwapPanel` import surface stable for callers.
  */
-export function SwapPanel({ onClose, initialTokenIn, initialTokenOut }: SwapPanelProps = {}) {
+export function SwapPanel({
+  onClose,
+  initialTokenIn,
+  initialTokenOut,
+  initialHook,
+  initialAmount,
+}: SwapPanelProps = {}) {
   return (
     <TestnetSwapPanel
       {...(onClose ? { onClose } : {})}
       {...(initialTokenIn ? { initialTokenIn } : {})}
       {...(initialTokenOut ? { initialTokenOut } : {})}
+      {...(initialHook ? { initialHook } : {})}
+      {...(initialAmount ? { initialAmount } : {})}
     />
   );
 }
