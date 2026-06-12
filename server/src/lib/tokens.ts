@@ -38,13 +38,13 @@ export interface Token {
 // USDC is Arc's native gas token, but the precompile at 0x3600…0000 also
 // exposes a working ERC-20 interface (balanceOf, 6 decimals) — verified
 // on-chain — so we read it as a normal ERC-20. EURC and cirBTC are
-// regular ERC-20s too. cirBTC is not in Circle's official token table
-// (caller-provided, no CoinGecko id → unpriced).
+// regular ERC-20s too. cirBTC ("Circle Wrapped BTC") is BTC-pegged, so it
+// prices off bitcoin's CoinGecko id.
 // Mirror of client/src/lib/tokens.ts — keep both in sync.
 const TOKENS_ARC_TESTNET = {
   USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
-  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "bitcoin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
 export type TokenSymbol = keyof typeof TOKENS_ARC_TESTNET;

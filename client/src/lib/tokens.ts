@@ -60,7 +60,7 @@ export interface Token {
 const TOKENS_ARC_TESTNET = {
   USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
   EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
-  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "bitcoin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
 } as const satisfies Record<string, Token>;
 
 export type TokenSymbol = keyof typeof TOKENS_ARC_TESTNET;
