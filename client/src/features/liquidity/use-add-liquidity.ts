@@ -4,17 +4,13 @@ import { createPublicClient, createWalletClient, custom, http } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { CHAIN_INFO, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
+import { getToken, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { ensurePermit2Approval } from "./erc20-allowance.ts";
 import { extractMintedTokenId } from "./extract-token-id.ts";
 import { rememberLocalPool } from "./local-pools.ts";
 import { rememberLocalPosition } from "./local-positions.ts";
-import {
-  buildSignTypedDataArgs,
-  wrapInMulticall,
-  type Permit2Bundle,
-} from "./permit2-helpers.ts";
+import { buildSignTypedDataArgs, wrapInMulticall, type Permit2Bundle } from "./permit2-helpers.ts";
 import type { HookName } from "./use-create-pool.ts";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -111,18 +107,15 @@ export function useAddLiquidity() {
       let poolSqrtPriceX96: string | undefined = args.sqrtPriceX96;
       setState({ status: "creating-pool", message: "Preparing pool…" });
       try {
-        const initRes = await api.post<PoolCreateCalldataRes>(
-          "/api/pools/create/calldata",
-          {
-            chainId,
-            tokenA: args.tokenA,
-            tokenB: args.tokenB,
-            fee: args.fee,
-            hook: args.hook ?? null,
-            initialAmount0Raw: args.amountARaw,
-            initialAmount1Raw: args.amountBRaw,
-          },
-        );
+        const initRes = await api.post<PoolCreateCalldataRes>("/api/pools/create/calldata", {
+          chainId,
+          tokenA: args.tokenA,
+          tokenB: args.tokenB,
+          fee: args.fee,
+          hook: args.hook ?? null,
+          initialAmount0Raw: args.amountARaw,
+          initialAmount1Raw: args.amountBRaw,
+        });
         setState({ status: "creating-pool", message: "Confirm pool init in wallet…" });
         const initTx = await walletClient.sendTransaction({
           account: owner,
@@ -147,9 +140,7 @@ export function useAddLiquidity() {
         if (!(err instanceof ApiError) || err.code !== "POOL_ALREADY_EXISTS") throw err;
         // Pool already exists — pull the on-chain price out of the 409 details
         // (the server returns the live PoolKey + sqrtPriceX96 there).
-        const details = err.details as
-          | { poolKey?: { sqrtPriceX96?: string } }
-          | undefined;
+        const details = err.details as { poolKey?: { sqrtPriceX96?: string } } | undefined;
         poolSqrtPriceX96 = details?.poolKey?.sqrtPriceX96 ?? poolSqrtPriceX96;
       }
 
@@ -162,14 +153,11 @@ export function useAddLiquidity() {
       });
 
       setState({ status: "approving", message: `Checking ${args.tokenA} approval…` });
-      const tokens = getTokens(chainId);
-      const tA = tokens[args.tokenA];
-      const tB = tokens[args.tokenB];
-      if (!tA || !tB) {
-        throw new Error(
-          `Token ${args.tokenA}/${args.tokenB} not available on chain ${String(chainId)}`,
-        );
-      }
+      // getToken throws "Unknown token on chain …" for an unsupported
+      // symbol, so this preserves the not-available guard while returning
+      // non-optional Tokens (avoids the always-defined lint on index access).
+      const tA = getToken(args.tokenA, chainId);
+      const tB = getToken(args.tokenB, chainId);
       const approvalA = await ensurePermit2Approval(
         walletClient,
         publicClient,
@@ -202,6 +190,11 @@ export function useAddLiquidity() {
           calldata.permit2.permitBatch,
           signature,
           calldata.data,
+          // Route the multicall to the pool's per-hook PositionManager
+          // (server-resolved), NOT a hardcoded hero address — otherwise
+          // mints on Dynamic Fee / RWA Gate / ALO pools hit the wrong
+          // PoolManager and revert.
+          calldata.to,
         );
         to = wrapped.to;
         data = wrapped.data;
