@@ -12,7 +12,6 @@ import {
   recommendedFeeTier,
   type FeeTier,
 } from "@/features/liquidity/fee-tiers.ts";
-import { FeeTierPicker } from "@/features/liquidity/FeeTierPicker.tsx";
 import { isStable } from "@/features/liquidity/create-helpers.ts";
 import {
   HOOK_LABELS,
@@ -33,14 +32,6 @@ interface Props {
   initialHook?: HookName;
   initialAmount?: string;
 }
-
-const HOOK_OPTIONS: { value: HookName | "none"; label: string }[] = [
-  { value: "none", label: "No Hook" },
-  { value: "stable-protection", label: HOOK_LABELS["stable-protection"] },
-  { value: "dynamic-fee", label: HOOK_LABELS["dynamic-fee"] },
-  { value: "rwa-gate", label: HOOK_LABELS["rwa-gate"] },
-  { value: "alo", label: HOOK_LABELS.alo },
-];
 
 function safeParse(symbol: TokenSymbol, input: string): string {
   if (!input || input === ".") return "0";
@@ -118,20 +109,23 @@ export function TestnetSwapPanel({
   onClose,
   initialTokenIn,
   initialTokenOut,
-  initialHook,
   initialAmount,
 }: Props) {
   const seedIn: TokenSymbol = initialTokenIn ?? "USDC";
   const seedOut: TokenSymbol = initialTokenOut ?? "EURC";
-  const seedHook: HookName | "none" =
-    initialHook ?? recommendedHookForPair(seedIn, seedOut) ?? "none";
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
   const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
-  const [fee, setFee] = useState<FeeTier>(() =>
-    recommendedFeeTier(seedHook === "none" ? null : seedHook, isStable(seedIn), isStable(seedOut)),
+  // Hook + fee tier are AUTO-ASSIGNED by the pair — no manual pickers.
+  // USDC/EURC → Stable Protection @ 0.01%; cirBTC pairs → Dynamic Fee @ 0.30%.
+  const hook: HookName | "none" = useMemo(
+    () => recommendedHookForPair(tokenIn, tokenOut) ?? "none",
+    [tokenIn, tokenOut],
   );
-  const [hook, setHook] = useState<HookName | "none">(() => seedHook);
+  const fee: FeeTier = useMemo(
+    () => recommendedFeeTier(hook === "none" ? null : hook, isStable(tokenIn), isStable(tokenOut)),
+    [hook, tokenIn, tokenOut],
+  );
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 
   const confirm = useConfirmedAction();
@@ -372,40 +366,16 @@ export function TestnetSwapPanel({
           </div>
         </div>
 
-        <div className="mt-5">
-          <p className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
-            FEE TIER
-          </p>
-          <FeeTierPicker value={fee} onChange={setFee} />
+        {/* Hook + fee tier are auto-assigned by the pair — shown read-only. */}
+        <div className="mt-5 flex items-center justify-between text-[13px]">
+          <span className="text-text-dim">Liquidity hook</span>
+          <span className="font-medium text-text">
+            {hook === "none" ? "No Hook" : HOOK_LABELS[hook]}
+          </span>
         </div>
-
-        <div className="mt-4">
-          <p className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
-            LIQUIDITY HOOK
-          </p>
-          <select
-            value={hook}
-            onChange={(e) => {
-              const next = e.target.value as HookName | "none";
-              setHook(next);
-              // Steer the fee tier to the hook's swappable tier (DynamicFee
-              // pools are only configured at 0.30%).
-              setFee(
-                recommendedFeeTier(
-                  next === "none" ? null : next,
-                  isStable(tokenIn),
-                  isStable(tokenOut),
-                ),
-              );
-            }}
-            className="w-full px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md text-[13px] text-text"
-          >
-            {HOOK_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        <div className="mt-2 flex items-center justify-between text-[13px]">
+          <span className="text-text-dim">Fee tier</span>
+          <span className="font-mono text-text">{FEE_TIER_LABELS[fee]}</span>
         </div>
 
         {hookIncompatible && (

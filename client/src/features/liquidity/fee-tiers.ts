@@ -16,8 +16,8 @@ export const FEE_TIER_LABELS: Record<FeeTier, string> = {
 export const FEE_TIER_HINTS: Record<FeeTier, string> = {
   100: "Stable pairs",
   500: "cirBTC / stable",
-  3000: "Volatile",
-  10000: "Exotic",
+  3000: "cirBTC pairs",
+  10000: "Wide range",
 };
 
 export const TICK_SPACING_BY_FEE: Record<FeeTier, number> = {

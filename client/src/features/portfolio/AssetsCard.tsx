@@ -54,12 +54,8 @@ function localHookLabel(h: LocalPosition["hook"]): HookName {
       return "Stable Protection";
     case "dynamic-fee":
       return "Dynamic Fee";
-    case "rwa-gate":
-      return "RWA Gate";
-    case "alo":
-      return "Async Limit Order";
     default:
-      return "Volatile";
+      return "No Hook";
   }
 }
 

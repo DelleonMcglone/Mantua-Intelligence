@@ -253,42 +253,14 @@ describe("detectIntent: add-liquidity", () => {
     });
   });
 
-  it("'add liquidity to a USDC cirBTC RWAgate pool' → carries rwa-gate hook", () => {
-    assert.deepEqual(detectIntent("add liquidity to a USDC cirBTC RWAgate pool"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "rwa-gate" },
-    });
-  });
-
-  it("'add liquidity to a USDC EURC RWA gate pool' → carries rwa-gate hook", () => {
-    assert.deepEqual(detectIntent("add liquidity to a USDC EURC RWA gate pool"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: "rwa-gate" },
-    });
-  });
-
-  it("'add liquidity to a EURC cirBTC ALO pool' → carries alo hook", () => {
-    assert.deepEqual(detectIntent("add liquidity to a EURC cirBTC ALO pool"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "EURC", tokenB: "cirBTC", fee: 500, hook: "alo" },
-    });
-  });
-
-  it("'add liquidity to USDC cirBTC with async limit order' → carries alo hook", () => {
-    assert.deepEqual(detectIntent("add liquidity to USDC cirBTC with async limit order"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "alo" },
-    });
-  });
-
-  it("'Add liquidity $10 USDC / $10 cirBTC ALO pool' → carries amounts + hook", () => {
-    assert.deepEqual(detectIntent("Add liquidity $10 USDC / $10 cirBTC ALO pool"), {
+  it("'Add liquidity $10 USDC / $10 cirBTC dynamic fee pool' → carries amounts + hook", () => {
+    assert.deepEqual(detectIntent("Add liquidity $10 USDC / $10 cirBTC dynamic fee pool"), {
       kind: "add-liquidity",
       ctx: {
         tokenA: "USDC",
         tokenB: "cirBTC",
         fee: 500,
-        hook: "alo",
+        hook: "dynamic-fee",
         amountA: "10",
         amountB: "10",
       },

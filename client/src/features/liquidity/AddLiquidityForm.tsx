@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, useEffect } from "react";
-import { ArrowLeft, ArrowUp, ChevronDown, ExternalLink, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, ArrowUp, ExternalLink, RefreshCw } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -9,7 +9,6 @@ import { getExplorerTxUrl, type SupportedTestnetChainId } from "@/lib/chains.ts"
 import { type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
 import { FEE_TIER_LABELS, recommendedFeeTier, type FeeTier } from "./fee-tiers.ts";
-import { FeeTierPicker } from "./FeeTierPicker.tsx";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { isStable, safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
@@ -53,42 +52,12 @@ interface Props {
   onClose?: () => void;
 }
 
-const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] = [
-  { value: "none", name: "No Hook", desc: "Standard execution" },
-  {
-    value: "stable-protection",
-    name: HOOK_LABELS["stable-protection"],
-    desc: HOOK_DESCRIPTIONS["stable-protection"],
-  },
-  {
-    value: "dynamic-fee",
-    name: HOOK_LABELS["dynamic-fee"],
-    desc: HOOK_DESCRIPTIONS["dynamic-fee"],
-  },
-  { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
-  { value: "alo", name: HOOK_LABELS.alo, desc: HOOK_DESCRIPTIONS.alo },
-];
-
 function defaultPairForChain(chainId: SupportedTestnetChainId): [TokenSymbol, TokenSymbol] {
   void chainId;
   // Arc Testnet defaults to USDC/EURC so the Stable Protection
   // recommendation lights up.
   return ["USDC", "EURC"];
 }
-
-function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
-  return h ?? "none";
-}
-
-// Mirror of server `HOOK_REQUIRES_DYNAMIC_FEE` (v4-contracts.ts). Gate /
-// limit-order hooks keep a static fee tier; peg / volatility hooks override
-// it with DYNAMIC_FEE_FLAG.
-const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
-  "stable-protection": true,
-  "dynamic-fee": true,
-  "rwa-gate": false,
-  alo: false,
-};
 
 function formatMirror(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0";
@@ -121,67 +90,29 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const [defaultA, defaultB] = defaultPairForChain(chainId);
   const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? defaultA);
   const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? defaultB);
-  const seedHook: HookName | "none" =
-    ctx?.hook !== undefined
-      ? hookFromCtx(ctx.hook)
-      : (recommendedHookForPair(defaultA, defaultB) ?? "none");
-  const [fee, setFee] = useState<FeeTier>(() => {
-    const a = isStable(ctx?.tokenA ?? defaultA);
-    const b = isStable(ctx?.tokenB ?? defaultB);
-    // DynamicFee pools are only configured at 0.30%, so force that tier even
-    // if the chat intent passed a pair-based ctx.fee. Other hooks honor
-    // ctx.fee, then the hook/pair recommendation.
-    if (seedHook === "dynamic-fee") return 3000;
-    return ctx?.fee ?? recommendedFeeTier(seedHook === "none" ? null : seedHook, a, b);
-  });
-  const [hook, setHook] = useState<HookName | "none">(() => seedHook);
+  // Hook + fee tier are AUTO-ASSIGNED by the pair — there are no manual
+  // pickers. USDC/EURC → Stable Protection @ 0.01%; USDC/cirBTC &
+  // EURC/cirBTC → Dynamic Fee @ 0.30% (its configured tier). Any chat-intent
+  // ctx.hook / ctx.fee is ignored: the pair is the single source of truth.
+  const hook: HookName | "none" = useMemo(
+    () => recommendedHookForPair(tokenA, tokenB) ?? "none",
+    [tokenA, tokenB],
+  );
+  const fee: FeeTier = useMemo(
+    () => recommendedFeeTier(hook === "none" ? null : hook, isStable(tokenA), isStable(tokenB)),
+    [hook, tokenA, tokenB],
+  );
 
-  // Chain-switch handling lives in the parent: App.tsx keys this
-  // component on `chainId`, so a network change remounts the form and
-  // useState initializers re-run with `defaultPairForChain(chainId)`.
-  // That's cleaner than a sync-via-effect (which would trip
-  // react-hooks/set-state-in-effect).
-
-  // When ctx pre-specifies the hook (e.g. from a chat intent like "with
-  // dynamic fee"), treat it as user intent — otherwise the
-  // pair-recommendation effect below would immediately reset the hook
-  // back to `recommendedHookForPair(...)` on mount.
-  const [hookTouched, setHookTouched] = useState(ctx?.hook !== undefined);
+  // Chain-switch handling lives in the parent: App.tsx keys this component
+  // on `chainId`, so a network change remounts the form and the useState
+  // initializers re-run with `defaultPairForChain(chainId)`.
   const [amountA, setAmountA] = useState(ctx?.amountA ?? "0.0");
   const [amountB, setAmountB] = useState(ctx?.amountB ?? "0.0");
   const [chartRange, setChartRange] = useState<ChartRange>("7D");
   const [chartTab, setChartTab] = useState<"volume" | "tvl">("volume");
-  const [showHooks, setShowHooks] = useState(false);
   const [range, setRange] = useState<RangeOption>("Full");
-  const hookRef = useRef<HTMLDivElement | null>(null);
   const confirm = useConfirmedAction();
   const add = useAddLiquidity();
-
-  // Auto-suggest a hook when the user changes the pair, but only until
-  // they explicitly pick one — same behavior as the (now-removed)
-  // dedicated PoolCreateForm.
-  const recommended = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
-  useEffect(() => {
-    if (locked || hookTouched) return;
-    const nextHook = recommended ?? "none";
-    /* eslint-disable react-hooks/set-state-in-effect -- intentional: re-suggest hook + tier on pair change until the user picks one */
-    setHook(nextHook);
-    setFee(
-      recommendedFeeTier(nextHook === "none" ? null : nextHook, isStable(tokenA), isStable(tokenB)),
-    );
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [recommended, locked, hookTouched, tokenA, tokenB]);
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (!hookRef.current) return;
-      if (!hookRef.current.contains(e.target as Node)) setShowHooks(false);
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-    };
-  }, []);
 
   // Mirror Token A ↔ Token B at the live USD price ratio so users
   // type once. Stable-stable pairs fall back to 1:1; pairs with no
@@ -367,75 +298,19 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           />
         </div>
 
-        {/* Fee tier picker — only when not locked to an existing pool */}
-        {!locked && (
-          <div className="mt-4">
-            <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
-              FEE TIER
-            </div>
-            <FeeTierPicker value={fee} onChange={setFee} />
-            {hookName && HOOK_REQUIRES_DYNAMIC_FEE[hookName] && (
-              <p className="text-[11px] text-text-mute mt-1.5">
-                {hookSummary} sets the fee dynamically per swap; your tier selection determines tick
-                spacing only.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Hook + Range */}
+        {/* Hook + Range. The hook (and its fee tier) is auto-assigned by the
+            pair — shown read-only, no picker. */}
         <div className="grid grid-cols-2 gap-3 mt-4">
           <div>
             <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
               LIQUIDITY HOOK
             </div>
-            <div className="relative" ref={hookRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (locked) return;
-                  setShowHooks((v) => !v);
-                }}
-                disabled={locked}
-                className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left disabled:cursor-not-allowed"
-              >
-                <ArrowUp className="h-3.5 w-3.5 text-text-dim" />
-                <div className="flex-1">
-                  <div className="text-[13px] font-medium">{hookSummary}</div>
-                  <div className="text-[11px] text-text-dim">{hookDesc}</div>
-                </div>
-                {!locked && <ChevronDown className="h-3.5 w-3.5 text-text-dim" />}
-              </button>
-              {showHooks && !locked && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-panel-solid border border-border rounded-md p-1 shadow-xl">
-                  {HOOK_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setHook(opt.value);
-                        setHookTouched(true);
-                        setShowHooks(false);
-                        // Steer the fee tier to the hook's swappable tier
-                        // (DynamicFee pools are only configured at 0.30%).
-                        setFee(
-                          recommendedFeeTier(
-                            opt.value === "none" ? null : opt.value,
-                            isStable(tokenA),
-                            isStable(tokenB),
-                          ),
-                        );
-                      }}
-                      className={`block w-full px-2.5 py-2 rounded-xs text-left ${
-                        hook === opt.value ? "bg-chip" : "hover:bg-row-hover"
-                      }`}
-                    >
-                      <div className="text-[13px] font-medium">{opt.name}</div>
-                      <div className="text-[11px] text-text-dim">{opt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md text-left">
+              <ArrowUp className="h-3.5 w-3.5 text-text-dim" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium">{hookSummary}</div>
+                <div className="text-[11px] text-text-dim">{hookDesc}</div>
+              </div>
             </div>
           </div>
           <div>

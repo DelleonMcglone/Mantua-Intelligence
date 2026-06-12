@@ -4,15 +4,11 @@ import type { HookName } from "./use-create-pool.ts";
 export const HOOK_LABELS: Record<HookName, string> = {
   "stable-protection": "Stable Protection",
   "dynamic-fee": "Dynamic Fee",
-  "rwa-gate": "RWA Gate",
-  alo: "Async Limit Order",
 };
 
 export const HOOK_DESCRIPTIONS: Record<HookName, string> = {
   "stable-protection": "Minimizes depeg & slippage on stable pairs.",
   "dynamic-fee": "Adjusts fees in real time based on volatility.",
-  "rwa-gate": "Permissioned pool — only allowlisted addresses may trade.",
-  alo: "Queue async limit orders that fill at your target price.",
 };
 
 interface PairRecommendation {
@@ -43,14 +39,6 @@ const ALLOWED_PAIRS: Record<HookName, readonly (readonly [TokenSymbol, TokenSymb
     ["USDC", "cirBTC"],
     ["EURC", "cirBTC"],
   ],
-  "rwa-gate": [
-    ["USDC", "EURC"],
-    ["USDC", "cirBTC"],
-  ],
-  alo: [
-    ["USDC", "cirBTC"],
-    ["EURC", "cirBTC"],
-  ],
 };
 
 function pairMatches(
@@ -61,10 +49,7 @@ function pairMatches(
   return (a === pa && b === pb) || (a === pb && b === pa);
 }
 
-export function recommendedHookForPair(
-  a: TokenSymbol,
-  b: TokenSymbol,
-): HookName | null {
+export function recommendedHookForPair(a: TokenSymbol, b: TokenSymbol): HookName | null {
   for (const rec of PAIR_HOOK_RECOMMENDATIONS) {
     const [pa, pb] = rec.pair;
     if ((a === pa && b === pb) || (a === pb && b === pa)) return rec.hook;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 /**
  * P9-001 — `effectivePoolFee` + `isFeeTier` unit tests. The
  * dynamic-fee override has been the source of two production
@@ -37,24 +38,9 @@ describe("getV4StackForHook — per-hook stack routing", () => {
     assert.equal(s.quoter, "0x2CF521F13658FE57958D09B40Ee3420D974EE7eC");
   });
 
-  it("ALO hook → the ALO stack (incl. its separately-deployed PoolSwapTest)", () => {
-    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC.alo.hook);
-    assert.equal(s.poolManager, "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b");
-    assert.equal(s.positionManager, "0x7866e36b7576DF5167cf76770799096Ba6fcD882");
-    assert.equal(s.poolSwapTest, "0xFCf895f7F5737b1D582a0bD4b131f88434a94433");
-  });
-
   it("is case-insensitive on the hook address", () => {
     const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["dynamic-fee"].hook.toLowerCase());
     assert.equal(s.poolManager, "0x7eA87A5919C119DC95855A0BE227fd3241c998F0");
-  });
-
-  it("RWAGate hook → the RWAGate stack (clean redeploy, full periphery)", () => {
-    const s = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["rwa-gate"].hook);
-    assert.equal(s.poolManager, "0xBC9C4e3e51E18Ea44c7363391d29ed300db57511");
-    assert.equal(s.positionManager, "0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3");
-    assert.equal(s.stateView, "0xBecb1cd296675CFC3fC8e63c4838590A4C97196d");
-    assert.equal(s.poolSwapTest, "0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00");
   });
 
   it("unrecognized hook → falls back to the hero stack", () => {

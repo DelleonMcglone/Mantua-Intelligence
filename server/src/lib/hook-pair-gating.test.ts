@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -45,26 +46,6 @@ describe("isHookPairAllowed — dynamic-fee (volatile pairs)", () => {
   });
 });
 
-describe("isHookPairAllowed — rwa-gate (gated USDC/EURC + USDC/cirBTC)", () => {
-  it("accepts USDC/EURC and USDC/cirBTC", () => {
-    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "USDC", "EURC"), true);
-    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "USDC", "cirBTC"), true);
-  });
-  it("rejects EURC/cirBTC", () => {
-    assert.equal(isHookPairAllowedBySymbol("rwa-gate", "EURC", "cirBTC"), false);
-  });
-});
-
-describe("isHookPairAllowed — alo (volatile pairs)", () => {
-  it("accepts USDC/cirBTC and EURC/cirBTC", () => {
-    assert.equal(isHookPairAllowedBySymbol("alo", "USDC", "cirBTC"), true);
-    assert.equal(isHookPairAllowedBySymbol("alo", "EURC", "cirBTC"), true);
-  });
-  it("rejects USDC/EURC", () => {
-    assert.equal(isHookPairAllowedBySymbol("alo", "USDC", "EURC"), false);
-  });
-});
-
 describe("listAllowedPairs", () => {
   it("returns [['USDC','EURC']] for stable-protection", () => {
     assert.deepEqual(listAllowedPairs("stable-protection"), [["USDC", "EURC"]]);
@@ -83,7 +64,7 @@ describe("assertHookPairAllowed", () => {
       assertHookPairAllowed("stable-protection", USDC, EURC);
     });
     assert.doesNotThrow(() => {
-      assertHookPairAllowedBySymbol("alo", "USDC", "cirBTC");
+      assertHookPairAllowedBySymbol("dynamic-fee", "USDC", "cirBTC");
     });
   });
   it("throws HookPairNotAllowedError for a disallowed pair", () => {
@@ -91,7 +72,7 @@ describe("assertHookPairAllowed", () => {
       assertHookPairAllowed("stable-protection", USDC, CIRBTC);
     }, HookPairNotAllowedError);
     assert.throws(() => {
-      assertHookPairAllowedBySymbol("alo", "USDC", "EURC");
+      assertHookPairAllowedBySymbol("dynamic-fee", "USDC", "EURC");
     }, HookPairNotAllowedError);
   });
 });
