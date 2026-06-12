@@ -22,8 +22,8 @@ import {DynamicFee} from "../src/DynamicFee.sol";
 ///         (0xceeD79…dd56) with `--via-ir --optimizer-runs 200`.
 ///
 /// @dev    poolIds are precomputed for the canonical-token 0.05% pools:
-///           USDC/cirBTC @0.05%: 0xdb6668fbd07ad897551a3035499235a79d15517b93ab7593fbb6c8db63784413
-///           EURC/cirBTC @0.05%: 0x2424f3434cf2c56e83db202cdc75748d9c01e2d17aea17e8a2e0881b8c6b947f
+///           USDC/cirBTC at 0.05%: 0xdb6668fbd07ad897551a3035499235a79d15517b93ab7593fbb6c8db63784413
+///           EURC/cirBTC at 0.05%: 0x2424f3434cf2c56e83db202cdc75748d9c01e2d17aea17e8a2e0881b8c6b947f
 ///         currency0 is the stablecoin (6dp) in both, currency1 is cirBTC
 ///         (8dp), so decimalDiff = 6 - 8 = -2.
 contract ConfigureDynamicFee05 is Script {
@@ -45,6 +45,6 @@ contract ConfigureDynamicFee05 is Script {
         HOOK.configurePool(USDC_CIRBTC_05, TWAP_WINDOW, MAX_FEE, FALLBACK_FEE, DECIMAL_DIFF, thresholds);
         HOOK.configurePool(EURC_CIRBTC_05, TWAP_WINDOW, MAX_FEE, FALLBACK_FEE, DECIMAL_DIFF, thresholds);
         vm.stopBroadcast();
-        console2.log("Configured USDC/cirBTC + EURC/cirBTC DynamicFee pools @0.05%");
+        console2.log("Configured USDC/cirBTC + EURC/cirBTC DynamicFee pools at 0.05%");
     }
 }
