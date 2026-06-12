@@ -15,7 +15,7 @@ export const FEE_TIER_LABELS: Record<FeeTier, string> = {
 
 export const FEE_TIER_HINTS: Record<FeeTier, string> = {
   100: "Stable pairs",
-  500: "ETH / stable",
+  500: "cirBTC / stable",
   3000: "Volatile",
   10000: "Exotic",
 };
@@ -27,10 +27,7 @@ export const TICK_SPACING_BY_FEE: Record<FeeTier, number> = {
   10000: 200,
 };
 
-export const DEFAULT_FEE_TIER_FOR_PAIR = (
-  aIsStable: boolean,
-  bIsStable: boolean,
-): FeeTier => {
+export const DEFAULT_FEE_TIER_FOR_PAIR = (aIsStable: boolean, bIsStable: boolean): FeeTier => {
   if (aIsStable && bIsStable) return 100;
   if (aIsStable || bIsStable) return 500;
   return 3000;
