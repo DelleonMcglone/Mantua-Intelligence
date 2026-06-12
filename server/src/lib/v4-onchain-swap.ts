@@ -64,6 +64,9 @@ const STABLE_PROTECTION_HOOK_ERRORS = [
   // DynamicFee hook: beforeSwap reverts PoolNotConfigured(poolId) when the
   // pool wasn't set up via the owner-only configurePool() call.
   { type: "error", name: "PoolNotConfigured", inputs: [{ type: "bytes32", name: "poolId" }] },
+  // RWAGate hook: beforeSwap reverts NotWhitelisted(account) when the caller
+  // isn't allowlisted in the hook's ComplianceRegistry.
+  { type: "error", name: "NotWhitelisted", inputs: [{ type: "address", name: "account" }] },
 ] as const;
 
 /**
