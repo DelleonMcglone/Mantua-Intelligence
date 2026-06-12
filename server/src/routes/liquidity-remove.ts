@@ -11,7 +11,7 @@ import { getRequestContext } from "../lib/request-context.ts";
 import { baseRpcClient } from "../lib/rpc-client.ts";
 import { buildRemoveLiquidityCalldata } from "../lib/v4-remove-liquidity.ts";
 import { decodePositionInfo } from "../lib/v4-position-info.ts";
-import { POSITION_MANAGER_VIEW_ABI, V4_POSITION_MANAGER } from "../lib/v4-contracts.ts";
+import { POSITION_MANAGER_VIEW_ABI, getV4StackForHook } from "../lib/v4-contracts.ts";
 import { readSlot0 } from "../lib/v4-state-view.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
@@ -39,12 +39,18 @@ interface ResolvedPosition {
 async function resolveByTokenId(
   tokenId: string,
   walletAddress: string,
+  hookAddress?: string | null,
 ): Promise<ResolvedPosition | { error: string; code: string; status: number }> {
   const tokenIdBig = BigInt(tokenId);
+  // tokenIds are NOT unique across PositionManagers — each Mantua hook has
+  // its own PM (hero/no-hook 0x47AD…, Dynamic Fee 0xDa1b…). Resolve the PM
+  // from the position's pool hook the client passes; default to the hero
+  // stack for no-hook positions.
+  const positionManager = getV4StackForHook(hookAddress ?? ZERO_ADDRESS).positionManager;
   let owner: `0x${string}`;
   try {
     owner = await baseRpcClient.readContract({
-      address: V4_POSITION_MANAGER,
+      address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "ownerOf",
       args: [tokenIdBig],
@@ -65,13 +71,13 @@ async function resolveByTokenId(
   }
   const [poolAndInfo, liquidity] = await Promise.all([
     baseRpcClient.readContract({
-      address: V4_POSITION_MANAGER,
+      address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "getPoolAndPositionInfo",
       args: [tokenIdBig],
     }),
     baseRpcClient.readContract({
-      address: V4_POSITION_MANAGER,
+      address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "getPositionLiquidity",
       args: [tokenIdBig],
@@ -112,7 +118,11 @@ liquidityRemoveRouter.post(
     try {
       let pos: ResolvedPosition;
       if (parsed.data.tokenId) {
-        const result = await resolveByTokenId(parsed.data.tokenId, ctx.walletAddress);
+        const result = await resolveByTokenId(
+          parsed.data.tokenId,
+          ctx.walletAddress,
+          parsed.data.hookAddress,
+        );
         if ("error" in result) {
           res.status(result.status).json({ error: result.error, code: result.code });
           return;
@@ -129,6 +139,7 @@ liquidityRemoveRouter.post(
           .from(users)
           .where(eq(users.privyUserId, req.privyUserId))
           .limit(1);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user
         if (!user) {
           res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
           return;
@@ -150,6 +161,7 @@ liquidityRemoveRouter.post(
           .innerJoin(pools, eq(positions.poolId, pools.id))
           .where(and(eq(positions.id, positionId), eq(positions.userId, user.id)))
           .limit(1);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown position
         if (!row || row.status !== "open") {
           res
             .status(404)
@@ -241,6 +253,7 @@ liquidityRemoveRouter.post(
       .from(users)
       .where(eq(users.privyUserId, req.privyUserId))
       .limit(1);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user
     if (!user) {
       res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
       return;
@@ -277,6 +290,7 @@ liquidityRemoveRouter.post(
           .from(positions)
           .where(eq(positions.id, v.positionId))
           .limit(1);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty if the position row is missing
         if (pos) {
           const remaining = BigInt(pos.liquidity) - BigInt(v.liquidityRemoved);
           await db

@@ -11,6 +11,7 @@ import { usePoolState } from "./use-pool-state.ts";
 import { usePositions } from "./use-positions.ts";
 import { getUserLocalPositions } from "./local-positions.ts";
 import { getLocalPools } from "./local-pools.ts";
+import { HOOK_ADDRESS } from "./hook-recommendations.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
@@ -104,7 +105,7 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
         token1: TOKENS[lp.tokenB].address.toLowerCase(),
         fee: lp.fee,
         tickSpacing: 0,
-        hookAddress: lp.hook ? null : ZERO_ADDRESS,
+        hookAddress: lp.hook ? HOOK_ADDRESS[lp.hook] : ZERO_ADDRESS,
       }));
     return [...fromApi, ...fromLocal];
   }, [positions.data, derived]);
