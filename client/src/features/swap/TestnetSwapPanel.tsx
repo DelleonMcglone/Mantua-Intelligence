@@ -60,6 +60,9 @@ function humanizeRevertReason(decoded: string): string {
   if (/^CircuitBreakerTripped/.test(decoded)) {
     return "Stable Protection hook detected a depeg and tripped its circuit breaker. Try again later or use a different hook.";
   }
+  if (/^PoolNotConfigured/.test(decoded)) {
+    return "This Dynamic Fee pool hasn't been configured by the hook owner yet — swaps stay disabled until a one-time owner setup (configurePool) runs. Use a different hook for now.";
+  }
   if (/Stable Protection is only available on the USDC\/EURC pair/.test(decoded)) {
     return "Stable Protection works only on USDC/EURC. Pick that pair or choose a different hook.";
   }
