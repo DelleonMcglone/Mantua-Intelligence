@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme.tsx";
 import { Logo } from "@/components/shell/Logo.tsx";
+import { NetworkLogo } from "@/components/shell/network-icons.tsx";
 
 interface Props {
   /** Called when the user clicks any "Launch Demo" CTA. Hands off
@@ -50,11 +51,16 @@ function Header({ onLaunch }: { onLaunch: () => void }) {
   const { theme, toggle } = useTheme();
   const ThemeIcon = theme === "dark" ? Sun : Moon;
   return (
-    <header className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-border-soft">
+    <header className="relative flex items-center justify-between px-5 sm:px-8 py-4 border-b border-border-soft">
       <div className="flex items-center gap-2.5">
         <Logo size={28} />
         <span className="text-[15px] font-semibold tracking-tight">Mantua.AI</span>
       </div>
+      <span className="absolute left-1/2 -translate-x-1/2 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border-soft bg-bg-elev text-text-dim text-[11px] font-medium">
+        <span>Built on Arc</span>
+        <NetworkLogo network="arc" size={14} />
+        <span>Testnet</span>
+      </span>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -135,14 +141,14 @@ interface Feature {
   icon: ReactNode;
   title: string;
   body: string;
-  status: "Live" | "Soon";
+  status: "Live" | "Soon" | "Flagship";
 }
 const FEATURES: Feature[] = [
   {
     icon: <ShieldCheck className="h-4 w-4 text-accent" />,
     title: "Stable Protection Hook",
     body: "A Uniswap v4 hook that dynamically adjusts swap fees across five depeg zones to protect stablecoin LPs from adverse selection. Fees scale from 0.05% in healthy conditions to 1% during severe depeg, with a circuit breaker for extreme events.",
-    status: "Live",
+    status: "Flagship",
   },
   {
     icon: <Bot className="h-4 w-4 text-accent" />,
@@ -178,7 +184,9 @@ function FeatureGrid() {
               className={`text-[10px] px-1.5 py-0.5 rounded-[4px] font-mono uppercase tracking-wider ${
                 f.status === "Live"
                   ? "bg-green/10 text-green border border-green/30"
-                  : "bg-chip text-text-mute border border-border-soft"
+                  : f.status === "Flagship"
+                    ? "bg-accent/15 text-accent border border-accent/30"
+                    : "bg-chip text-text-mute border border-border-soft"
               }`}
             >
               {f.status}
@@ -205,8 +213,69 @@ const FAQS: FAQItem[] = [
     a: "Managing stablecoin liquidity today is operationally manual, interface-fragmented, strategy-dependent, and exposed to peg risk across pools, venues, and market conditions. Mantua.AI enables liquidity providers, stablecoin issuers, fintech platforms, and RWA protocols to deploy peg-aware liquidity, automated rebalancing strategies, and yield-seeking routing logic directly from natural-language instructions, executed onchain via agent-managed Uniswap v4 hook strategies.",
   },
   {
-    q: "How does the Stable Protection Hook work?",
-    a: "The Stable Protection Hook is a Uniswap v4 hook that dynamically adjusts swap fees based on how far a stablecoin pair has drifted from its peg. It defines five depeg zones — Healthy, Minor, Moderate, Severe, and Critical — each with progressively higher fees to discourage arbitrage during volatility and protect LPs from adverse selection. When the peg is healthy, fees stay low (0.05%). As deviation increases, fees scale up automatically to as high as 1%, and a circuit breaker can pause swaps entirely during extreme depeg events.",
+    q: "How do the Hooks work?",
+    a: (
+      <>
+        <p>
+          Mantua ships four Uniswap v4 hooks on Arc Testnet. Each plugs into the pool lifecycle to
+          add behavior vanilla pools can&apos;t — and each is live on-chain:
+        </p>
+        <ul className="mt-3 space-y-2.5 list-disc list-outside pl-5 marker:text-text-mute">
+          <li>
+            <strong className="text-text">Stable Protection</strong> — dynamically adjusts swap fees
+            across five depeg zones (with a circuit breaker for extreme events) to protect
+            stablecoin LPs. Pair: USDC/EURC.{" "}
+            <a
+              href="https://testnet.arcscan.app/address/0xF131A048875E578A0F89393e858C0442fcD7e0C0"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:text-accent-2 underline"
+            >
+              View on ArcScan
+            </a>
+          </li>
+          <li>
+            <strong className="text-text">Dynamic Fee</strong> — scales the per-swap fee in real time
+            from a TWAP-derived volatility signal: cheaper for stable flow, costlier in turbulence.
+            Pairs: USDC/cirBTC, EURC/cirBTC.{" "}
+            <a
+              href="https://testnet.arcscan.app/address/0xA1Be807481F532c074380FCcF05be5e2A3ec80C0"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:text-accent-2 underline"
+            >
+              View on ArcScan
+            </a>
+          </li>
+          <li>
+            <strong className="text-text">RWA Gate</strong> — a permissioned pool: only allowlisted
+            addresses may trade, gating real-world-asset liquidity to compliant participants. Pairs:
+            USDC/EURC, USDC/cirBTC.{" "}
+            <a
+              href="https://testnet.arcscan.app/address/0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:text-accent-2 underline"
+            >
+              View on ArcScan
+            </a>
+          </li>
+          <li>
+            <strong className="text-text">Async Limit Order (ALO)</strong> — queue limit orders that
+            fill asynchronously when the pool reaches your target price, instead of swapping at
+            market. Pairs: USDC/cirBTC, EURC/cirBTC.{" "}
+            <a
+              href="https://testnet.arcscan.app/address/0x18c2c2E657912E21091E364b5daB4f9702c810c8"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:text-accent-2 underline"
+            >
+              View on ArcScan
+            </a>
+          </li>
+        </ul>
+      </>
+    ),
   },
   {
     q: "How can I provide liquidity?",
@@ -226,8 +295,7 @@ const FAQS: FAQItem[] = [
             >
               Circle Faucet
             </a>{" "}
-            — USDC and EURC on Arc Testnet (Arc USDC also pays for gas). cirBTC is available in-app
-            for demo pools.
+            — USDC, EURC and cirBTC on Arc Testnet (Arc USDC also pays for gas).
           </li>
         </ul>
       </>
