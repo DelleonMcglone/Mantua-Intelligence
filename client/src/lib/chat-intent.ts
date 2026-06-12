@@ -50,7 +50,10 @@ export type Intent =
     };
 
 const WALLET_TOKEN_ALIASES: { sym: TokenSymbol; aliases: string[] }[] = [
-  { sym: "cirBTC", aliases: ["cirbtc", "cir-btc", "cbbtc", "cbbct", "cb-btc", "cb-bct", "cbtc", "btc", "bitcoin"] },
+  {
+    sym: "cirBTC",
+    aliases: ["cirbtc", "cir-btc", "cbbtc", "cbbct", "cb-btc", "cb-bct", "cbtc", "btc", "bitcoin"],
+  },
   { sym: "EURC", aliases: ["eurc", "eucr"] },
   { sym: "USDC", aliases: ["usdc", "uscd"] },
 ];
@@ -105,6 +108,10 @@ function isStable(s: TokenSymbol): boolean {
 function detectHookKeyword(t: string): HookName | null {
   if (/\bdynamic[\s-]?fees?\b/.test(t)) return "dynamic-fee";
   if (/\bstable[\s-]?protection\b/.test(t)) return "stable-protection";
+  // RWA Gate — "rwagate", "rwa gate", "rwa-gate", or bare "rwa".
+  if (/\brwa[\s-]?gate\b/.test(t) || /\brwa\b/.test(t)) return "rwa-gate";
+  // ALO — "alo", "async limit order(s)", or "limit order(s)".
+  if (/\balo\b/.test(t) || /\b(?:async[\s-]?)?limit[\s-]?orders?\b/.test(t)) return "alo";
   return null;
 }
 
@@ -129,7 +136,8 @@ export function extractEvmAddress(text: string): `0x${string}` | null {
  * Excludes `analyze`/`learn`/`tell`/`what`/`how`/`show` deliberately —
  * those are question framings the analytic rules need to keep matching.
  */
-const ACTION_VERB_RE = /\b(swap|exchange|trade|convert|add|provide|deposit|create|make|place|cancel|send|transfer|remove)\b/;
+const ACTION_VERB_RE =
+  /\b(swap|exchange|trade|convert|add|provide|deposit|create|make|place|cancel|send|transfer|remove)\b/;
 
 export function detectIntent(text: string): Intent | null {
   const t = text.toLowerCase();
@@ -160,10 +168,7 @@ export function detectIntent(text: string): Intent | null {
         ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: detectHookKeyword(t) },
       };
     }
-    if (
-      /\b(add|provide|deposit).*(liquidity|lp|pool)\b/.test(t) ||
-      /^lp\b/.test(t)
-    ) {
+    if (/\b(add|provide|deposit).*(liquidity|lp|pool)\b/.test(t) || /^lp\b/.test(t)) {
       const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
@@ -178,10 +183,7 @@ export function detectIntent(text: string): Intent | null {
   // Mantua-hooks info — runs before the discrete-action intents so
   // "Tell me about the limit order hook" doesn't get grabbed by the
   // limit-order matcher below.
-  if (
-    /\bhook(s)?\b/.test(t) &&
-    /(learn|explain|what|tell|describe|how|which)/.test(t)
-  ) {
+  if (/\bhook(s)?\b/.test(t) && /(learn|explain|what|tell|describe|how|which)/.test(t)) {
     return { kind: "analyze", topic: "mantua-hooks", question: text };
   }
 
@@ -197,7 +199,7 @@ export function detectIntent(text: string): Intent | null {
     const to = extractEvmAddress(text);
     if (to) {
       const tokens = extractWalletTokens(text);
-      const tokenIn = tokens[0]?.sym;
+      const tokenIn = tokens.at(0)?.sym;
       return {
         kind: "send",
         ...(tokenIn ? { tokenIn } : {}),
@@ -261,10 +263,10 @@ export function detectIntent(text: string): Intent | null {
     const tokens = extractWalletTokens(text);
     if (tokens.length >= 2) {
       const [a, b] = tokens;
-      const fee: FeeTier = isStable(a!.sym) && isStable(b!.sym) ? 100 : 500;
+      const fee: FeeTier = isStable(a.sym) && isStable(b.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: a!.sym, tokenB: b!.sym, fee, hook: detectHookKeyword(t) },
+        ctx: { tokenA: a.sym, tokenB: b.sym, fee, hook: detectHookKeyword(t) },
       };
     }
     return { kind: "pools" };
@@ -273,10 +275,10 @@ export function detectIntent(text: string): Intent | null {
     const tokens = extractWalletTokens(text);
     if (tokens.length >= 2) {
       const [a, b] = tokens;
-      return { kind: "swap", tokenIn: a!.sym, tokenOut: b!.sym };
+      return { kind: "swap", tokenIn: a.sym, tokenOut: b.sym };
     }
     if (tokens.length === 1) {
-      return { kind: "swap", tokenIn: tokens[0]!.sym };
+      return { kind: "swap", tokenIn: tokens[0].sym };
     }
     return { kind: "swap" };
   }
