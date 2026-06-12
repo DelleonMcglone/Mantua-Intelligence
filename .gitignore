@@ -64,3 +64,6 @@ logs/
 *.log
 docs/security/slither/*
 !docs/security/slither/.gitkeep
+
+# Local Replit sync notes — never commit
+REPLIT_SYNC.*
