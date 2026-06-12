@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Settings } from "lucide-react";
+import { Send } from "lucide-react";
 import { ChainSelector } from "./ChainSelector.tsx";
 
 interface Props {
@@ -48,14 +48,6 @@ export function InputBar({ onSubmit }: Props) {
       </div>
       <div className="mt-2 flex gap-2 items-center">
         <ChainSelector />
-        <div className="flex-1" />
-        <button
-          type="button"
-          className="px-2.5 py-1 rounded-xs border border-border bg-transparent text-text-dim text-[11px] inline-flex items-center cursor-pointer"
-          aria-label="Settings"
-        >
-          <Settings className="h-2.5 w-2.5" />
-        </button>
       </div>
     </div>
   );
