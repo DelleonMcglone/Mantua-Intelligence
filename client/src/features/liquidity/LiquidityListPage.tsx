@@ -14,6 +14,8 @@ import { getLocalPools, type LocalPool } from "./local-pools.ts";
 import { getLocalPositions, type LocalPosition } from "./local-positions.ts";
 import type { PoolSummary } from "./types.ts";
 import { HOOK_LABELS } from "./hook-recommendations.ts";
+import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
+import { useOnchainPositions } from "@/features/portfolio/use-onchain-positions.ts";
 
 interface Props {
   onSelectPool: (poolId: string) => void;
@@ -81,6 +83,21 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
     IS_MAINNET ? [] : getLocalPositions(),
   );
 
+  // Only show pools the user actually holds a position in. Source the
+  // positions on-chain (authoritative, matches the Positions tab); fall back
+  // to the localStorage breadcrumb while that loads. Keyed by pair+hook —
+  // each (pair, hook) has one canonical tier in the two-hook model.
+  const { walletAddress } = usePortfolio();
+  const onchainPositions = useOnchainPositions(walletAddress);
+  const ownedPoolKeys = useMemo<Set<string>>(() => {
+    const positions = onchainPositions.data ?? localPositions;
+    const keyOf = (a: string, b: string, hook: string | null) => {
+      const [x, y] = [a, b].sort();
+      return `${x}|${y}|${hook ?? "none"}`;
+    };
+    return new Set(positions.map((p) => keyOf(p.tokenA, p.tokenB, p.hook)));
+  }, [onchainPositions.data, localPositions]);
+
   // Pull live USD prices for every token symbol present in the local
   // pool list — used to convert per-position deposit amounts into a
   // pool-level TVL approximation. Stable→stable pairs and ETH-quoted
@@ -145,43 +162,48 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   const enriched = useMemo(() => {
     const remote = (data ?? []).map(classifyPool);
     if (IS_MAINNET) return remote;
-    // On testnet, show pools the user has touched locally. Synthesize
-    // a minimal `PoolSummary` shape so the existing row renderer
-    // works without a special-case branch.
-    const local: DerivedPool[] = localPools.map((p) => {
-      const aStable = STABLES.has(p.tokenA);
-      const bStable = STABLES.has(p.tokenB);
-      const aMajor = MAJORS.has(p.tokenA);
-      const bMajor = MAJORS.has(p.tokenB);
-      const aRwa = RWAS.has(p.tokenA);
-      const bRwa = RWAS.has(p.tokenB);
-      let category: DerivedPool["category"];
-      if (aRwa || bRwa) category = "RWAs";
-      else if (aStable && bStable) category = "Stables";
-      else if (aMajor || bMajor) category = "Majors";
-      else category = "Majors";
-      const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "Volatile";
-      const tvlUsd = localTvlByKey[p.key] ?? 0;
-      return {
-        id: `local:${p.key}`,
-        symbol: `${p.tokenA}-${p.tokenB}`,
-        project: "mantua",
-        feeTier: FEE_TIER_LABELS[p.fee],
-        tvlUsd,
-        apy: 0,
-        volumeUsd1d: 0,
-        volumeUsd7d: 0,
-        underlyingTokens: [],
-        stablecoin: aStable && bStable,
-        pair: { a: p.tokenA, b: p.tokenB },
-        category,
-        hookLabel,
-        hasHook: p.hook !== null,
-        network: "arc",
-      };
-    });
+    // On testnet, show only pools the user holds a position in (by
+    // pair+hook). Synthesize a minimal `PoolSummary` shape so the existing
+    // row renderer works without a special-case branch.
+    const local: DerivedPool[] = localPools
+      .filter((p) => {
+        const [a, b] = [p.tokenA, p.tokenB].sort();
+        return ownedPoolKeys.has(`${a}|${b}|${p.hook ?? "none"}`);
+      })
+      .map((p) => {
+        const aStable = STABLES.has(p.tokenA);
+        const bStable = STABLES.has(p.tokenB);
+        const aMajor = MAJORS.has(p.tokenA);
+        const bMajor = MAJORS.has(p.tokenB);
+        const aRwa = RWAS.has(p.tokenA);
+        const bRwa = RWAS.has(p.tokenB);
+        let category: DerivedPool["category"];
+        if (aRwa || bRwa) category = "RWAs";
+        else if (aStable && bStable) category = "Stables";
+        else if (aMajor || bMajor) category = "Majors";
+        else category = "Majors";
+        const hookLabel = p.hook ? HOOK_LABELS[p.hook] : "Volatile";
+        const tvlUsd = localTvlByKey[p.key] ?? 0;
+        return {
+          id: `local:${p.key}`,
+          symbol: `${p.tokenA}-${p.tokenB}`,
+          project: "mantua",
+          feeTier: FEE_TIER_LABELS[p.fee],
+          tvlUsd,
+          apy: 0,
+          volumeUsd1d: 0,
+          volumeUsd7d: 0,
+          underlyingTokens: [],
+          stablecoin: aStable && bStable,
+          pair: { a: p.tokenA, b: p.tokenB },
+          category,
+          hookLabel,
+          hasHook: p.hook !== null,
+          network: "arc",
+        };
+      });
     return [...local, ...remote];
-  }, [data, localPools]);
+  }, [data, localPools, ownedPoolKeys]);
 
   const totals = useMemo(() => {
     const tvl = enriched.reduce((s, p) => s + (p.tvlUsd || 0), 0);
