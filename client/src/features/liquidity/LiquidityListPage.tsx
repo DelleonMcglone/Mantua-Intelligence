@@ -40,7 +40,7 @@ interface DerivedPool extends PoolSummary {
 
 function classifyPool(p: PoolSummary): DerivedPool {
   const sym = normalizePairSymbol(p.symbol);
-  const [aRaw, bRaw] = sym.split("-");
+  const [aRaw, bRaw] = sym.split("-") as (string | undefined)[];
   const a = aRaw ?? "?";
   const b = bRaw ?? "?";
   const aStable = STABLES.has(a);
@@ -136,8 +136,10 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   // a manual refresh.
   useEffect(() => {
     if (IS_MAINNET) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLocalPools(getLocalPools());
     setLocalPositions(getLocalPositions());
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const enriched = useMemo(() => {
@@ -285,9 +287,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 px-5 pb-2">
-        {loading && (
-          <p className="px-1 py-8 text-xs text-text-dim text-center">Loading pools…</p>
-        )}
+        {loading && <p className="px-1 py-8 text-xs text-text-dim text-center">Loading pools…</p>}
         {error && (
           <p className="px-1 py-8 text-xs text-red text-center">
             Failed to load pools: {error.message}
@@ -312,7 +312,8 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
             </div>
             <div className="flex-1 overflow-auto">
               {(["arc"] as const).map((net) => {
-                const group = filtered.filter((p) => p.network === net).slice(0, 50);
+                // Single network (Arc) today — all pools belong to this group.
+                const group = filtered.slice(0, 50);
                 if (group.length === 0) return null;
                 return (
                   <div key={net}>
@@ -375,24 +376,37 @@ function PoolRow({ pool, onSelect }: { pool: DerivedPool; onSelect: (id: string)
         <span className="text-[13px] font-mono text-right">{formatUsd(pool.tvlUsd)}</span>
         <span className="text-[13px] font-mono text-right">{formatUsd(pool.volumeUsd1d)}</span>
         <span className="text-[13px] font-mono text-right">{formatUsd(fees24)}</span>
-        <span className="text-[13px] font-mono text-right text-green">
-          {formatPct(pool.apy)}
-        </span>
+        <span className="text-[13px] font-mono text-right text-green">{formatPct(pool.apy)}</span>
       </button>
     </li>
   );
 }
 
+/** Per-hook badge palette — mirrors the portfolio's HOOK_TINT so a hook
+ *  reads the same color everywhere (Stable Protection green, Dynamic Fee
+ *  yellow). Keyed by the HOOK_LABELS display strings. */
+const HOOK_BADGE_TINT: Record<string, { bg: string; fg: string; bd: string }> = {
+  "Stable Protection": {
+    bg: "rgba(61, 220, 151, 0.14)",
+    fg: "#3ddc97",
+    bd: "rgba(61, 220, 151, 0.35)",
+  },
+  "Dynamic Fee": { bg: "rgba(230, 199, 74, 0.14)", fg: "#e6c74a", bd: "rgba(230, 199, 74, 0.35)" },
+  "RWA Gate": { bg: "rgba(91, 155, 213, 0.14)", fg: "#5b9bd5", bd: "rgba(91, 155, 213, 0.35)" },
+  "Async Limit Order": {
+    bg: "rgba(180, 140, 230, 0.14)",
+    fg: "#b48ce6",
+    bd: "rgba(180, 140, 230, 0.35)",
+  },
+};
+
 function HookBadge({ hasHook, label }: { hasHook: boolean; label: string }) {
-  if (hasHook) {
+  const tint = hasHook ? HOOK_BADGE_TINT[label] : undefined;
+  if (tint) {
     return (
       <span
         className="px-1.5 py-px rounded-[6px] text-[10px] font-semibold tracking-[0.01em] border"
-        style={{
-          background: "rgba(61, 220, 151, 0.14)",
-          color: "var(--green)",
-          borderColor: "rgba(61, 220, 151, 0.35)",
-        }}
+        style={{ background: tint.bg, color: tint.fg, borderColor: tint.bd }}
       >
         {label}
       </span>
@@ -408,7 +422,7 @@ function HookBadge({ hasHook, label }: { hasHook: boolean; label: string }) {
 function parseFeeTierToBps(feeTier: string | null): number {
   if (!feeTier) return 0;
   const m = /([\d.]+)\s*%/.exec(feeTier);
-  if (!m || m[1] === undefined) return 0;
+  if (!m) return 0;
   const pct = parseFloat(m[1]);
   if (!Number.isFinite(pct)) return 0;
   return Math.round(pct * 100);
