@@ -414,8 +414,13 @@ export function TestnetSwapPanel({
         {!hookIncompatible && quote.loading && (
           <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>
         )}
-        {!hookIncompatible && quote.error && (
-          <p className="text-xs text-red text-center mt-3">{quote.error.message}</p>
+        {/* Humanize the quote failure to a specific, actionable reason. Skip it
+            when the under-Sell banner already shows the same diagnosis (the
+            max-input probe trips at cappedMax === 0). */}
+        {!hookIncompatible && quote.error && !(amountEntered && cappedMax === 0n) && (
+          <p className="text-xs text-red text-center mt-3">
+            {humanizeRevertReason(quote.error.message)}
+          </p>
         )}
         {!hookIncompatible && !quote.error && noLiquidity && (
           <p className="text-xs text-amber text-center mt-3">

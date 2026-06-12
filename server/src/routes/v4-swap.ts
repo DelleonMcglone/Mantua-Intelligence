@@ -9,6 +9,7 @@ import {
 import { isTokenSymbol } from "../lib/tokens.ts";
 import {
   buildPoolSwapTestCalldata,
+  decodeSwapRevertReason,
   findMaxQuotableInputV4,
   quoteExactInputV4,
 } from "../lib/v4-onchain-swap.ts";
@@ -108,7 +109,11 @@ v4SwapRouter.post(
         return;
       }
       logger.warn({ err, tokenIn, tokenOut, hook, chainId }, "v4 onchain quote failed");
-      const message = err instanceof Error ? err.message : "Quote failed";
+      // Surface the specific decoded revert (PoolNotConfigured / NotWhitelisted
+      // / NotEnoughLiquidity / …) so the UI stops showing a misleading generic
+      // "Quote failed" for what's really an unconfigured/unfunded/gated pool.
+      const decodedReason = decodeSwapRevertReason(err);
+      const message = decodedReason ?? (err instanceof Error ? err.message : "Quote failed");
       res.status(502).json({ error: message, code: "V4_QUOTE_FAILED" });
     }
   },
