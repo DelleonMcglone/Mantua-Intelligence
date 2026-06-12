@@ -1,9 +1,8 @@
-import { History, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface Props {
   onNewChat?: () => void;
-  onHistory?: () => void;
   right?: ReactNode;
 }
 
@@ -16,24 +15,17 @@ interface Props {
  * panel-specific subheader (e.g. "Swap", "Create Pool"), then the
  * panel body, then the shared `<InputBar />` at the bottom.
  *
- * When `onNewChat`/`onHistory` aren't supplied (the default for non-
- * home panels) the buttons fall back to dispatching window events
- * `mantua:new-chat` / `mantua:history`. App.tsx listens for these so
- * the buttons work without each panel having to thread props.
+ * When `onNewChat` isn't supplied (the default for non-home panels) the
+ * button falls back to dispatching the window event `mantua:new-chat`.
+ * App.tsx listens for it so the button works without each panel having
+ * to thread props.
  */
-export function PanelHeader({ onNewChat, onHistory, right }: Props) {
+export function PanelHeader({ onNewChat, right }: Props) {
   const handleNewChat = () => {
     if (onNewChat) {
       onNewChat();
     } else {
       window.dispatchEvent(new Event("mantua:new-chat"));
-    }
-  };
-  const handleHistory = () => {
-    if (onHistory) {
-      onHistory();
-    } else {
-      window.dispatchEvent(new Event("mantua:history"));
     }
   };
   return (
@@ -49,13 +41,6 @@ export function PanelHeader({ onNewChat, onHistory, right }: Props) {
           className="px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] inline-flex items-center gap-1.5 cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" /> New chat
-        </button>
-        <button
-          type="button"
-          onClick={handleHistory}
-          className="px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] inline-flex items-center gap-1.5 cursor-pointer"
-        >
-          <History className="h-3.5 w-3.5" /> History
         </button>
       </div>
     </div>
