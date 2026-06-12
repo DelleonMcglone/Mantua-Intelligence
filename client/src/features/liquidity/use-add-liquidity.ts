@@ -105,6 +105,10 @@ export function useAddLiquidity() {
       // invisible to the caller — one `execute()` does both, with two
       // wallet popups labeled distinctly.
       let poolSqrtPriceX96: string | undefined = args.sqrtPriceX96;
+      // Set only when THIS run initializes the pool — the creation tx we
+      // surface on the pool detail page. Stays undefined when the pool
+      // already existed (we don't have its original init tx then).
+      let createdTx: `0x${string}` | undefined;
       setState({ status: "creating-pool", message: "Preparing pool…" });
       try {
         const initRes = await api.post<PoolCreateCalldataRes>("/api/pools/create/calldata", {
@@ -126,6 +130,7 @@ export function useAddLiquidity() {
         });
         setState({ status: "pool-pending", poolInitTx: initTx, message: "Pool initializing…" });
         await publicClient.waitForTransactionReceipt({ hash: initTx });
+        createdTx = initTx;
         poolSqrtPriceX96 = initRes.poolKey.sqrtPriceX96;
         void api.post("/api/pools/create/record", {
           chainId,
@@ -252,6 +257,7 @@ export function useAddLiquidity() {
           fee: args.fee,
           hook: args.hook ?? null,
           txHash,
+          ...(createdTx ? { createdTx } : {}),
         });
         if (tokenId) {
           const fmt = (raw: string, decimals: number): string => {
