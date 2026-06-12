@@ -38,6 +38,10 @@ export interface PoolKeyContext {
    *  locks the pair / fee / hook controls so the user can't drift away
    *  from the pool they're trying to deposit into. */
   locked?: boolean;
+  /** Deposit amounts to pre-fill, parsed from a chat command like
+   *  "add $10 USDC / $10 cirBTC". Omitted = start at 0. */
+  amountA?: string;
+  amountB?: string;
 }
 
 interface Props {
@@ -51,15 +55,21 @@ interface Props {
 
 const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] = [
   { value: "none", name: "No Hook", desc: "Standard execution" },
-  { value: "stable-protection", name: HOOK_LABELS["stable-protection"], desc: HOOK_DESCRIPTIONS["stable-protection"] },
-  { value: "dynamic-fee", name: HOOK_LABELS["dynamic-fee"], desc: HOOK_DESCRIPTIONS["dynamic-fee"] },
+  {
+    value: "stable-protection",
+    name: HOOK_LABELS["stable-protection"],
+    desc: HOOK_DESCRIPTIONS["stable-protection"],
+  },
+  {
+    value: "dynamic-fee",
+    name: HOOK_LABELS["dynamic-fee"],
+    desc: HOOK_DESCRIPTIONS["dynamic-fee"],
+  },
   { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
   { value: "alo", name: HOOK_LABELS.alo, desc: HOOK_DESCRIPTIONS.alo },
 ];
 
-function defaultPairForChain(
-  chainId: SupportedTestnetChainId,
-): [TokenSymbol, TokenSymbol] {
+function defaultPairForChain(chainId: SupportedTestnetChainId): [TokenSymbol, TokenSymbol] {
   void chainId;
   // Arc Testnet defaults to USDC/EURC so the Stable Protection
   // recommendation lights up.
@@ -134,8 +144,8 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   // pair-recommendation effect below would immediately reset the hook
   // back to `recommendedHookForPair(...)` on mount.
   const [hookTouched, setHookTouched] = useState(ctx?.hook !== undefined);
-  const [amountA, setAmountA] = useState("0.0");
-  const [amountB, setAmountB] = useState("0.0");
+  const [amountA, setAmountA] = useState(ctx?.amountA ?? "0.0");
+  const [amountB, setAmountB] = useState(ctx?.amountB ?? "0.0");
   const [chartRange, setChartRange] = useState<ChartRange>("7D");
   const [chartTab, setChartTab] = useState<"volume" | "tvl">("volume");
   const [showHooks, setShowHooks] = useState(false);
@@ -150,6 +160,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const recommended = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
   useEffect(() => {
     if (locked || hookTouched) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: re-suggest hook on pair change until the user picks one
     setHook(recommended ?? "none");
   }, [recommended, locked, hookTouched]);
 
@@ -298,9 +309,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
                   setChartRange(r);
                 }}
                 className={`px-2 py-1 text-[11px] rounded-xs font-medium ${
-                  chartRange === r
-                    ? "bg-green/30 text-green"
-                    : "bg-transparent text-text-dim"
+                  chartRange === r ? "bg-green/30 text-green" : "bg-transparent text-text-dim"
                 }`}
               >
                 {r}
@@ -359,8 +368,8 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             <FeeTierPicker value={fee} onChange={setFee} />
             {hookName && HOOK_REQUIRES_DYNAMIC_FEE[hookName] && (
               <p className="text-[11px] text-text-mute mt-1.5">
-                {hookSummary} sets the fee dynamically per swap; your tier
-                selection determines tick spacing only.
+                {hookSummary} sets the fee dynamically per swap; your tier selection determines tick
+                spacing only.
               </p>
             )}
           </div>
@@ -477,7 +486,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
 
         {add.state.poolInitTx && (
           <a
-            href={`${getExplorerTxUrl(chainId, add.state.poolInitTx)}`}
+            href={getExplorerTxUrl(chainId, add.state.poolInitTx)}
             target="_blank"
             rel="noreferrer"
             className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
@@ -548,9 +557,10 @@ function formatUsdApprox(amount: string, price: number | undefined): string {
   const n = parseFloat(amount);
   if (!price || !Number.isFinite(n) || n <= 0) return "≈ $0.00";
   const usd = n * price;
-  const formatted = usd >= 1
-    ? usd.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
-    : usd.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 });
+  const formatted =
+    usd >= 1
+      ? usd.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+      : usd.toLocaleString("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 });
   return `≈ $${formatted}`;
 }
 
@@ -590,8 +600,9 @@ function TokenInputCard({
   );
 }
 
-const SPARK_POINTS = Array.from({ length: 28 }, (_, i) =>
-  55 + Math.sin(i * 0.9) * 6 + Math.cos(i * 1.4) * 3,
+const SPARK_POINTS = Array.from(
+  { length: 28 },
+  (_, i) => 55 + Math.sin(i * 0.9) * 6 + Math.cos(i * 1.4) * 3,
 );
 
 function Sparkline() {
@@ -603,10 +614,10 @@ function Sparkline() {
     const mx = Math.max(...SPARK_POINTS);
     const sx = (i: number) => pad + (i / (SPARK_POINTS.length - 1)) * (w - pad * 2);
     const sy = (v: number) => pad + (1 - (v - mn) / (mx - mn + 0.001)) * (h - pad * 2);
-    const line = SPARK_POINTS.map((v, i) => `${i === 0 ? "M" : "L"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join(
-      " ",
-    );
-    const area = `${line} L${sx(SPARK_POINTS.length - 1)},${h - pad} L${sx(0)},${h - pad} Z`;
+    const line = SPARK_POINTS.map(
+      (v, i) => `${i === 0 ? "M" : "L"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`,
+    ).join(" ");
+    const area = `${line} L${String(sx(SPARK_POINTS.length - 1))},${String(h - pad)} L${String(sx(0))},${String(h - pad)} Z`;
     return { line, area };
   }, []);
   return (

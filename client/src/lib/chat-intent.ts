@@ -30,6 +30,11 @@ export interface PoolKeyCtx {
   tokenB: TokenSymbol;
   fee: FeeTier;
   hook?: HookName | null;
+  /** Deposit amounts parsed from the command (e.g. "$10 USDC / $10 cirBTC"),
+   *  used to pre-fill the add-liquidity form. Omitted when no number was
+   *  written before the token. */
+  amountA?: string;
+  amountB?: string;
 }
 
 export type Intent =
@@ -105,6 +110,27 @@ function isStable(s: TokenSymbol): boolean {
   return s === "USDC" || s === "EURC";
 }
 
+/** The numeric amount written immediately before a token in the text,
+ *  e.g. "$10 USDC" or "100 usdc" → "10" / "100". Undefined when none. */
+function amountBefore(text: string, pos: number): string | undefined {
+  const m = /\$?\s*([\d,]+(?:\.\d+)?)\s*$/.exec(text.slice(0, pos));
+  return m ? m[1].replace(/,/g, "") : undefined;
+}
+
+/** `{ amountA?, amountB? }` parsed from the numbers preceding each token. */
+function amountsCtx(
+  text: string,
+  a: { pos: number },
+  b: { pos: number },
+): { amountA?: string; amountB?: string } {
+  const amountA = amountBefore(text, a.pos);
+  const amountB = amountBefore(text, b.pos);
+  return {
+    ...(amountA !== undefined ? { amountA } : {}),
+    ...(amountB !== undefined ? { amountB } : {}),
+  };
+}
+
 function detectHookKeyword(t: string): HookName | null {
   if (/\bdynamic[\s-]?fees?\b/.test(t)) return "dynamic-fee";
   if (/\bstable[\s-]?protection\b/.test(t)) return "stable-protection";
@@ -165,14 +191,26 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
       return {
         kind: "create-pool",
-        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: detectHookKeyword(t) },
+        ctx: {
+          tokenA: preA.sym,
+          tokenB: preB.sym,
+          fee,
+          hook: detectHookKeyword(t),
+          ...amountsCtx(text, preA, preB),
+        },
       };
     }
     if (/\b(add|provide|deposit).*(liquidity|lp|pool)\b/.test(t) || /^lp\b/.test(t)) {
       const fee: FeeTier = isStable(preA.sym) && isStable(preB.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: preA.sym, tokenB: preB.sym, fee, hook: detectHookKeyword(t) },
+        ctx: {
+          tokenA: preA.sym,
+          tokenB: preB.sym,
+          fee,
+          hook: detectHookKeyword(t),
+          ...amountsCtx(text, preA, preB),
+        },
       };
     }
     if (/\b(swap|exchange|trade|convert)\b/.test(t)) {
@@ -266,7 +304,13 @@ export function detectIntent(text: string): Intent | null {
       const fee: FeeTier = isStable(a.sym) && isStable(b.sym) ? 100 : 500;
       return {
         kind: "add-liquidity",
-        ctx: { tokenA: a.sym, tokenB: b.sym, fee, hook: detectHookKeyword(t) },
+        ctx: {
+          tokenA: a.sym,
+          tokenB: b.sym,
+          fee,
+          hook: detectHookKeyword(t),
+          ...amountsCtx(text, a, b),
+        },
       };
     }
     return { kind: "pools" };
