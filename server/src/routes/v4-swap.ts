@@ -23,15 +23,28 @@ export const v4SwapRouter = Router();
  * Demo mode — when true, swap routes ignore the `hook` field on the
  * request body and always build the on-chain PoolKey with `hooks=0x0`.
  * This routes quotes / calldata to the no-hook variant of the pool
- * so the Stable Protection / Dynamic Fee hooks can't revert (their
- * oracle-dependent guards behave poorly on testnet without price
+ * so the Stable Protection / Dynamic Fee hooks couldn't revert (their
+ * oracle-dependent guards behaved poorly on Base Sepolia without price
  * feeds). The UI still surfaces the user's hook selection visually;
- * only the on-chain query is detoured.
+ * only the on-chain query was detoured.
  *
- * Flip to `false` once the production hooks have working oracles
- * and we want swaps to go through the actual hook-gated pools.
+ * DISABLED on Arc: the detour forced `hook = null` for EVERY swap, so
+ * hook-bound pools (which is every deployed Arc hook pool) resolved to a
+ * zero-hook PoolKey that was never initialized — making every hook swap
+ * fail with "No pool is initialized for this pair at this fee tier and
+ * hook." The deployed Arc hooks quote correctly through V4Quoter
+ * (verified: USDC→EURC on Stable Protection returns a real amountOut).
+ *
+ * With the flag off, the user's hook selection passes through verbatim:
+ *   - a hook ("stable-protection" / "dynamic-fee" / "rwa-gate" / "alo")
+ *     → that hook's gated pool (pair-allowlisted per hook-pair-gating).
+ *   - "No Hook" (hook = null) → the plain zero-hook pool on the hero
+ *     PoolManager stack, allowed for ANY pair (USDC/EURC/cirBTC in any
+ *     combination) — no pair gating applies when there's no hook.
+ * Both kinds require the pool to be initialized on-chain first (create
+ * it via Add Liquidity with the matching hook/No-Hook + fee tier).
  */
-const BYPASS_HOOK_FOR_DEMO = true;
+const BYPASS_HOOK_FOR_DEMO = false;
 
 const hookSchema = z.enum(HOOK_NAMES);
 const chainIdSchema = z
