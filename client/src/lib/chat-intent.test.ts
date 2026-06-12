@@ -190,6 +190,34 @@ describe("detectIntent: swap", () => {
   it("verb only → swap with no token presets", () => {
     assert.deepEqual(detectIntent("swap stablecoins"), { kind: "swap" });
   });
+
+  it("'swap 10 USDC for EURC' → carries amount", () => {
+    assert.deepEqual(detectIntent("swap 10 USDC for EURC"), {
+      kind: "swap",
+      tokenIn: "USDC",
+      tokenOut: "EURC",
+      amountIn: "10",
+    });
+  });
+
+  it("'swap USDC for EURC with stable protection' → carries hook", () => {
+    assert.deepEqual(detectIntent("swap USDC for EURC with stable protection"), {
+      kind: "swap",
+      tokenIn: "USDC",
+      tokenOut: "EURC",
+      hook: "stable-protection",
+    });
+  });
+
+  it("'swap $25 USDC for cirBTC with dynamic fee' → carries amount + hook", () => {
+    assert.deepEqual(detectIntent("swap $25 USDC for cirBTC with dynamic fee"), {
+      kind: "swap",
+      tokenIn: "USDC",
+      tokenOut: "cirBTC",
+      hook: "dynamic-fee",
+      amountIn: "25",
+    });
+  });
 });
 
 describe("detectIntent: add-liquidity", () => {

@@ -38,8 +38,14 @@ export interface PoolKeyCtx {
 }
 
 export type Intent =
+  | {
+      kind: "swap";
+      tokenIn?: TokenSymbol;
+      tokenOut?: TokenSymbol;
+      hook?: HookName | null;
+      amountIn?: string;
+    }
   | { kind: "home" }
-  | { kind: "swap"; tokenIn?: TokenSymbol; tokenOut?: TokenSymbol }
   | { kind: "pools" }
   | { kind: "add-liquidity"; ctx?: PoolKeyCtx }
   | { kind: "create-pool"; ctx?: PoolKeyCtx }
@@ -214,7 +220,15 @@ export function detectIntent(text: string): Intent | null {
       };
     }
     if (/\b(swap|exchange|trade|convert)\b/.test(t)) {
-      return { kind: "swap", tokenIn: preA.sym, tokenOut: preB.sym };
+      const hk = detectHookKeyword(t);
+      const amountIn = amountBefore(text, preA.pos);
+      return {
+        kind: "swap",
+        tokenIn: preA.sym,
+        tokenOut: preB.sym,
+        ...(hk ? { hook: hk } : {}),
+        ...(amountIn !== undefined ? { amountIn } : {}),
+      };
     }
   }
 
@@ -319,10 +333,26 @@ export function detectIntent(text: string): Intent | null {
     const tokens = extractWalletTokens(text);
     if (tokens.length >= 2) {
       const [a, b] = tokens;
-      return { kind: "swap", tokenIn: a.sym, tokenOut: b.sym };
+      const hk = detectHookKeyword(t);
+      const amountIn = amountBefore(text, a.pos);
+      return {
+        kind: "swap",
+        tokenIn: a.sym,
+        tokenOut: b.sym,
+        ...(hk ? { hook: hk } : {}),
+        ...(amountIn !== undefined ? { amountIn } : {}),
+      };
     }
     if (tokens.length === 1) {
-      return { kind: "swap", tokenIn: tokens[0].sym };
+      const first = tokens[0];
+      const hk = detectHookKeyword(t);
+      const amountIn = amountBefore(text, first.pos);
+      return {
+        kind: "swap",
+        tokenIn: first.sym,
+        ...(hk ? { hook: hk } : {}),
+        ...(amountIn !== undefined ? { amountIn } : {}),
+      };
     }
     return { kind: "swap" };
   }
