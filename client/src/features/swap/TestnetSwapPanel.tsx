@@ -7,12 +7,7 @@ import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getUserFacingTokenSymbols, TOKENS, type TokenSymbol } from "@/lib/tokens.ts";
 import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
-import {
-  FEE_TIER_LABELS,
-  recommendedFeeTier,
-  type FeeTier,
-} from "@/features/liquidity/fee-tiers.ts";
-import { isStable } from "@/features/liquidity/create-helpers.ts";
+import { FEE_TIER_LABELS, type FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import {
   HOOK_LABELS,
   hookCompatibilityError,
@@ -116,16 +111,18 @@ export function TestnetSwapPanel({
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
   const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
-  // Hook + fee tier are AUTO-ASSIGNED by the pair — no manual pickers.
-  // USDC/EURC → Stable Protection @ 0.01%; cirBTC pairs → Dynamic Fee @ 0.30%.
-  const hook: HookName | "none" = useMemo(
-    () => recommendedHookForPair(tokenIn, tokenOut) ?? "none",
-    [tokenIn, tokenOut],
-  );
-  const fee: FeeTier = useMemo(
-    () => recommendedFeeTier(hook === "none" ? null : hook, isStable(tokenIn), isStable(tokenOut)),
-    [hook, tokenIn, tokenOut],
-  );
+  // USDC/EURC is always Stable Protection. cirBTC pairs offer Dynamic Fee
+  // (default) or Volatile (no hook) via a toggle. USDC/EURC → 0.01%; every
+  // cirBTC pool → 0.30%.
+  const pairHook = useMemo(() => recommendedHookForPair(tokenIn, tokenOut), [tokenIn, tokenOut]);
+  const isCirBtcPair = pairHook === "dynamic-fee";
+  const [cirBtcMode, setCirBtcMode] = useState<"dynamic-fee" | "volatile">("dynamic-fee");
+  const hook: HookName | "none" = useMemo(() => {
+    if (pairHook === "stable-protection") return "stable-protection";
+    if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
+    return "none";
+  }, [pairHook, cirBtcMode]);
+  const fee: FeeTier = useMemo(() => (hook === "stable-protection" ? 100 : 3000), [hook]);
   const [slippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
 
   const confirm = useConfirmedAction();
@@ -366,13 +363,38 @@ export function TestnetSwapPanel({
           </div>
         </div>
 
-        {/* Hook + fee tier are auto-assigned by the pair — shown read-only. */}
-        <div className="mt-5 flex items-center justify-between text-[13px]">
-          <span className="text-text-dim">Liquidity hook</span>
-          <span className="font-medium text-text">
-            {hook === "none" ? "No Hook" : HOOK_LABELS[hook]}
-          </span>
-        </div>
+        {/* Hook is auto-assigned by the pair. cirBTC pairs get a Dynamic Fee /
+            Volatile (no hook) toggle; USDC/EURC is read-only Stable Protection. */}
+        {isCirBtcPair ? (
+          <div className="mt-5">
+            <p className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
+              LIQUIDITY HOOK
+            </p>
+            <div className="flex gap-1 bg-bg-elev p-0.5 rounded-md border border-border-soft">
+              {(["dynamic-fee", "volatile"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setCirBtcMode(m);
+                  }}
+                  className={`flex-1 py-2 text-[12px] rounded-xs font-medium ${
+                    cirBtcMode === m ? "bg-chip text-text" : "bg-transparent text-text-dim"
+                  }`}
+                >
+                  {m === "dynamic-fee" ? "Dynamic Fee" : "Volatile"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 flex items-center justify-between text-[13px]">
+            <span className="text-text-dim">Liquidity hook</span>
+            <span className="font-medium text-text">
+              {hook === "none" ? "Volatile" : HOOK_LABELS[hook]}
+            </span>
+          </div>
+        )}
         <div className="mt-2 flex items-center justify-between text-[13px]">
           <span className="text-text-dim">Fee tier</span>
           <span className="font-mono text-text">{FEE_TIER_LABELS[fee]}</span>

@@ -8,7 +8,7 @@ import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerTxUrl, type SupportedTestnetChainId } from "@/lib/chains.ts";
 import { type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
-import { FEE_TIER_LABELS, recommendedFeeTier, type FeeTier } from "./fee-tiers.ts";
+import { FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { isStable, safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
@@ -94,14 +94,18 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   // pickers. USDC/EURC → Stable Protection @ 0.01%; USDC/cirBTC &
   // EURC/cirBTC → Dynamic Fee @ 0.30% (its configured tier). Any chat-intent
   // ctx.hook / ctx.fee is ignored: the pair is the single source of truth.
-  const hook: HookName | "none" = useMemo(
-    () => recommendedHookForPair(tokenA, tokenB) ?? "none",
-    [tokenA, tokenB],
-  );
-  const fee: FeeTier = useMemo(
-    () => recommendedFeeTier(hook === "none" ? null : hook, isStable(tokenA), isStable(tokenB)),
-    [hook, tokenA, tokenB],
-  );
+  // USDC/EURC is always Stable Protection. cirBTC pairs offer two pool
+  // types — Dynamic Fee (default) or Volatile (no hook) — via a toggle.
+  const pairHook = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
+  const isCirBtcPair = pairHook === "dynamic-fee";
+  const [cirBtcMode, setCirBtcMode] = useState<"dynamic-fee" | "volatile">("dynamic-fee");
+  const hook: HookName | "none" = useMemo(() => {
+    if (pairHook === "stable-protection") return "stable-protection";
+    if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
+    return "none";
+  }, [pairHook, cirBtcMode]);
+  // USDC/EURC → 0.01%; every cirBTC pool (Dynamic Fee or Volatile) → 0.30%.
+  const fee: FeeTier = useMemo(() => (hook === "stable-protection" ? 100 : 3000), [hook]);
 
   // Chain-switch handling lives in the parent: App.tsx keys this component
   // on `chainId`, so a network change remounts the form and the useState
@@ -151,8 +155,8 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const hookIncompatible = hookCompatibilityError(tokenA, tokenB, hookName);
   const ready =
     tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0" && hookIncompatible === null;
-  const hookSummary = hook === "none" ? "No Hook" : HOOK_LABELS[hook];
-  const hookDesc = hook === "none" ? "Standard execution" : HOOK_DESCRIPTIONS[hook];
+  const hookSummary = hook === "none" ? "Volatile" : HOOK_LABELS[hook];
+  const hookDesc = hook === "none" ? "No hook — standard execution" : HOOK_DESCRIPTIONS[hook];
 
   async function onSubmit() {
     if (!ready) return;
@@ -305,13 +309,33 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
               LIQUIDITY HOOK
             </div>
-            <div className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md text-left">
-              <ArrowUp className="h-3.5 w-3.5 text-text-dim" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium">{hookSummary}</div>
-                <div className="text-[11px] text-text-dim">{hookDesc}</div>
+            {isCirBtcPair && !locked ? (
+              // cirBTC pairs: choose Dynamic Fee or Volatile (no hook).
+              <div className="flex gap-1 bg-bg-elev p-0.5 rounded-md border border-border-soft">
+                {(["dynamic-fee", "volatile"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setCirBtcMode(m);
+                    }}
+                    className={`flex-1 py-2 text-[12px] rounded-xs font-medium ${
+                      cirBtcMode === m ? "bg-chip text-text" : "bg-transparent text-text-dim"
+                    }`}
+                  >
+                    {m === "dynamic-fee" ? "Dynamic Fee" : "Volatile"}
+                  </button>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="w-full flex items-center gap-2 px-3 py-2.5 bg-bg-elev border border-border-soft rounded-md text-left">
+                <ArrowUp className="h-3.5 w-3.5 text-text-dim" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium">{hookSummary}</div>
+                  <div className="text-[11px] text-text-dim">{hookDesc}</div>
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
