@@ -67,6 +67,9 @@ const STABLE_PROTECTION_HOOK_ERRORS = [
   // RWAGate hook: beforeSwap reverts NotWhitelisted(account) when the caller
   // isn't allowlisted in the hook's ComplianceRegistry.
   { type: "error", name: "NotWhitelisted", inputs: [{ type: "address", name: "account" }] },
+  // v4-core: the pool has no (in-range) liquidity to swap against — e.g. a
+  // pool that was created/configured but never funded.
+  { type: "error", name: "NotEnoughLiquidity", inputs: [{ type: "bytes32", name: "poolId" }] },
 ] as const;
 
 /**
