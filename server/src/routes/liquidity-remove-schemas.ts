@@ -15,8 +15,16 @@ import { z } from "zod";
  */
 export const calldataSchema = z
   .object({
-    positionId: z.string().uuid().optional(),
+    positionId: z.uuid().optional(),
     tokenId: z.string().regex(/^\d+$/).optional(),
+    /** The position's pool hook address — needed to pick the right
+     *  per-hook PositionManager when resolving a tokenId (tokenIds aren't
+     *  unique across PMs). Null/omitted = no-hook (hero) stack. */
+    hookAddress: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/)
+      .nullable()
+      .optional(),
     /** Percentage 1..100 (whole numbers). */
     percentage: z.number().int().min(1).max(100),
     slippageBps: z.number().int().min(0).max(500).default(50),
@@ -30,7 +38,7 @@ export const calldataSchema = z
 export const recordSchema = z
   .object({
     txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
-    positionId: z.string().uuid().optional(),
+    positionId: z.uuid().optional(),
     tokenId: z.string().regex(/^\d+$/).optional(),
     liquidityRemoved: z.string().regex(/^\d+$/),
     isFullExit: z.boolean(),

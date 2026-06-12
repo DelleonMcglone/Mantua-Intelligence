@@ -52,6 +52,8 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
     // route those through the tokenId path on the calldata endpoint.
     await remove.execute({
       ...(position.id ? { positionId: position.id } : { tokenId: position.tokenId ?? "" }),
+      // Disambiguates the per-hook PositionManager for the tokenId path.
+      hookAddress: position.hookAddress,
       percentage,
       slippageBps,
     });

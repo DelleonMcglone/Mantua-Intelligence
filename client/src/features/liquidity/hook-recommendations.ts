@@ -6,6 +6,14 @@ export const HOOK_LABELS: Record<HookName, string> = {
   "dynamic-fee": "Dynamic Fee",
 };
 
+/** Arc Testnet hook addresses (mirror of server v4-contracts). Used to
+ *  resolve a local position's hook name → address for the per-hook
+ *  PositionManager routing on remove-liquidity. */
+export const HOOK_ADDRESS: Record<HookName, `0x${string}`> = {
+  "stable-protection": "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+  "dynamic-fee": "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+};
+
 export const HOOK_DESCRIPTIONS: Record<HookName, string> = {
   "stable-protection": "Minimizes depeg & slippage on stable pairs.",
   "dynamic-fee": "Adjusts fees in real time based on volatility.",

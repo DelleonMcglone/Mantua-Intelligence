@@ -16,6 +16,10 @@ export interface RemoveArgs {
   /** … or the on-chain PositionManager ERC721 id (testnet positions
    *  whose DB row never landed). Exactly one must be set. */
   tokenId?: string;
+  /** The position's pool hook address — disambiguates the per-hook
+   *  PositionManager when removing by tokenId (ids collide across PMs).
+   *  Null = no-hook (hero) stack. */
+  hookAddress?: string | null;
   percentage: number;
   slippageBps: number;
 }
