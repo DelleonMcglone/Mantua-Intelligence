@@ -49,21 +49,33 @@ export const topicSchema = z.enum(TOPICS);
  * "btc" cannibalizing "cbbtc" before the cb prefix is checked.
  */
 const TOKEN_ALIASES: { aliases: string[]; coingeckoId: string; label: string; symbol: string }[] = [
-  { aliases: ["coinbase wrapped btc", "cbbtc", "cb-btc"], coingeckoId: "coinbase-wrapped-btc", label: "Coinbase Wrapped BTC", symbol: "cbBTC" },
+  {
+    aliases: ["coinbase wrapped btc", "cbbtc", "cb-btc"],
+    coingeckoId: "coinbase-wrapped-btc",
+    label: "Coinbase Wrapped BTC",
+    symbol: "cbBTC",
+  },
   { aliases: ["bitcoin", "btc"], coingeckoId: "bitcoin", label: "Bitcoin", symbol: "BTC" },
   { aliases: ["ethereum", "eth"], coingeckoId: "ethereum", label: "Ethereum", symbol: "ETH" },
   { aliases: ["solana", "sol"], coingeckoId: "solana", label: "Solana", symbol: "SOL" },
   { aliases: ["usd coin", "usdc"], coingeckoId: "usd-coin", label: "USD Coin", symbol: "USDC" },
   { aliases: ["tether", "usdt"], coingeckoId: "tether", label: "Tether", symbol: "USDT" },
   { aliases: ["euro coin", "eurc"], coingeckoId: "euro-coin", label: "Euro Coin", symbol: "EURC" },
-  { aliases: ["wrapped ether", "weth"], coingeckoId: "weth", label: "Wrapped Ether", symbol: "WETH" },
+  {
+    aliases: ["wrapped ether", "weth"],
+    coingeckoId: "weth",
+    label: "Wrapped Ether",
+    symbol: "WETH",
+  },
   { aliases: ["maker", "mkr"], coingeckoId: "maker", label: "Maker", symbol: "MKR" },
   { aliases: ["pendle"], coingeckoId: "pendle", label: "Pendle", symbol: "PENDLE" },
   { aliases: ["ondo"], coingeckoId: "ondo-finance", label: "Ondo", symbol: "ONDO" },
   { aliases: ["centrifuge", "rwa"], coingeckoId: "centrifuge", label: "Centrifuge", symbol: "CFG" },
 ];
 
-export function resolveTokenAlias(input: string): { coingeckoId: string; label: string; symbol: string } | null {
+export function resolveTokenAlias(
+  input: string,
+): { coingeckoId: string; label: string; symbol: string } | null {
   const norm = input.trim().toLowerCase();
   if (!norm) return null;
   for (const t of TOKEN_ALIASES) {
@@ -184,7 +196,7 @@ async function usdcEurcPool(): Promise<AnalyzeResponse> {
       sources: [{ name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" }],
     };
   }
-  const top = candidates.sort((a, b) => b.tvlUsd - a.tvlUsd)[0]!;
+  const top = candidates.sort((a, b) => b.tvlUsd - a.tvlUsd)[0];
   return {
     topic: "usdc-eurc-pool",
     title: "USDC/EURC — top Base pool",
@@ -214,26 +226,19 @@ async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
       title: "cbBTC volume on Base",
       summary:
         "DefiLlama doesn't currently surface cbBTC pools on Base. cbBTC was minted on Base in 2024; once liquidity migrates onto v3/v4 pools the route returns real numbers here.",
-      sources: [
-        { name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" },
-      ],
+      sources: [{ name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" }],
     };
   }
   const total24h = cbbtcPools.reduce((s, p) => s + (p.volumeUsd1d ?? 0), 0);
   const total7d = cbbtcPools.reduce((s, p) => s + (p.volumeUsd7d ?? 0), 0);
   const avgDaily7d = total7d / 7;
-  const trend =
-    avgDaily7d > 0 ? ((total24h - avgDaily7d) / avgDaily7d) * 100 : 0;
-  const top = cbbtcPools.sort(
-    (a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0),
-  )[0]!;
+  const trend = avgDaily7d > 0 ? ((total24h - avgDaily7d) / avgDaily7d) * 100 : 0;
+  const top = cbbtcPools.sort((a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0))[0];
   return {
     topic: "cbbtc-24h-volume",
     title: "cbBTC — 24h volume on Base",
     summary: `Across ${String(cbbtcPools.length)} cbBTC pools on Base, ${fmtUsd(total24h)} of volume cleared in the last 24h${
-      Number.isFinite(trend)
-        ? ` (${fmtPct(trend)} vs the trailing 7-day daily average)`
-        : ""
+      Number.isFinite(trend) ? ` (${fmtPct(trend)} vs the trailing 7-day daily average)` : ""
     }. Largest single pool: ${top.project} ${top.symbol} at ${fmtUsd(top.volumeUsd1d ?? 0)}.`,
     metrics: [
       { label: "24h volume (total)", value: fmtUsd(total24h) },
@@ -242,7 +247,10 @@ async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
       { label: "Top pool", value: `${top.project} (${fmtUsd(top.volumeUsd1d ?? 0)})` },
     ],
     sources: [
-      { name: "DefiLlama (Base cbBTC pools)", url: "https://defillama.com/yields?chain=Base&token=CBBTC" },
+      {
+        name: "DefiLlama (Base cbBTC pools)",
+        url: "https://defillama.com/yields?chain=Base&token=CBBTC",
+      },
     ],
   };
 }
@@ -285,7 +293,7 @@ async function usdc24hVolume(): Promise<AnalyzeResponse> {
   const total7d = usdcPools.reduce((s, p) => s + (p.volumeUsd7d ?? 0), 0);
   const avgDaily7d = total7d / 7;
   const trend = avgDaily7d > 0 ? ((total24h - avgDaily7d) / avgDaily7d) * 100 : 0;
-  const top = usdcPools.sort((a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0))[0]!;
+  const top = usdcPools.sort((a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0))[0];
   return {
     topic: "usdc-24h-volume",
     title: "USDC — 24h volume on Base",
@@ -299,14 +307,16 @@ async function usdc24hVolume(): Promise<AnalyzeResponse> {
       { label: "Top pool", value: `${top.project} (${fmtUsd(top.volumeUsd1d ?? 0)})` },
     ],
     sources: [
-      { name: "DefiLlama (Base USDC pools)", url: "https://defillama.com/yields?chain=Base&token=USDC" },
+      {
+        name: "DefiLlama (Base USDC pools)",
+        url: "https://defillama.com/yields?chain=Base&token=USDC",
+      },
     ],
   };
 }
 
-/** The Mantua token set → CoinGecko ids. cirBTC tracks BTC. */
+/** Mantua's stablecoins → CoinGecko ids. */
 const MANTUA_MARKET_TOKENS = [
-  { id: "bitcoin", label: "cirBTC" },
   { id: "usd-coin", label: "USDC" },
   { id: "euro-coin", label: "EURC" },
 ] as const;
@@ -349,28 +359,21 @@ async function marketSummary(): Promise<AnalyzeResponse> {
 
   return {
     topic: "market-summary",
-    title: "Market summary — Mantua tokens",
-    summary: `Live market data for cirBTC (BTC), USDC and EURC.${
-      mover ? ` Biggest 24h move: ${mover.label} at ${fmtPct(mover.change)}.` : ""
+    title: "Stablecoin market summary — USDC & EURC",
+    summary: `Live market data for Mantua's stablecoins, USDC and EURC.${
+      mover ? ` Larger 24h move: ${mover.label} at ${fmtPct(mover.change)}.` : ""
     }`,
     metrics,
-    sources: [
-      {
-        name: "CoinGecko",
-        url: "https://www.coingecko.com/en/coins/bitcoin",
-      },
-    ],
+    sources: [{ name: "CoinGecko", url: "https://www.coingecko.com/en/categories/stablecoins" }],
   };
 }
 
-/** The Mantua hook pools on Arc (hook + canonical pair + static fee tier). */
-const ARC_POOLS: { hook: HookName; a: TokenSymbol; b: TokenSymbol; fee: FeeTier; label: string }[] = [
-  { hook: "stable-protection", a: "USDC", b: "EURC", fee: 100, label: "Stable Protection" },
-  { hook: "dynamic-fee", a: "USDC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
-  { hook: "dynamic-fee", a: "EURC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
-  { hook: "rwa-gate", a: "USDC", b: "EURC", fee: 3000, label: "RWA Gate" },
-  { hook: "rwa-gate", a: "USDC", b: "cirBTC", fee: 3000, label: "RWA Gate" },
-];
+/** Mantua's USDC/EURC stablecoin pools on Arc (hook + pair + static fee tier). */
+const ARC_POOLS: { hook: HookName; a: TokenSymbol; b: TokenSymbol; fee: FeeTier; label: string }[] =
+  [
+    { hook: "stable-protection", a: "USDC", b: "EURC", fee: 100, label: "Stable Protection" },
+    { hook: "rwa-gate", a: "USDC", b: "EURC", fee: 3000, label: "RWA Gate" },
+  ];
 
 /** sqrtPriceX96 → human price (token1 per token0), decimal-adjusted. */
 function priceFromSqrt(sqrtPriceX96: bigint, dec0: number, dec1: number): number {
@@ -398,7 +401,11 @@ async function arcPools(): Promise<AnalyzeResponse> {
       continue;
     }
     liveCount += 1;
-    const price = priceFromSqrt(slot0.sqrtPriceX96, getToken(sym0).decimals, getToken(sym1).decimals);
+    const price = priceFromSqrt(
+      slot0.sqrtPriceX96,
+      getToken(sym0).decimals,
+      getToken(sym1).decimals,
+    );
     metrics.push({
       label: `${sym0}/${sym1} · ${p.label}`,
       value: `1 ${sym0} = ${price.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${sym1} (tick ${String(slot0.tick)})`,
@@ -406,8 +413,8 @@ async function arcPools(): Promise<AnalyzeResponse> {
   }
   return {
     topic: "arc-pools",
-    title: "Live Arc hook pools",
-    summary: `${String(liveCount)} of ${String(ARC_POOLS.length)} Mantua hook pools are initialized on Arc Testnet — prices read live from on-chain v4 state.`,
+    title: "Live Arc USDC/EURC pools",
+    summary: `${String(liveCount)} of ${String(ARC_POOLS.length)} USDC/EURC stablecoin pools are initialized on Arc Testnet — prices read live from on-chain v4 state.`,
     metrics,
     sources: [{ name: "ArcScan", url: "https://testnet.arcscan.app" }],
   };
@@ -423,10 +430,7 @@ const STABLECOIN_LIST: { symbol: string; name: string; coingeckoId: string; peg:
 
 async function topStablecoins(): Promise<AnalyzeResponse> {
   const keys = STABLECOIN_LIST.map((t) => `coingecko:${t.coingeckoId}`);
-  const [prices, changes] = await Promise.all([
-    getTokenPrices(keys),
-    getTokenChangePercents(keys),
-  ]);
+  const [prices, changes] = await Promise.all([getTokenPrices(keys), getTokenChangePercents(keys)]);
   const rows = STABLECOIN_LIST.map((t) => {
     const k = `coingecko:${t.coingeckoId}`;
     return {
@@ -445,7 +449,7 @@ async function topStablecoins(): Promise<AnalyzeResponse> {
       sources: [{ name: "DefiLlama" }],
     };
   }
-  const winner = rows[0]!;
+  const winner = rows[0];
   return {
     topic: "top-stablecoins",
     title: "Top performing stablecoins (24h)",
@@ -584,9 +588,7 @@ export async function runAnalyze(topic: Topic, symbol?: string): Promise<Analyze
   }
   try {
     const response =
-      topic === "token-price"
-        ? await tokenPrice(symbol ?? "")
-        : await TOPIC_RUNNERS[topic]();
+      topic === "token-price" ? await tokenPrice(symbol ?? "") : await TOPIC_RUNNERS[topic]();
     cache.set(key, { response, fetchedAt: now });
     return response;
   } catch (err) {

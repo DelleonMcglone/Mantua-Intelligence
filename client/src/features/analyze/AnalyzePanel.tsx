@@ -39,11 +39,11 @@ type Topic =
 
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
-  { topic: "market-summary", question: "Market summary for cirBTC, USDC and EURC" },
-  { topic: "arc-pools", question: "Show live prices in the Arc hook pools" },
-  { topic: "cirbtc-price", question: "What is the current price of cirBTC (evaluate as BTC)" },
-  { topic: "usdc-24h-volume", question: "What is USDC 24h volume trend?" },
-  { topic: "eurc-peg", question: "Is EURC trading above or below its peg?" },
+  { topic: "market-summary", question: "Stablecoin market summary for USDC and EURC" },
+  { topic: "arc-pools", question: "Show live USDC/EURC pool prices on Arc" },
+  { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
+  { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
+  { topic: "usdc-24h-volume", question: "What is USDC's 24h volume trend?" },
 ];
 
 interface AnalyzePanelProps {
