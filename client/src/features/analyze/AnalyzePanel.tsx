@@ -40,7 +40,7 @@ type Topic =
 const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
   { topic: "market-summary", question: "Stablecoin market summary for USDC and EURC" },
-  { topic: "arc-pools", question: "Show live USDC/EURC pool prices on Arc" },
+  { topic: "cirbtc-price", question: "Show me cirBTC price" },
   { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
   { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
   { topic: "usdc-24h-volume", question: "What is USDC's 24h volume trend?" },
