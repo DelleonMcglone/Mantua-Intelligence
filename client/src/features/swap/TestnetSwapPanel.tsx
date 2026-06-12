@@ -66,6 +66,9 @@ function humanizeRevertReason(decoded: string): string {
   if (/^NotWhitelisted/.test(decoded)) {
     return "RWA Gate is a permissioned pool — your address isn't allowlisted in its compliance registry yet, so swaps are blocked. The hook owner must whitelist the account first.";
   }
+  if (/^NotEnoughLiquidity/.test(decoded)) {
+    return "This pool has no liquidity yet — add liquidity to it before swapping (Add Liquidity → same pair, hook, and fee tier).";
+  }
   if (/Stable Protection is only available on the USDC\/EURC pair/.test(decoded)) {
     return "Stable Protection works only on USDC/EURC. Pick that pair or choose a different hook.";
   }
