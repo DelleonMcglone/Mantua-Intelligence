@@ -7,7 +7,6 @@ export type HomePromptId = "pool" | "swap" | "analyze" | "agent";
 interface Props {
   onPromptSelect: (id: HomePromptId) => void;
   onNewChat: () => void;
-  onHistory: () => void;
 }
 
 const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
@@ -19,13 +18,13 @@ const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
 
 /**
  * Default right-column view — matches prototype `HomeMenu` in panels.jsx.
- * Shared `<PanelHeader />` ("Ask Mantua" + New chat / History buttons),
- * greeting line with the Mantua avatar, and a 2x2 grid of prompt cards.
+ * Shared `<PanelHeader />` ("Ask Mantua" + New chat button), greeting
+ * line with the Mantua avatar, and a 2x2 grid of prompt cards.
  */
-export function HomeMenu({ onPromptSelect, onNewChat, onHistory }: Props) {
+export function HomeMenu({ onPromptSelect, onNewChat }: Props) {
   return (
     <>
-      <PanelHeader onNewChat={onNewChat} onHistory={onHistory} />
+      <PanelHeader onNewChat={onNewChat} />
 
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex items-start gap-3 mb-2.5">

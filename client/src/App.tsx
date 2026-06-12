@@ -156,7 +156,6 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onNewChat={() => {
             setRoute({ kind: "home" });
           }}
-          onHistory={() => undefined}
         />
       );
     case "swap":
@@ -326,9 +325,7 @@ function intentToRoute(intent: Intent): Route {
       return { kind: "pools" };
     case "add-liquidity":
     case "create-pool":
-      return intent.ctx
-        ? { kind: "add-liquidity", ctx: intent.ctx }
-        : { kind: "add-liquidity" };
+      return intent.ctx ? { kind: "add-liquidity", ctx: intent.ctx } : { kind: "add-liquidity" };
     case "remove-liquidity":
       return { kind: "positions" };
     case "positions":
