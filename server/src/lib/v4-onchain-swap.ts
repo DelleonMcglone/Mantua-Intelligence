@@ -188,6 +188,20 @@ function decodeQuoterRevert(err: unknown): DecodedQuoterRevert {
 }
 
 /**
+ * Best-effort decoded reason for a failed quote/swap — the hook's named
+ * custom error (PoolNotConfigured / NotWhitelisted / NotEnoughLiquidity /
+ * CircuitBreakerTripped / …) when we can decode it, else null. Unwraps the
+ * `friendlyQuoterError` wrapper to reach the original viem revert. Callers
+ * fall back to a generic string when this returns null. The client maps the
+ * named error to an actionable sentence (humanizeRevertReason).
+ */
+export function decodeSwapRevertReason(err: unknown): string | null {
+  const cause = err instanceof Error && err.cause ? err.cause : err;
+  const decoded = decodeQuoterRevert(cause);
+  return decoded.hookReasonDecoded ?? decoded.decoded ?? null;
+}
+
+/**
  * v4 sqrt price limits. Anything inside `MIN_SQRT_PRICE_LIMIT <
  * sqrtPriceX96 < MAX_SQRT_PRICE_LIMIT` is accepted; using these
  * extremes effectively disables price-impact protection at the
