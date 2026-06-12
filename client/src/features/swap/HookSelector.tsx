@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Shield, Zap, Layers, Lock, Clock, Check } from "lucide-react";
+import { ChevronDown, Shield, Zap, Layers, Check } from "lucide-react";
 import { HOOK_OPTIONS, HOOK_META, type HookOption } from "./hook-types.ts";
 
 interface HookSelectorProps {
@@ -11,8 +11,6 @@ const HOOK_ICONS: Record<HookOption, React.ReactNode> = {
   none: null,
   "stable-protection": <Shield className="h-3.5 w-3.5" />,
   "dynamic-fee": <Zap className="h-3.5 w-3.5" />,
-  "rwa-gate": <Lock className="h-3.5 w-3.5" />,
-  alo: <Clock className="h-3.5 w-3.5" />,
 };
 
 export function HookSelector({ value, onChange }: HookSelectorProps) {
@@ -26,7 +24,9 @@ export function HookSelector({ value, onChange }: HookSelectorProps) {
       if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+    };
   }, [open]);
 
   return (
@@ -37,7 +37,9 @@ export function HookSelector({ value, onChange }: HookSelectorProps) {
       <div ref={containerRef} className="relative">
         <button
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            setOpen(!open);
+          }}
           className="w-full flex items-center gap-3 bg-bg-elev border border-border-soft rounded-sm px-4 py-3.5 text-left hover:border-text-mute transition-colors"
         >
           <div className="flex-1">

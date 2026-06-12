@@ -372,7 +372,8 @@ async function marketSummary(): Promise<AnalyzeResponse> {
 const ARC_POOLS: { hook: HookName; a: TokenSymbol; b: TokenSymbol; fee: FeeTier; label: string }[] =
   [
     { hook: "stable-protection", a: "USDC", b: "EURC", fee: 100, label: "Stable Protection" },
-    { hook: "rwa-gate", a: "USDC", b: "EURC", fee: 3000, label: "RWA Gate" },
+    { hook: "dynamic-fee", a: "USDC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
+    { hook: "dynamic-fee", a: "EURC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
   ];
 
 /** sqrtPriceX96 → human price (token1 per token0), decimal-adjusted. */
@@ -506,12 +507,10 @@ function mantuaHooks(): AnalyzeResponse {
     topic: "mantua-hooks",
     title: "Mantua hooks",
     summary:
-      "Mantua ships four Liquidity Hooks on Uniswap v4, all on Arc Testnet: Stable Protection, Dynamic Fee, RWA Gate, and Async Limit Order (ALO). Each plugs into the pool lifecycle to add behavior vanilla pools can't.",
+      "Mantua ships two Liquidity Hooks on Uniswap v4, all on Arc Testnet: Stable Protection and Dynamic Fee. Each plugs into the pool lifecycle to add behavior vanilla pools can't.",
     bullets: [
       "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs. Arc Testnet, USDC/EURC.",
       "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Arc Testnet, USDC/cirBTC and EURC/cirBTC.",
-      "RWA Gate — permissioned pool: only allowlisted addresses may trade, gating real-world-asset liquidity. Runs as its own pool (distinct PoolKey via the hook address). Arc Testnet, USDC/EURC and USDC/cirBTC.",
-      "Async Limit Order (ALO) — queue limit orders that fill asynchronously when the pool price reaches your target, instead of swapping at market. Arc Testnet, USDC/cirBTC and EURC/cirBTC.",
     ],
     sources: [
       { name: "Uniswap v4 Hooks", url: "https://docs.uniswap.org/contracts/v4/concepts/hooks" },

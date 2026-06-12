@@ -95,16 +95,9 @@ const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` 
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
 };
-const RWAGATE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  // Clean redeploy (hook ported to current v4 + full periphery) — replaces the
-  // original 0xda48… whose v4-core/periphery versions were mismatched.
-  [ARC_TESTNET_CHAIN_ID]: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
-};
-const ALO_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
-};
-
-export const HOOK_NAMES = ["stable-protection", "dynamic-fee", "rwa-gate", "alo"] as const;
+// Mantua ships two hooks: Stable Protection (USDC/EURC) and Dynamic Fee
+// (cirBTC pairs). RWAGate and ALO were removed from the product.
+export const HOOK_NAMES = ["stable-protection", "dynamic-fee"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
 export { DEFAULT_CHAIN_ID };
@@ -118,10 +111,6 @@ export function getHookAddress(
       return STABLE_PROTECTION_BY_CHAIN[chainId];
     case "dynamic-fee":
       return DYNAMIC_FEE_BY_CHAIN[chainId];
-    case "rwa-gate":
-      return RWAGATE_BY_CHAIN[chainId];
-    case "alo":
-      return ALO_BY_CHAIN[chainId];
   }
 }
 
@@ -191,36 +180,6 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
     token1: "0xAeE5a58b0ae058bfd358CeeB72e4804C16d94F5E", // MOCK cirBTC (8dp)
     tokensAreMocks: true,
   },
-  // Clean redeploy from one consistent v4 version (hook ported to current v4 so
-  // it can carry the periphery the app needs). Supersedes the original mismatched
-  // deployment (old hook 0xda48…, PoolManager 0xA29B…). See deploy/arc-rwagate-clean.
-  "rwa-gate": {
-    poolManager: "0xBC9C4e3e51E18Ea44c7363391d29ed300db57511",
-    hook: "0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80",
-    poolSwapTest: "0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00",
-    poolModifyLiquidityTest: "0xB8736964413a970186359089490f578191170AC0",
-    positionManager: "0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3",
-    stateView: "0xBecb1cd296675CFC3fC8e63c4838590A4C97196d",
-    quoter: "0x49ffeA1ECd7760fC55F3598D7A0d89239cfeAea9",
-    token0: "0x3600000000000000000000000000000000000000", // USDC (canonical)
-    token1: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC (canonical)
-    tokensAreMocks: false,
-    aux: { complianceRegistry: "0x5E33Ed3D77Ff22B9c6eD689a18a040E7633f9003" },
-  },
-  alo: {
-    poolManager: "0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b",
-    hook: "0x18c2c2E657912E21091E364b5daB4f9702c810c8",
-    // Deployed via deploy/arc-alo-periphery/DeployAloSwapRouter (the ALO repo
-    // shipped no swap router); enables swaps on ALO pools.
-    poolSwapTest: "0xFCf895f7F5737b1D582a0bD4b131f88434a94433",
-    poolModifyLiquidityTest: null, // NOT FOUND in repo
-    positionManager: "0x7866e36b7576DF5167cf76770799096Ba6fcD882",
-    stateView: "0xbF8dC490E538a7749f9DF6B34Ee740650D325b15",
-    quoter: "0xA12B21D108Eb0ad982870d90CcB66976274d3b18",
-    token0: "0x1B056aDe32E5F1F782638e21bF1E665059F47971", // MOCK cirBTC (8dp)
-    token1: "0x3600000000000000000000000000000000000000", // USDC (native)
-    tokensAreMocks: true,
-  },
 };
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
@@ -280,9 +239,6 @@ export const DYNAMIC_FEE_HOOK: `0x${string}` | null = DYNAMIC_FEE_BY_CHAIN[ARC_T
 export const HOOK_PERMISSIONS: Record<HookName, readonly string[]> = {
   "stable-protection": ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
   "dynamic-fee": ["BEFORE_SWAP", "AFTER_SWAP"],
-  // TODO(Phase E): confirm from the deployed bytecode (npm run verify:hooks).
-  "rwa-gate": ["BEFORE_INITIALIZE", "BEFORE_SWAP"],
-  alo: ["BEFORE_SWAP", "AFTER_SWAP"],
 } as const;
 
 /**
@@ -301,11 +257,6 @@ export const DYNAMIC_FEE_FLAG = 0x800000;
 export const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true, // SP pool: tickSpacing 1, dynamic fee (repo README)
   "dynamic-fee": true, // fee scales with volatility
-  // Confirmed from the hook repos' deployed pools: RWAGate and ALO pools
-  // were both initialized with a STATIC fee tier (3000 / tickSpacing 60),
-  // so neither overrides the fee with DYNAMIC_FEE_FLAG.
-  "rwa-gate": false,
-  alo: false,
 };
 
 /**

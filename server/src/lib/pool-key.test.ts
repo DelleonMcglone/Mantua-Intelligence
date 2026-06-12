@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 /**
  * `buildPoolKey` unit tests. Guards three invariants that have been the
  * source of multiple production bugs:
@@ -78,8 +79,8 @@ describe("buildPoolKey: hook-aware effective fee", () => {
     assert.equal(r.key.tickSpacing, 10);
   });
 
-  it("rwa-gate → keeps the static fee (no dynamic-fee requirement)", () => {
-    const r = buildPoolKey("USDC", "EURC", 100, HOOK, "rwa-gate");
+  it("no-hook pool → keeps the static fee (no dynamic-fee requirement)", () => {
+    const r = buildPoolKey("USDC", "EURC", 100, HOOK, null);
     assert.equal(r.key.fee, 100);
   });
 

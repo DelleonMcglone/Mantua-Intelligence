@@ -392,12 +392,6 @@ const HOOK_BADGE_TINT: Record<string, { bg: string; fg: string; bd: string }> = 
     bd: "rgba(61, 220, 151, 0.35)",
   },
   "Dynamic Fee": { bg: "rgba(230, 199, 74, 0.14)", fg: "#e6c74a", bd: "rgba(230, 199, 74, 0.35)" },
-  "RWA Gate": { bg: "rgba(91, 155, 213, 0.14)", fg: "#5b9bd5", bd: "rgba(91, 155, 213, 0.35)" },
-  "Async Limit Order": {
-    bg: "rgba(180, 140, 230, 0.14)",
-    fg: "#b48ce6",
-    bd: "rgba(180, 140, 230, 0.35)",
-  },
 };
 
 function HookBadge({ hasHook, label }: { hasHook: boolean; label: string }) {

@@ -38,8 +38,6 @@ const HOOK_OPTIONS: { value: HookName | "none"; label: string }[] = [
   { value: "none", label: "No Hook" },
   { value: "stable-protection", label: HOOK_LABELS["stable-protection"] },
   { value: "dynamic-fee", label: HOOK_LABELS["dynamic-fee"] },
-  { value: "rwa-gate", label: HOOK_LABELS["rwa-gate"] },
-  { value: "alo", label: HOOK_LABELS.alo },
 ];
 
 function safeParse(symbol: TokenSymbol, input: string): string {

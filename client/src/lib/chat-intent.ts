@@ -140,10 +140,6 @@ function amountsCtx(
 function detectHookKeyword(t: string): HookName | null {
   if (/\bdynamic[\s-]?fees?\b/.test(t)) return "dynamic-fee";
   if (/\bstable[\s-]?protection\b/.test(t)) return "stable-protection";
-  // RWA Gate — "rwagate", "rwa gate", "rwa-gate", or bare "rwa".
-  if (/\brwa[\s-]?gate\b/.test(t) || /\brwa\b/.test(t)) return "rwa-gate";
-  // ALO — "alo", "async limit order(s)", or "limit order(s)".
-  if (/\balo\b/.test(t) || /\b(?:async[\s-]?)?limit[\s-]?orders?\b/.test(t)) return "alo";
   return null;
 }
 

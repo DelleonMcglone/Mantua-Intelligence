@@ -4,24 +4,12 @@
  * hook badges from a single source without a circular import.
  */
 
-export type HookName =
-  | "Stable Protection"
-  | "Dynamic Fee"
-  | "RWA Gate"
-  | "Async Limit Order"
-  | "Volatile";
+export type HookName = "Stable Protection" | "Dynamic Fee" | "No Hook";
 
 // Colors match the pools-list HookBadge palette so a hook reads the same
-// everywhere: Stable Protection green, Dynamic Fee yellow, RWA Gate blue,
-// Async Limit Order purple.
+// everywhere: Stable Protection green, Dynamic Fee yellow.
 export const HOOK_TINT: Record<HookName, { bg: string; fg: string; bd: string }> = {
   "Dynamic Fee": { bg: "rgba(230,199,74,0.12)", fg: "#e6c74a", bd: "rgba(230,199,74,0.35)" },
   "Stable Protection": { bg: "rgba(61,220,151,0.12)", fg: "#3ddc97", bd: "rgba(61,220,151,0.35)" },
-  "RWA Gate": { bg: "rgba(91,155,213,0.12)", fg: "#5b9bd5", bd: "rgba(91,155,213,0.35)" },
-  "Async Limit Order": {
-    bg: "rgba(180,140,230,0.12)",
-    fg: "#b48ce6",
-    bd: "rgba(180,140,230,0.35)",
-  },
-  Volatile: { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
+  "No Hook": { bg: "var(--chip)", fg: "var(--text-mute)", bd: "var(--border-soft)" },
 };

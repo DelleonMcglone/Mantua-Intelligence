@@ -33,24 +33,8 @@ const HOOK_ALLOWLIST: Record<
   [ARC_TESTNET_CHAIN_ID]: {
     // Stable Protection — the FX-rate-aware showcase on the stable pair.
     "stable-protection": { pairs: [["USDC", "EURC"]] },
-    // Dynamic Fee — volatile pairs (BTC vs each stablecoin).
+    // Dynamic Fee — cirBTC vs each stablecoin.
     "dynamic-fee": {
-      pairs: [
-        ["USDC", "cirBTC"],
-        ["EURC", "cirBTC"],
-      ],
-    },
-    // RWAGate — its own (allowlisted) pool: a second gated USDC/EURC pool
-    // coexisting with Stable Protection (distinct PoolKey via hook addr),
-    // plus a secondary USDC/cirBTC pool.
-    "rwa-gate": {
-      pairs: [
-        ["USDC", "EURC"],
-        ["USDC", "cirBTC"],
-      ],
-    },
-    // ALO — async limit orders on the volatile pairs.
-    alo: {
       pairs: [
         ["USDC", "cirBTC"],
         ["EURC", "cirBTC"],

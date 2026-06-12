@@ -65,8 +65,6 @@ const HOOK_OPTIONS: { value: HookName | "none"; name: string; desc: string }[] =
     name: HOOK_LABELS["dynamic-fee"],
     desc: HOOK_DESCRIPTIONS["dynamic-fee"],
   },
-  { value: "rwa-gate", name: HOOK_LABELS["rwa-gate"], desc: HOOK_DESCRIPTIONS["rwa-gate"] },
-  { value: "alo", name: HOOK_LABELS.alo, desc: HOOK_DESCRIPTIONS.alo },
 ];
 
 function defaultPairForChain(chainId: SupportedTestnetChainId): [TokenSymbol, TokenSymbol] {
@@ -86,8 +84,6 @@ function hookFromCtx(h: HookName | null | undefined): HookName | "none" {
 const HOOK_REQUIRES_DYNAMIC_FEE: Record<HookName, boolean> = {
   "stable-protection": true,
   "dynamic-fee": true,
-  "rwa-gate": false,
-  alo: false,
 };
 
 function formatMirror(value: number): string {

@@ -217,7 +217,7 @@ const FAQS: FAQItem[] = [
     a: (
       <>
         <p>
-          Mantua ships four Uniswap v4 hooks on Arc Testnet. Each plugs into the pool lifecycle to
+          Mantua ships two Uniswap v4 hooks on Arc Testnet. Each plugs into the pool lifecycle to
           add behavior vanilla pools can&apos;t — and each is live on-chain:
         </p>
         <ul className="mt-3 space-y-2.5 list-disc list-outside pl-5 marker:text-text-mute">
@@ -235,37 +235,11 @@ const FAQS: FAQItem[] = [
             </a>
           </li>
           <li>
-            <strong className="text-text">Dynamic Fee</strong> — scales the per-swap fee in real time
-            from a TWAP-derived volatility signal: cheaper for stable flow, costlier in turbulence.
-            Pairs: USDC/cirBTC, EURC/cirBTC.{" "}
+            <strong className="text-text">Dynamic Fee</strong> — scales the per-swap fee in real
+            time from a TWAP-derived volatility signal: cheaper for stable flow, costlier in
+            turbulence. Pairs: USDC/cirBTC, EURC/cirBTC.{" "}
             <a
               href="https://testnet.arcscan.app/address/0xA1Be807481F532c074380FCcF05be5e2A3ec80C0"
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:text-accent-2 underline"
-            >
-              View on ArcScan
-            </a>
-          </li>
-          <li>
-            <strong className="text-text">RWA Gate</strong> — a permissioned pool: only allowlisted
-            addresses may trade, gating real-world-asset liquidity to compliant participants. Pairs:
-            USDC/EURC, USDC/cirBTC.{" "}
-            <a
-              href="https://testnet.arcscan.app/address/0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80"
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:text-accent-2 underline"
-            >
-              View on ArcScan
-            </a>
-          </li>
-          <li>
-            <strong className="text-text">Async Limit Order (ALO)</strong> — queue limit orders that
-            fill asynchronously when the pool reaches your target price, instead of swapping at
-            market. Pairs: USDC/cirBTC, EURC/cirBTC.{" "}
-            <a
-              href="https://testnet.arcscan.app/address/0x18c2c2E657912E21091E364b5daB4f9702c810c8"
               target="_blank"
               rel="noreferrer"
               className="text-accent hover:text-accent-2 underline"
