@@ -49,9 +49,18 @@ type Sort = (typeof SORTS)[number];
  *  display label so the existing HOOK_TINT palette keeps working
  *  unchanged when we render local positions. */
 function localHookLabel(h: LocalPosition["hook"]): HookName {
-  if (!h) return "Volatile";
-  if (h === "stable-protection") return "Stable Protection";
-  return "Dynamic Fee";
+  switch (h) {
+    case "stable-protection":
+      return "Stable Protection";
+    case "dynamic-fee":
+      return "Dynamic Fee";
+    case "rwa-gate":
+      return "RWA Gate";
+    case "alo":
+      return "Async Limit Order";
+    default:
+      return "Volatile";
+  }
 }
 
 function localPositionToRow(p: LocalPosition): PortfolioPosition {
