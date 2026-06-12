@@ -1,5 +1,9 @@
 import { listBasePools, getTokenPrices, getTokenChangePercents } from "./defillama.ts";
 import { logger } from "./logger.ts";
+import { buildPoolKey } from "./pool-key.ts";
+import { readSlot0 } from "./v4-state-view.ts";
+import { getHookAddress, type FeeTier, type HookName } from "./v4-contracts.ts";
+import { getToken, type TokenSymbol } from "./tokens.ts";
 import { z } from "zod";
 
 /**
@@ -20,10 +24,14 @@ import { z } from "zod";
 
 export const TOPICS = [
   "eth-price",
+  "cirbtc-price",
   "eurc-peg",
   "usdc-eurc-pool",
   "top-stablecoins",
   "cbbtc-24h-volume",
+  "usdc-24h-volume",
+  "market-summary",
+  "arc-pools",
   "mantua-hooks",
   // Generic price lookup — uses the `?symbol=` query param (or the
   // `symbol` body field) to drive a CoinGecko spot fetch. Falls back
@@ -239,6 +247,172 @@ async function cbbtc24hVolume(): Promise<AnalyzeResponse> {
   };
 }
 
+async function cirbtcPrice(): Promise<AnalyzeResponse> {
+  // cirBTC ("Circle Wrapped BTC") tracks Bitcoin — evaluate it at the BTC spot.
+  const [prices, changes] = await Promise.all([
+    getTokenPrices(["coingecko:bitcoin"]),
+    getTokenChangePercents(["coingecko:bitcoin"]),
+  ]);
+  const price = prices["coingecko:bitcoin"]?.price;
+  if (price === undefined) throw new Error("DefiLlama: BTC price unavailable");
+  const change = changes["coingecko:bitcoin"] ?? 0;
+  return {
+    topic: "cirbtc-price",
+    title: "cirBTC spot price",
+    summary: `cirBTC (Circle Wrapped BTC) is evaluated at the Bitcoin spot — ${fmtUsd(price)} per cirBTC${
+      Number.isFinite(change) ? `, ${fmtPct(change)} in the last 24h` : ""
+    }.`,
+    metrics: [
+      { label: "Price (≈ BTC)", value: fmtUsd(price) },
+      { label: "24h change", value: fmtPct(change) },
+    ],
+    sources: [{ name: "DefiLlama", url: "https://defillama.com/coins/coingecko:bitcoin" }],
+  };
+}
+
+async function usdc24hVolume(): Promise<AnalyzeResponse> {
+  const all = await listBasePools();
+  const usdcPools = all.filter((p) => /USDC/i.test(p.symbol));
+  if (usdcPools.length === 0) {
+    return {
+      topic: "usdc-24h-volume",
+      title: "USDC 24h volume",
+      summary: "DefiLlama doesn't currently surface USDC pool volume for this view.",
+      sources: [{ name: "DefiLlama (Base pools)", url: "https://defillama.com/yields?chain=Base" }],
+    };
+  }
+  const total24h = usdcPools.reduce((s, p) => s + (p.volumeUsd1d ?? 0), 0);
+  const total7d = usdcPools.reduce((s, p) => s + (p.volumeUsd7d ?? 0), 0);
+  const avgDaily7d = total7d / 7;
+  const trend = avgDaily7d > 0 ? ((total24h - avgDaily7d) / avgDaily7d) * 100 : 0;
+  const top = usdcPools.sort((a, b) => (b.volumeUsd1d ?? 0) - (a.volumeUsd1d ?? 0))[0]!;
+  return {
+    topic: "usdc-24h-volume",
+    title: "USDC — 24h volume on Base",
+    summary: `Across ${String(usdcPools.length)} USDC pools on Base, ${fmtUsd(total24h)} of volume cleared in the last 24h${
+      Number.isFinite(trend) ? ` (${fmtPct(trend)} vs the trailing 7-day daily average)` : ""
+    }. Largest single pool: ${top.project} ${top.symbol} at ${fmtUsd(top.volumeUsd1d ?? 0)}.`,
+    metrics: [
+      { label: "24h volume (total)", value: fmtUsd(total24h) },
+      { label: "7d daily avg", value: fmtUsd(avgDaily7d) },
+      { label: "Trend vs 7d avg", value: fmtPct(trend) },
+      { label: "Top pool", value: `${top.project} (${fmtUsd(top.volumeUsd1d ?? 0)})` },
+    ],
+    sources: [
+      { name: "DefiLlama (Base USDC pools)", url: "https://defillama.com/yields?chain=Base&token=USDC" },
+    ],
+  };
+}
+
+/** The Mantua token set → CoinGecko ids. cirBTC tracks BTC. */
+const MANTUA_MARKET_TOKENS = [
+  { id: "bitcoin", label: "cirBTC" },
+  { id: "usd-coin", label: "USDC" },
+  { id: "euro-coin", label: "EURC" },
+] as const;
+
+interface CoinGeckoMarket {
+  id: string;
+  current_price: number;
+  price_change_percentage_24h: number | null;
+  market_cap: number | null;
+  total_volume: number | null;
+}
+
+async function marketSummary(): Promise<AnalyzeResponse> {
+  // One cached CoinGecko /coins/markets call (price + 24h change + mcap +
+  // volume) for the three Mantua tokens. The analyze topic cache (5-min TTL)
+  // keeps this to ~1 call/5min, well inside CoinGecko's keyless limit.
+  const ids = MANTUA_MARKET_TOKENS.map((t) => t.id).join(",");
+  const res = await fetch(
+    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=24h`,
+  );
+  if (!res.ok) throw new Error(`CoinGecko markets ${String(res.status)}`);
+  const rows = (await res.json()) as CoinGeckoMarket[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const metrics: { label: string; value: string }[] = [];
+  let mover: { label: string; change: number } | null = null;
+  for (const t of MANTUA_MARKET_TOKENS) {
+    const m = byId.get(t.id);
+    if (!m) continue;
+    const change = m.price_change_percentage_24h ?? 0;
+    if (mover === null || Math.abs(change) > Math.abs(mover.change)) {
+      mover = { label: t.label, change };
+    }
+    metrics.push({
+      label: t.label,
+      value: `${fmtUsd(m.current_price)} (${fmtPct(change)}, mcap ${fmtUsd(m.market_cap ?? 0)})`,
+    });
+  }
+  if (metrics.length === 0) throw new Error("CoinGecko: no market data");
+
+  return {
+    topic: "market-summary",
+    title: "Market summary — Mantua tokens",
+    summary: `Live market data for cirBTC (BTC), USDC and EURC.${
+      mover ? ` Biggest 24h move: ${mover.label} at ${fmtPct(mover.change)}.` : ""
+    }`,
+    metrics,
+    sources: [
+      {
+        name: "CoinGecko",
+        url: "https://www.coingecko.com/en/coins/bitcoin",
+      },
+    ],
+  };
+}
+
+/** The Mantua hook pools on Arc (hook + canonical pair + static fee tier). */
+const ARC_POOLS: { hook: HookName; a: TokenSymbol; b: TokenSymbol; fee: FeeTier; label: string }[] = [
+  { hook: "stable-protection", a: "USDC", b: "EURC", fee: 100, label: "Stable Protection" },
+  { hook: "dynamic-fee", a: "USDC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
+  { hook: "dynamic-fee", a: "EURC", b: "cirBTC", fee: 3000, label: "Dynamic Fee" },
+  { hook: "rwa-gate", a: "USDC", b: "EURC", fee: 3000, label: "RWA Gate" },
+  { hook: "rwa-gate", a: "USDC", b: "cirBTC", fee: 3000, label: "RWA Gate" },
+];
+
+/** sqrtPriceX96 → human price (token1 per token0), decimal-adjusted. */
+function priceFromSqrt(sqrtPriceX96: bigint, dec0: number, dec1: number): number {
+  const r = Number(sqrtPriceX96) / 2 ** 96;
+  return r * r * 10 ** (dec0 - dec1);
+}
+
+async function arcPools(): Promise<AnalyzeResponse> {
+  const metrics: { label: string; value: string }[] = [];
+  let liveCount = 0;
+  for (const p of ARC_POOLS) {
+    const hookAddr = getHookAddress(p.hook);
+    if (!hookAddr) continue;
+    const { key, flipped } = buildPoolKey(p.a, p.b, p.fee, hookAddr, p.hook);
+    const sym0 = flipped ? p.b : p.a;
+    const sym1 = flipped ? p.a : p.b;
+    let slot0: Awaited<ReturnType<typeof readSlot0>> = null;
+    try {
+      slot0 = await readSlot0(key);
+    } catch (err) {
+      logger.warn({ err, pool: `${sym0}/${sym1}` }, "arc-pools slot0 read failed");
+    }
+    if (!slot0) {
+      metrics.push({ label: `${sym0}/${sym1} · ${p.label}`, value: "not initialized" });
+      continue;
+    }
+    liveCount += 1;
+    const price = priceFromSqrt(slot0.sqrtPriceX96, getToken(sym0).decimals, getToken(sym1).decimals);
+    metrics.push({
+      label: `${sym0}/${sym1} · ${p.label}`,
+      value: `1 ${sym0} = ${price.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${sym1} (tick ${String(slot0.tick)})`,
+    });
+  }
+  return {
+    topic: "arc-pools",
+    title: "Live Arc hook pools",
+    summary: `${String(liveCount)} of ${String(ARC_POOLS.length)} Mantua hook pools are initialized on Arc Testnet — prices read live from on-chain v4 state.`,
+    metrics,
+    sources: [{ name: "ArcScan", url: "https://testnet.arcscan.app" }],
+  };
+}
+
 const STABLECOIN_LIST: { symbol: string; name: string; coingeckoId: string; peg: string }[] = [
   { symbol: "USDC", name: "USD Coin", coingeckoId: "usd-coin", peg: "USD" },
   { symbol: "USDT", name: "Tether", coingeckoId: "tether", peg: "USD" },
@@ -346,10 +520,14 @@ const TOPIC_RUNNERS: Record<
   () => Promise<AnalyzeResponse> | AnalyzeResponse
 > = {
   "eth-price": ethPrice,
+  "cirbtc-price": cirbtcPrice,
   "eurc-peg": eurcPeg,
   "usdc-eurc-pool": usdcEurcPool,
   "top-stablecoins": topStablecoins,
   "cbbtc-24h-volume": cbbtc24hVolume,
+  "usdc-24h-volume": usdc24hVolume,
+  "market-summary": marketSummary,
+  "arc-pools": arcPools,
   "mantua-hooks": mantuaHooks,
 };
 
@@ -375,11 +553,16 @@ const STATIC_TTL = { freshMs: Number.MAX_SAFE_INTEGER, staleMs: Number.MAX_SAFE_
 const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
   "mantua-hooks": STATIC_TTL,
   "eth-price": PRICE_TTL,
+  "cirbtc-price": PRICE_TTL,
   "eurc-peg": PRICE_TTL,
   "top-stablecoins": PRICE_TTL,
   "token-price": PRICE_TTL,
   "usdc-eurc-pool": POOL_TTL,
   "cbbtc-24h-volume": POOL_TTL,
+  "usdc-24h-volume": POOL_TTL,
+  "market-summary": PRICE_TTL,
+  // Live on-chain reads — short fresh window so prices reflect recent swaps.
+  "arc-pools": { freshMs: 30_000, staleMs: 5 * 60_000 },
 };
 
 /**
