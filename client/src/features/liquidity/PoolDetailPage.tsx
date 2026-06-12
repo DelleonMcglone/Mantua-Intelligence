@@ -10,6 +10,7 @@ import { usePool } from "./use-pools.ts";
 import { usePoolState } from "./use-pool-state.ts";
 import { usePositions } from "./use-positions.ts";
 import { getUserLocalPositions } from "./local-positions.ts";
+import { getLocalPools } from "./local-pools.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
@@ -34,6 +35,18 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
   const positions = usePositions();
 
   const derived = data ? tryDeriveAddCtx(data.pool) : null;
+
+  // The `local:<key>` poolId encodes the exact pool key, so we can look
+  // up the stored creation tx for the "Pool created" link. Prefer the
+  // dedicated creation (initialize) tx; fall back to the last-activity
+  // tx for pools created before createdTx was tracked.
+  const creationTx = useMemo<string | null>(() => {
+    const PREFIX = "local:";
+    if (!poolId.startsWith(PREFIX)) return null;
+    const key = poolId.slice(PREFIX.length);
+    const lp = getLocalPools().find((p) => p.key === key);
+    return lp?.createdTx ?? lp?.txHash ?? null;
+  }, [poolId]);
   const poolState = usePoolState(
     derived?.tokenA ?? null,
     derived?.tokenB ?? null,
@@ -121,6 +134,17 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
             vol24={data.pool.volumeUsd1d}
             vol7d={data.pool.volumeUsd7d}
           />
+
+          {creationTx && (
+            <a
+              href={`${EXPLORER}/tx/${creationTx}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-text-dim hover:text-accent"
+            >
+              Pool created — view transaction <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
 
           <div className="flex items-center justify-between">
             <RangeToggle value={range} onChange={setRange} />

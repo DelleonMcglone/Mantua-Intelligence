@@ -23,6 +23,10 @@ export interface LocalPool {
   hook: HookName | null;
   /** Last on-chain init or add-liquidity tx hash on this pool. */
   txHash: string;
+  /** The pool's creation (initialize) tx hash — set once when the pool
+   *  is first created, preserved across later add-liquidity updates.
+   *  Surfaced as the "Pool created" link on the pool detail page. */
+  createdTx?: string;
   /** ms epoch of the most recent activity. */
   lastSeenAt: number;
 }
@@ -86,9 +90,15 @@ export function rememberLocalPool(entry: Omit<LocalPool, "key" | "lastSeenAt">) 
   try {
     const existing = getLocalPools();
     const key = localPoolKey(entry.chainId, entry.tokenA, entry.tokenB, entry.fee, entry.hook);
+    const prior = existing.find((p) => p.key === key);
+    const { createdTx: entryCreatedTx, ...rest } = entry;
+    // Preserve the original creation tx across later add-liquidity updates
+    // (which don't carry it).
+    const createdTx = entryCreatedTx ?? prior?.createdTx;
     const next: LocalPool = {
-      ...entry,
+      ...rest,
       key,
+      ...(createdTx ? { createdTx } : {}),
       lastSeenAt: Date.now(),
     };
     const others = existing.filter((p) => p.key !== key);

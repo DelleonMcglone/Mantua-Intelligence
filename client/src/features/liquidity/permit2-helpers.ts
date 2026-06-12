@@ -10,9 +10,6 @@
  * erc20-allowance.ts.
  */
 import { encodeFunctionData } from "viem";
-import { V4_POSITION_MANAGER } from "@/lib/tokens.ts";
-
-const POSITION_MANAGER = V4_POSITION_MANAGER;
 
 interface PermitDetailsWire {
   token: `0x${string}`;
@@ -122,12 +119,20 @@ export function buildSignTypedDataArgs(t: TypedDataWire) {
  * PositionManager.multicall. Multicall is delegatecall, so msg.sender
  * stays the user (which becomes Permit2's `owner`) and msg.value flows
  * through to the inner modifyLiquidities for the native side.
+ *
+ * `positionManager` MUST be the per-hook PositionManager the pool lives
+ * on (the server returns it as the add-liquidity calldata `to`). Each
+ * Mantua hook has its own v4 stack — Stable Protection/no-hook → hero
+ * 0x47AD…, Dynamic Fee → 0xDa1b…, RWA Gate → 0xCa05…, ALO → 0x7866….
+ * Hardcoding the hero PositionManager sends the multicall to the wrong
+ * PoolManager, where the pool isn't initialized, and the mint reverts.
  */
 export function wrapInMulticall(
   owner: `0x${string}`,
   permitBatchWire: PermitBatchWire,
   signature: `0x${string}`,
   modifyLiquiditiesCalldata: `0x${string}`,
+  positionManager: `0x${string}`,
 ): { to: `0x${string}`; data: `0x${string}` } {
   const permitBatch = deserializePermitBatch(permitBatchWire);
   const permitBatchCalldata = encodeFunctionData({
@@ -140,5 +145,5 @@ export function wrapInMulticall(
     functionName: "multicall",
     args: [[permitBatchCalldata, modifyLiquiditiesCalldata]],
   });
-  return { to: POSITION_MANAGER, data };
+  return { to: positionManager, data };
 }
