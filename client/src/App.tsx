@@ -20,6 +20,7 @@ import type { HookName } from "./features/liquidity/use-create-pool.ts";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 import { PositionsList } from "./features/liquidity/PositionsList.tsx";
+import { BridgePanel } from "./features/bridge/BridgePanel.tsx";
 
 type AnalyzeTopic =
   | "eth-price"
@@ -56,7 +57,8 @@ type Route =
       /** Free-form symbol to pass to the `token-price` runner. */
       symbol?: string;
     }
-  | { kind: "agent" };
+  | { kind: "agent" }
+  | { kind: "bridge" };
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -265,6 +267,14 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
+    case "bridge":
+      return (
+        <BridgePanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
   }
 }
 
@@ -278,6 +288,8 @@ function promptToRoute(id: HomePromptId): Route {
       return { kind: "analyze" };
     case "agent":
       return { kind: "agent" };
+    case "bridge":
+      return { kind: "bridge" };
   }
 }
 
