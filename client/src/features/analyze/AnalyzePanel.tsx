@@ -34,6 +34,7 @@ type Topic =
   | "usdc-24h-volume"
   | "market-summary"
   | "arc-pools"
+  | "coinbase-prices"
   | "mantua-hooks"
   | "token-price";
 
@@ -44,6 +45,7 @@ const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
   { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
   { topic: "usdc-24h-volume", question: "What is USDC's 24h volume trend?" },
+  { topic: "coinbase-prices", question: "Coinbase spot prices for USDC, EURC, cirBTC" },
 ];
 
 interface AnalyzePanelProps {

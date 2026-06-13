@@ -1,4 +1,5 @@
 import { listBasePools, getTokenPrices, getTokenChangePercents } from "./defillama.ts";
+import { getCoinbaseMarket, getCoinbaseSpot } from "./coinbase.ts";
 import { logger } from "./logger.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { readSlot0 } from "./v4-state-view.ts";
@@ -32,6 +33,8 @@ export const TOPICS = [
   "usdc-24h-volume",
   "market-summary",
   "arc-pools",
+  // Coinbase read-only public market data (no auth) for the three assets.
+  "coinbase-prices",
   "mantua-hooks",
   // Generic price lookup — uses the `?symbol=` query param (or the
   // `symbol` body field) to drive a CoinGecko spot fetch. Falls back
@@ -518,6 +521,44 @@ function mantuaHooks(): AnalyzeResponse {
   };
 }
 
+/**
+ * Coinbase spot prices for the three Mantua assets via Coinbase's public
+ * (no-auth) market-data endpoints. cirBTC is BTC-pegged, so it tracks
+ * Coinbase's BTC-USD (which also carries 24h change). USDC/EURC come from
+ * the public spot endpoint. Read-only — no trading/keys involved.
+ */
+async function coinbasePrices(): Promise<AnalyzeResponse> {
+  const [btc, eurc, usdc] = await Promise.all([
+    getCoinbaseMarket("BTC-USD"),
+    getCoinbaseSpot("EURC-USD"),
+    getCoinbaseSpot("USDC-USD"),
+  ]);
+  const metrics: AnalyzeMetric[] = [];
+  if (usdc !== null) metrics.push({ label: "USDC", value: fmtUsd(usdc) });
+  if (eurc !== null) metrics.push({ label: "EURC", value: fmtUsd(eurc) });
+  if (btc) {
+    metrics.push({
+      label: "cirBTC (tracks BTC)",
+      value: fmtUsd(btc.price),
+      ...(btc.change24hPct !== null ? { hint: `${fmtPct(btc.change24hPct)} 24h` } : {}),
+    });
+  }
+  if (metrics.length === 0) throw new Error("Coinbase: no market data available");
+  const btcChange = btc?.change24hPct;
+  return {
+    topic: "coinbase-prices",
+    title: "Coinbase spot prices",
+    summary: `Coinbase spot (read-only public market data): USDC ${usdc !== null ? fmtUsd(usdc) : "—"}, EURC ${eurc !== null ? fmtUsd(eurc) : "—"}. cirBTC is BTC-pegged and tracks Coinbase BTC at ${btc ? fmtUsd(btc.price) : "—"}${btcChange != null ? ` (${fmtPct(btcChange)} 24h)` : ""}.`,
+    metrics,
+    sources: [
+      {
+        name: "Coinbase Advanced Trade (public market data)",
+        url: "https://www.coinbase.com/advanced-trade",
+      },
+    ],
+  };
+}
+
 const TOPIC_RUNNERS: Record<
   Exclude<Topic, "token-price">,
   () => Promise<AnalyzeResponse> | AnalyzeResponse
@@ -531,6 +572,7 @@ const TOPIC_RUNNERS: Record<
   "usdc-24h-volume": usdc24hVolume,
   "market-summary": marketSummary,
   "arc-pools": arcPools,
+  "coinbase-prices": coinbasePrices,
   "mantua-hooks": mantuaHooks,
 };
 
@@ -566,6 +608,7 @@ const TOPIC_TTL: Record<Topic, { freshMs: number; staleMs: number }> = {
   "market-summary": PRICE_TTL,
   // Live on-chain reads — short fresh window so prices reflect recent swaps.
   "arc-pools": { freshMs: 30_000, staleMs: 5 * 60_000 },
+  "coinbase-prices": PRICE_TTL,
 };
 
 /**

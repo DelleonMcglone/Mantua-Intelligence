@@ -14,10 +14,12 @@ describe("resolveTokenAlias", () => {
   it("resolves bitcoin / btc to the same canonical entry", () => {
     const a = resolveTokenAlias("bitcoin");
     const b = resolveTokenAlias("btc");
-    assert.equal(a?.coingeckoId, "bitcoin");
-    assert.equal(b?.coingeckoId, "bitcoin");
-    assert.equal(a?.symbol, "BTC");
-    assert.equal(a?.label, "Bitcoin");
+    assert.ok(a);
+    assert.ok(b);
+    assert.equal(a.coingeckoId, "bitcoin");
+    assert.equal(b.coingeckoId, "bitcoin");
+    assert.equal(a.symbol, "BTC");
+    assert.equal(a.label, "Bitcoin");
   });
 
   it("resolves ethereum / eth", () => {
@@ -74,14 +76,12 @@ describe("TOPICS / topicSchema", () => {
       "usdc-eurc-pool",
       "top-stablecoins",
       "cbbtc-24h-volume",
+      "coinbase-prices",
       "mantua-hooks",
       "token-price",
     ];
     for (const t of expected) {
-      assert.ok(
-        (TOPICS as readonly string[]).includes(t),
-        `TOPICS missing ${t}`,
-      );
+      assert.ok((TOPICS as readonly string[]).includes(t), `TOPICS missing ${t}`);
     }
   });
 
