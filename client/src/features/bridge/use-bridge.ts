@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
+import { formatUnits } from "viem";
 import type {
   BridgeResult,
   BridgeStep,
@@ -128,6 +129,18 @@ export function useBridge() {
 function stepError(steps: BridgeStep[]): string | null {
   const failed = steps.find((s) => s.state === "error");
   return failed?.errorMessage ?? null;
+}
+
+/** Format a wei-string gas fee. Arc's native gas token is USDC (6 dp);
+ *  the EVM source chains use 18-dp native (ETH/UNI). */
+export function formatGas(fee: string | undefined, token: string): string {
+  if (!fee) return "—";
+  const decimals = token.toUpperCase().includes("USDC") ? 6 : 18;
+  try {
+    return `${Number(formatUnits(BigInt(fee), decimals)).toFixed(6)} ${token}`;
+  } catch {
+    return "—";
+  }
 }
 
 /** Human-readable label for a CCTP fee bucket. */
