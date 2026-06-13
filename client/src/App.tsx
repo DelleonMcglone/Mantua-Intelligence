@@ -20,7 +20,7 @@ import type { HookName } from "./features/liquidity/use-create-pool.ts";
 import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
 import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
 import { PositionsList } from "./features/liquidity/PositionsList.tsx";
-import { BridgePanel } from "./features/bridge/BridgePanel.tsx";
+import { TransferPanel } from "./features/bridge/TransferPanel.tsx";
 
 type AnalyzeTopic =
   | "eth-price"
@@ -269,7 +269,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
       );
     case "bridge":
       return (
-        <BridgePanel
+        <TransferPanel
           onClose={() => {
             setRoute({ kind: "home" });
           }}
