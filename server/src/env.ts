@@ -3,7 +3,7 @@ import { z } from "zod";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3001),
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
 
   PRIVY_APP_ID: z.string().min(1),
   PRIVY_APP_SECRET: z.string().min(1),
@@ -28,6 +28,15 @@ const schema = z.object({
     .string()
     .min(1)
     .default("HNCFA9TyBqpo5qpe6QreQABAA1kV8g46mhkCcicu6v2R"),
+
+  /** thirdweb Insight — indexed on-chain data (transactions, events,
+   *  token balances/metadata) powering the Analyze/Research feature.
+   *  Server-side calls use the secret key (x-secret-key header). Absent
+   *  ⇒ Insight-backed topics degrade gracefully ("not configured").
+   *  THIRDWEB_CLIENT_ID is optional (used only if a request must fall
+   *  back to the public client-id auth path). */
+  THIRDWEB_SECRET_KEY: z.string().min(1).optional(),
+  THIRDWEB_CLIENT_ID: z.string().min(1).optional(),
 
   CDP_PROJECT_ID: z.string().min(1).optional(),
   CDP_API_KEY_NAME: z.string().min(1).optional(),
