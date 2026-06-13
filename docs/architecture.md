@@ -152,6 +152,50 @@ if (!ok) return;
 await submitSwap(...);
 ```
 
+## Arc AgentKit agent (`agent/` workspace)
+
+Coinbase **AgentKit `0.10.4`** (TypeScript) agent on **Arc testnet** via
+`ViemWalletProvider` — `CdpWalletProvider` is not used because Arc is not a
+CDP-supported network and is absent from AgentKit's `CHAIN_ID_TO_NETWORK_ID`
+map. Isolated as its own workspace so it can pin **zod 3.25.76** + **viem
+2.38.3** (AgentKit-compatible) without disturbing the server's zod v4 / viem
+2.48.4. CDP-native action providers (`cdpApiActionProvider`, `deploy_token`, the
+CDP faucet) are intentionally not registered — they assume CDP networks.
+
+**Chain:** id `5042002`, RPC `https://rpc.testnet.arc.network`, explorer
+`https://testnet.arcscan.app`.
+
+**Decimals decision (critical).** Arc's native gas token (USDC) uses **18
+decimals**; the USDC **ERC-20 interface uses 6 decimals**. The two are never
+mixed: gas/fee math uses 18-dp native units; all balances, transfers, and
+ERC-8183 escrow use the 6-dp ERC-20 interface. Centralized in
+`agent/src/lib/decimals.ts` (gap = 10^12), with conversion tests both ways.
+Source: [How Gas Works on Arc](https://www.arc.network/blog/how-gas-works-on-arc).
+
+**Verified contract addresses** (loaded from env, never hardcoded in source):
+
+| Standard | Contract                       | Address                                      | Source                                                                                              |
+| -------- | ------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| ERC-8004 | IdentityRegistry               | `0x8004A818BFB912233c491871b3d84c89A494BD9e` | docs.arc.network — register-your-first-ai-agent                                                     |
+| ERC-8004 | ReputationRegistry             | `0x8004B663056A597Dffe9eCcC1965A193B7388713` | docs.arc.network — register-your-first-ai-agent                                                     |
+| ERC-8004 | ValidationRegistry             | `0x8004Cb1BF31DAf7788923b405b754f57acEB4272` | docs.arc.network — register-your-first-ai-agent                                                     |
+| ERC-8183 | AgenticCommerce (job + escrow) | `0x0747EEf0706327138c69792bF28Cd525089e4583` | docs.arc.network — create-your-first-erc-8183-job                                                   |
+| token    | USDC ERC-20 (6-dp)             | `0x3600000000000000000000000000000000000000` | Circle USDC contract addresses (Arc testnet)                                                        |
+| token    | EURC ERC-20 (6-dp)             | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | Circle EURC contract addresses (Arc testnet)                                                        |
+| token    | cirBTC ERC-20 (8-dp)           | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | **Repo-sourced** (Mantua token registry) — NOT in Circle's official Arc docs; verify before mainnet |
+
+All four standard contracts are ERC-1967 proxies; calls target the proxy
+addresses above. ABIs (inputs + outputs) were transcribed from the verified
+implementation contracts via Arcscan and live in `agent/src/abis/`.
+
+**Funding.** Gas is native USDC only (no test ETH). Top up via the Circle
+faucet (`https://faucet.circle.com`, ~20 USDC / address / chain / 2h). The CDP
+faucet action is disabled. See `agent/docs/funding-runbook.md`; the
+`check_balances` action warns on low gas.
+
+**Assets allowlist.** USDC / EURC / cirBTC only (`agent/src/config/assets.ts`);
+any other asset is rejected with a clear error.
+
 ## Decision log
 
 See `docs/decisions/v2-open-decisions.md` for the per-decision reasoning and `docs/tasks/v2-roadmap.md` for the locked task list.
