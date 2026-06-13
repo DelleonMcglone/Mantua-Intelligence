@@ -1,0 +1,25 @@
+{
+  "name": "@mantua/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Coinbase AgentKit agent on Arc testnet — ERC-8004 identity/reputation + ERC-8183 jobs. Isolated workspace (pins zod v3 + AgentKit-matched viem to avoid the server's zod v4).",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "start": "tsx --env-file-if-exists=.env src/index.ts",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "find src -name '*.test.ts' | xargs tsx --env-file-if-exists=.env --test"
+  },
+  "dependencies": {
+    "@coinbase/agentkit": "0.10.4",
+    "viem": "2.38.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3"
+  }
+}

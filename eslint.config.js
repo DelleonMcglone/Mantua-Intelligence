@@ -54,12 +54,36 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ["agent/**/*.ts"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      globals: globals.node,
+      parserOptions: {
+        project: ["./agent/tsconfig.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  // Test files use node:test's test()/describe()/it(), which intentionally
+  // return un-awaited promises (the runner tracks them). Don't flag those.
+  {
+    files: ["**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-floating-promises": "off",
+    },
+  },
   // Files outside the client/server tsconfig projects (one-off Node
   // scripts and root-level config files). Keep syntactic rules but
   // disable type-aware ones so we don't have to maintain a dedicated
   // tsconfig project for them.
   {
-    files: ["api/**/*.ts", "contracts/script/**/*.ts", "eslint.config.js", "*.config.{js,cjs,mjs,ts}"],
+    files: [
+      "api/**/*.ts",
+      "contracts/script/**/*.ts",
+      "eslint.config.js",
+      "*.config.{js,cjs,mjs,ts}",
+    ],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ecmaVersion: 2023,
