@@ -111,19 +111,19 @@ export function TestnetSwapPanel({
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
   const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
-  // USDC/EURC is always Stable Protection. cirBTC pairs offer Dynamic Fee
-  // (default) or Volatile (no hook) via a toggle. USDC/EURC → 0.01%; every
-  // cirBTC pool → 0.30%.
+  // Every supported pair can be swapped against its recommended-hook pool
+  // OR a no-hook pool, via the toggle below — matching what's creatable:
+  //   USDC/EURC          → Stable Protection | No Hook
+  //   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook
+  // `useHook` defaults to on, so the recommended hook is the default.
   const pairHook = useMemo(() => recommendedHookForPair(tokenIn, tokenOut), [tokenIn, tokenOut]);
-  const isCirBtcPair = pairHook === "dynamic-fee";
-  const [cirBtcMode, setCirBtcMode] = useState<"dynamic-fee" | "volatile">("dynamic-fee");
-  const hook: HookName | "none" = useMemo(() => {
-    if (pairHook === "stable-protection") return "stable-protection";
-    if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
-    return "none";
-  }, [pairHook, cirBtcMode]);
-  // USDC/EURC → 0.01%; cirBTC Dynamic Fee → 0.05% (funded, correct-price
-  // pools); Volatile (no-hook) → 0.30%.
+  const [useHook, setUseHook] = useState(true);
+  const hook: HookName | "none" = useMemo(
+    () => (pairHook && useHook ? pairHook : "none"),
+    [pairHook, useHook],
+  );
+  // Fee tier follows the chosen hook: Stable Protection → 0.01%; Dynamic
+  // Fee → 0.05% (funded, correct-price pools); No Hook → 0.30%.
   const fee: FeeTier = useMemo(
     () => (hook === "stable-protection" ? 100 : hook === "dynamic-fee" ? 500 : 3000),
     [hook],
@@ -368,26 +368,26 @@ export function TestnetSwapPanel({
           </div>
         </div>
 
-        {/* Hook is auto-assigned by the pair. cirBTC pairs get a Dynamic Fee /
-            Volatile (no hook) toggle; USDC/EURC is read-only Stable Protection. */}
-        {isCirBtcPair ? (
+        {/* Every pair offers its recommended hook or no hook — pick which
+            pool to swap against. (Hidden if the pair has no recommended hook.) */}
+        {pairHook ? (
           <div className="mt-5">
             <p className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
               LIQUIDITY HOOK
             </p>
             <div className="flex gap-1 bg-bg-elev p-0.5 rounded-md border border-border-soft">
-              {(["dynamic-fee", "volatile"] as const).map((m) => (
+              {([true, false] as const).map((on) => (
                 <button
-                  key={m}
+                  key={String(on)}
                   type="button"
                   onClick={() => {
-                    setCirBtcMode(m);
+                    setUseHook(on);
                   }}
                   className={`flex-1 py-2 text-[12px] rounded-xs font-medium ${
-                    cirBtcMode === m ? "bg-chip text-text" : "bg-transparent text-text-dim"
+                    useHook === on ? "bg-chip text-text" : "bg-transparent text-text-dim"
                   }`}
                 >
-                  {m === "dynamic-fee" ? "Dynamic Fee" : "Volatile"}
+                  {on ? HOOK_LABELS[pairHook] : "No Hook"}
                 </button>
               ))}
             </div>
@@ -396,7 +396,7 @@ export function TestnetSwapPanel({
           <div className="mt-5 flex items-center justify-between text-[13px]">
             <span className="text-text-dim">Liquidity hook</span>
             <span className="font-medium text-text">
-              {hook === "none" ? "Volatile" : HOOK_LABELS[hook]}
+              {hook === "none" ? "No Hook" : HOOK_LABELS[hook]}
             </span>
           </div>
         )}

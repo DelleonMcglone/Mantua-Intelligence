@@ -90,20 +90,18 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const [defaultA, defaultB] = defaultPairForChain(chainId);
   const [tokenA, setTokenA] = useState<TokenSymbol>(ctx?.tokenA ?? defaultA);
   const [tokenB, setTokenB] = useState<TokenSymbol>(ctx?.tokenB ?? defaultB);
-  // Hook + fee tier are AUTO-ASSIGNED by the pair — there are no manual
-  // pickers. USDC/EURC → Stable Protection @ 0.01%; USDC/cirBTC &
-  // EURC/cirBTC → Dynamic Fee @ 0.30% (its configured tier). Any chat-intent
-  // ctx.hook / ctx.fee is ignored: the pair is the single source of truth.
-  // USDC/EURC is always Stable Protection. cirBTC pairs offer two pool
-  // types — Dynamic Fee (default) or Volatile (no hook) — via a toggle.
+  // The fee tier is auto-assigned by the chosen hook. Every supported pair
+  // can be created with its recommended hook OR with no hook (a plain
+  // pool), via the toggle below:
+  //   USDC/EURC          → Stable Protection | No Hook
+  //   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook
+  // `useHook` defaults to on, so the recommended hook is the default.
   const pairHook = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
-  const isCirBtcPair = pairHook === "dynamic-fee";
-  const [cirBtcMode, setCirBtcMode] = useState<"dynamic-fee" | "volatile">("dynamic-fee");
-  const hook: HookName | "none" = useMemo(() => {
-    if (pairHook === "stable-protection") return "stable-protection";
-    if (pairHook === "dynamic-fee") return cirBtcMode === "volatile" ? "none" : "dynamic-fee";
-    return "none";
-  }, [pairHook, cirBtcMode]);
+  const [useHook, setUseHook] = useState(true);
+  const hook: HookName | "none" = useMemo(
+    () => (pairHook && useHook ? pairHook : "none"),
+    [pairHook, useHook],
+  );
   // Fee tier follows the pool that actually exists on-chain: USDC/EURC
   // Stable Protection → 0.01%; cirBTC Dynamic Fee → 0.05% (the funded,
   // correct-price pools); Volatile (no-hook) → 0.30%.
@@ -160,7 +158,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const hookIncompatible = hookCompatibilityError(tokenA, tokenB, hookName);
   const ready =
     tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0" && hookIncompatible === null;
-  const hookSummary = hook === "none" ? "Volatile" : HOOK_LABELS[hook];
+  const hookSummary = hook === "none" ? "No Hook" : HOOK_LABELS[hook];
   const hookDesc = hook === "none" ? "No hook — standard execution" : HOOK_DESCRIPTIONS[hook];
 
   async function onSubmit() {
@@ -314,21 +312,21 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
             <div className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">
               LIQUIDITY HOOK
             </div>
-            {isCirBtcPair && !locked ? (
-              // cirBTC pairs: choose Dynamic Fee or Volatile (no hook).
+            {pairHook && !locked ? (
+              // Every hooked pair: choose the recommended hook or no hook.
               <div className="flex gap-1 bg-bg-elev p-0.5 rounded-md border border-border-soft">
-                {(["dynamic-fee", "volatile"] as const).map((m) => (
+                {([true, false] as const).map((on) => (
                   <button
-                    key={m}
+                    key={String(on)}
                     type="button"
                     onClick={() => {
-                      setCirBtcMode(m);
+                      setUseHook(on);
                     }}
                     className={`flex-1 py-2 text-[12px] rounded-xs font-medium ${
-                      cirBtcMode === m ? "bg-chip text-text" : "bg-transparent text-text-dim"
+                      useHook === on ? "bg-chip text-text" : "bg-transparent text-text-dim"
                     }`}
                   >
-                    {m === "dynamic-fee" ? "Dynamic Fee" : "Volatile"}
+                    {on ? HOOK_LABELS[pairHook] : "No Hook"}
                   </button>
                 ))}
               </div>
