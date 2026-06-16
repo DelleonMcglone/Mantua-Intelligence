@@ -37,6 +37,9 @@ export function useEarnings(walletAddress: string | null): UseEarnings {
   }, [walletAddress]);
 
   useEffect(() => {
+    // fetchEarnings sets state asynchronously after its await; the initial
+    // synchronous setLoading is an intentional load-state reset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchEarnings();
   }, [fetchEarnings]);
 

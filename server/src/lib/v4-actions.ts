@@ -90,8 +90,5 @@ export function encodeUnlockData(
   actions: `0x${string}`,
   params: readonly `0x${string}`[],
 ): `0x${string}` {
-  return encodeAbiParameters(
-    [{ type: "bytes" }, { type: "bytes[]" }],
-    [actions, params as readonly `0x${string}`[]],
-  );
+  return encodeAbiParameters([{ type: "bytes" }, { type: "bytes[]" }], [actions, params]);
 }

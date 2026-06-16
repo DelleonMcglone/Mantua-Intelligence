@@ -48,9 +48,9 @@ const quoteResponseSchema = z
           )
           .optional(),
       })
-      .passthrough(),
+      .loose(),
   })
-  .passthrough();
+  .loose();
 
 export type UniswapQuote = z.infer<typeof quoteResponseSchema>;
 
@@ -64,9 +64,9 @@ const swapResponseSchema = z
         value: z.string(),
         gasLimit: z.string().optional(),
       })
-      .passthrough(),
+      .loose(),
   })
-  .passthrough();
+  .loose();
 
 export type UniswapSwapTx = z.infer<typeof swapResponseSchema>["swap"];
 

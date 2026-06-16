@@ -5,7 +5,7 @@ import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { CHAIN_INFO } from "@/lib/chains.ts";
 import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
-import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
+import { AssetIcon } from "./asset-icons.tsx";
 import {
   toDisplayAssets,
   usePortfolio,
@@ -56,7 +56,7 @@ export function AssetDetailPanel({ symbol, onClose }: Props) {
       <div className="flex-1 overflow-auto px-5 pt-2 pb-5 space-y-4">
         <div className="flex items-center gap-3 p-4 bg-bg-elev rounded-md border border-border-soft">
           <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex">
-            <AssetIcon symbol={symbol as AssetSymbol} size={36} />
+            <AssetIcon symbol={symbol} size={36} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-text-mute">Balance</div>
@@ -106,7 +106,9 @@ function TxRow({
 }) {
   const label = describeTx(tx, symbol);
   const when = formatRelative(tx.createdAt);
-  const usd = tx.usdValue ? `$${Number(tx.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+  const usd = tx.usdValue
+    ? `$${Number(tx.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : null;
   return (
     <a
       href={`${explorerUrl}/tx/${tx.txHash}`}

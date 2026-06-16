@@ -19,10 +19,7 @@ export interface WalletAgeInfo {
  * row already exists for this Privy user id, only `primary_address` is
  * updated (if missing). `first_seen_at` is preserved on subsequent calls.
  */
-export async function recordFirstSeen(
-  privyUserId: string,
-  primaryAddress: string,
-): Promise<Date> {
+export async function recordFirstSeen(privyUserId: string, primaryAddress: string): Promise<Date> {
   const lower = primaryAddress.toLowerCase();
   const [row] = await db
     .insert(users)
@@ -35,6 +32,7 @@ export async function recordFirstSeen(
       },
     })
     .returning({ firstSeenAt: users.firstSeenAt });
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the returning row as defined, but defends against an empty result.
   if (!row) throw new Error("recordFirstSeen: insert returned no row");
   return row.firstSeenAt;
 }
@@ -50,6 +48,7 @@ export async function getWalletAge(address: string): Promise<WalletAgeInfo | nul
     .from(users)
     .where(eq(users.primaryAddress, lower))
     .limit(1);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown wallet.
   if (!row) return null;
 
   const ageDays = Math.floor((Date.now() - row.firstSeenAt.getTime()) / MS_PER_DAY);

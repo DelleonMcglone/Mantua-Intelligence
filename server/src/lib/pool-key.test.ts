@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 /**
  * `buildPoolKey` unit tests. Guards three invariants that have been the
  * source of multiple production bugs:

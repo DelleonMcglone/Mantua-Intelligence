@@ -23,7 +23,7 @@ export function classifySlippage(bps: number): SlippageWarning {
   if (bps > MAX_SLIPPAGE_BPS) {
     throw new SafetyError(
       "slippage_too_high",
-      `Slippage ${bps} bps exceeds the hard cap of ${MAX_SLIPPAGE_BPS} bps (5%).`,
+      `Slippage ${String(bps)} bps exceeds the hard cap of ${String(MAX_SLIPPAGE_BPS)} bps (5%).`,
       { bps, max: MAX_SLIPPAGE_BPS },
     );
   }

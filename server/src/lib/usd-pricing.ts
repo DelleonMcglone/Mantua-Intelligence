@@ -25,8 +25,9 @@ export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
 }
 
 async function getUsdPriceForToken(token: Token | undefined): Promise<number> {
-  // Tokens without a CoinGecko id (e.g. cirBTC) or an unknown symbol
-  // simply have no price — return 0 rather than throwing.
+  // Tokens without a CoinGecko id, or an unknown symbol, simply have no
+  // price — return 0 rather than throwing. (All current Arc tokens are
+  // priced: USDC→usd-coin, EURC→euro-coin, cirBTC→bitcoin.)
   if (!token || !token.coingeckoId) return 0;
   const cached = cache.get(token.coingeckoId);
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.usd;

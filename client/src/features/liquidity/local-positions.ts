@@ -84,6 +84,9 @@ export function rememberLocalPosition(entry: Omit<LocalPosition, "createdAt">) {
     // Dedupe on `(chainId, tokenId)` — tokenIds aren't unique across
     // chains, so the composite key prevents cross-chain collisions.
     const others = existing.filter(
+      // The chainId check is defensive for future multi-chain support; today
+      // SupportedTestnetChainId is a single literal so TS sees it as constant.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       (p) => !(p.tokenId === entry.tokenId && p.chainId === entry.chainId),
     );
     const next: LocalPosition = { ...entry, createdAt: Date.now() };

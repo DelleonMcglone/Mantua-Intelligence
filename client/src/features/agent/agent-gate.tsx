@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- co-located gate helpers + component by design. */
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerAddressUrl } from "@/lib/chains.ts";
 import { AgentStrip } from "./AgentStrip.tsx";

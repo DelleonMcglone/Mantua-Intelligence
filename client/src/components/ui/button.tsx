@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- UI primitive: component + its cva variants live together by design. */
 import { forwardRef } from "react";
 import type { ButtonHTMLAttributes } from "react";
 import { Slot } from "@radix-ui/react-slot";
@@ -17,12 +18,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary:
-          "bg-accent text-white hover:bg-accent/90 active:bg-accent/95",
-        ghost:
-          "bg-transparent border border-border text-text-dim hover:bg-bg-elev hover:text-text",
-        chip:
-          "bg-bg-elev border border-border text-text-dim hover:text-text rounded-full",
+        primary: "bg-accent text-white hover:bg-accent/90 active:bg-accent/95",
+        ghost: "bg-transparent border border-border text-text-dim hover:bg-bg-elev hover:text-text",
+        chip: "bg-bg-elev border border-border text-text-dim hover:text-text rounded-full",
         icon: "bg-transparent border border-border text-text-dim hover:text-text rounded-sm",
         destructive: "bg-red text-white hover:bg-red/90",
       },
@@ -38,8 +36,7 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
 

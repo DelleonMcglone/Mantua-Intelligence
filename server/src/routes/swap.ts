@@ -40,7 +40,9 @@ swapRouter.post(
       res.json({ swap });
     } catch (err) {
       const message = err instanceof Error ? err.message : "calldata failed";
-      res.status(502).json({ error: "Upstream calldata failed", code: "UPSTREAM_SWAP", details: message });
+      res
+        .status(502)
+        .json({ error: "Upstream calldata failed", code: "UPSTREAM_SWAP", details: message });
     }
   },
 );
@@ -66,7 +68,9 @@ swapRouter.post(
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
+      res
+        .status(400)
+        .json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
       return;
     }
     const ctx = getRequestContext(req);
@@ -79,14 +83,25 @@ swapRouter.post(
     const { txHash, tokenIn, tokenOut, amountInRaw, amountOutRaw, slippageBps, outcome } =
       parsed.data;
 
-    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.privyUserId, req.privyUserId)).limit(1);
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.privyUserId, req.privyUserId))
+      .limit(1);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
     if (!user) {
       res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
       return;
     }
 
     const usdValue = await tokenAmountUsd(tokenIn, BigInt(amountInRaw));
-    const params = { tokenIn, tokenOut, amountInRaw, amountOutRaw, ...(slippageBps !== undefined ? { slippageBps } : {}) };
+    const params = {
+      tokenIn,
+      tokenOut,
+      amountInRaw,
+      amountOutRaw,
+      ...(slippageBps !== undefined ? { slippageBps } : {}),
+    };
 
     await db.insert(portfolioTransactions).values({
       userId: user.id,
@@ -96,7 +111,7 @@ swapRouter.post(
       chainId: ACTIVE_CHAIN_ID,
       params,
       outcome,
-      usdValue: usdValue > 0 ? String(usdValue.toFixed(2)) : null,
+      usdValue: usdValue > 0 ? usdValue.toFixed(2) : null,
     });
 
     if (outcome === "success" && usdValue > 0) {

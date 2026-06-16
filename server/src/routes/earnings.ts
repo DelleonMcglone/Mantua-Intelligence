@@ -54,6 +54,7 @@ earningsRouter.get("/api/earnings", requireAuth, async (req: Request, res: Respo
       .from(users)
       .where(eq(users.privyUserId, req.privyUserId))
       .limit(1);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
     if (!user) {
       res.json({ totalAccruedUsd: 0, positions: [] });
       return;
@@ -158,6 +159,7 @@ earningsRouter.post(
         .from(users)
         .where(eq(users.privyUserId, req.privyUserId))
         .limit(1);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
       if (!user) {
         res.json({ txs: [] });
         return;
