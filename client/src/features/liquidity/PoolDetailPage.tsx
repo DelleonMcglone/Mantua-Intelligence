@@ -3,7 +3,9 @@ import { ExternalLink, Trash2 } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { EXPLORER_URL, IS_MAINNET, TOKENS, ZERO_ADDRESS } from "@/lib/tokens.ts";
+import { EXPLORER_URL, IS_MAINNET, TOKENS } from "@/lib/tokens.ts";
+import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
+import { useOnchainPositions } from "@/features/portfolio/use-onchain-positions.ts";
 import type { PoolKeyContext } from "./AddLiquidityForm.tsx";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
@@ -11,7 +13,8 @@ import { usePoolState } from "./use-pool-state.ts";
 import { usePositions } from "./use-positions.ts";
 import { getUserLocalPositions } from "./local-positions.ts";
 import { getLocalPools } from "./local-pools.ts";
-import { HOOK_ADDRESS } from "./hook-recommendations.ts";
+import { localPositionToPosition } from "./position-adapters.ts";
+import type { HookName } from "./use-create-pool.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
@@ -34,8 +37,21 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
   const [removing, setRemoving] = useState<Position | null>(null);
   const { data, error, loading } = usePool(poolId, range);
   const positions = usePositions();
+  const { walletAddress } = usePortfolio();
+  const onchainPositions = useOnchainPositions(walletAddress);
 
   const derived = data ? tryDeriveAddCtx(data.pool) : null;
+
+  // Authoritative hook for `local:<key>` pools — read straight from the
+  // stored pool record rather than inferred from the fee tier, so a
+  // no-hook pool can never inherit the pair's default recommendation
+  // (e.g. USDC/EURC No-Hook must not open as Stable Protection).
+  const localHook = useMemo<HookName | null | undefined>(() => {
+    const PREFIX = "local:";
+    if (!poolId.startsWith(PREFIX)) return undefined;
+    const key = poolId.slice(PREFIX.length);
+    return getLocalPools().find((p) => p.key === key)?.hook;
+  }, [poolId]);
 
   // The `local:<key>` poolId encodes the exact pool key, so we can look
   // up the stored creation tx for the "Pool created" link. Prefer the
@@ -81,7 +97,12 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
     const knownTokenIds = new Set(
       fromApi.map((p) => p.tokenId).filter((id): id is string => id !== null),
     );
-    const fromLocal: Position[] = getUserLocalPositions()
+    // Source positions on-chain (authoritative — survives cache clears and
+    // catches positions opened anywhere); fall back to the localStorage
+    // breadcrumb while that fetch is in flight. Both share the LocalPosition
+    // shape, so the same adapter + match works for either.
+    const source = onchainPositions.data ?? getUserLocalPositions();
+    const fromOnchain: Position[] = source
       .filter((lp) => {
         if (lp.fee !== derived.fee) return false;
         return (
@@ -90,25 +111,19 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
         );
       })
       .filter((lp) => !knownTokenIds.has(lp.tokenId))
-      .map((lp) => ({
-        id: "",
-        tokenId: lp.tokenId,
-        tickLower: 0,
-        tickUpper: 0,
-        liquidity: "0",
-        status: "open" as const,
-        openedTx: lp.txHash,
-        closedTx: null,
-        createdAt: new Date(lp.createdAt).toISOString(),
-        poolKeyHash: "",
-        token0: TOKENS[lp.tokenA].address.toLowerCase(),
-        token1: TOKENS[lp.tokenB].address.toLowerCase(),
-        fee: lp.fee,
-        tickSpacing: 0,
-        hookAddress: lp.hook ? HOOK_ADDRESS[lp.hook] : ZERO_ADDRESS,
-      }));
-    return [...fromApi, ...fromLocal];
-  }, [positions.data, derived]);
+      .map(localPositionToPosition);
+    return [...fromApi, ...fromOnchain];
+  }, [positions.data, derived, onchainPositions.data]);
+
+  // Removing liquidity is a single flow: one "Remove liquidity" action that
+  // opens the modal for the user's position in this pool (the modal burns/
+  // decreases the position and returns BOTH tokens in one transaction).
+  // Pick the most recent removable position (on-chain rows are newest-first;
+  // a missing tokenId can't be removed).
+  const removablePosition = useMemo<Position | null>(
+    () => matchingPositions.find((p) => p.tokenId !== null) ?? null,
+    [matchingPositions],
+  );
 
   return (
     <>
@@ -154,13 +169,17 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
 
           <TvlChart points={data.chart} metric={metric} />
 
-          <div className="space-y-1">
+          <div className="space-y-2">
             <Button
               variant="primary"
               size="md"
               disabled={!addStatus.enabled}
               onClick={() => {
-                if (addStatus.enabled && derived) onAddLiquidity(derived);
+                if (addStatus.enabled && derived) {
+                  onAddLiquidity(
+                    localHook === undefined ? derived : { ...derived, hook: localHook },
+                  );
+                }
               }}
               className="w-full"
             >
@@ -169,36 +188,21 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
             {addStatus.hint && (
               <p className="text-[11px] text-text-mute text-center">{addStatus.hint}</p>
             )}
+            {/* Single remove flow: one action that opens the modal to pull
+                BOTH tokens out of this pool in one transaction. */}
+            {removablePosition && (
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => {
+                  setRemoving(removablePosition);
+                }}
+                className="w-full"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remove liquidity
+              </Button>
+            )}
           </div>
-
-          {matchingPositions.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-wider text-text-mute">
-                Your positions in this pool
-              </p>
-              {matchingPositions.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-sm border border-border-soft bg-bg-elev"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-mono">token #{p.tokenId ?? "—"}</div>
-                    <div className="text-[11px] text-text-dim">liquidity {p.liquidity}</div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={p.tokenId === null}
-                    onClick={() => {
-                      setRemoving(p);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" /> Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
 
           <RemoveLiquidityModal
             position={removing}
@@ -208,6 +212,7 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
             onSuccess={() => {
               setRemoving(null);
               positions.reload();
+              onchainPositions.refetch();
             }}
           />
 

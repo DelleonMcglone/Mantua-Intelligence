@@ -1,5 +1,7 @@
 import type { TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
+import { hookForPairAndFee } from "./hook-recommendations.ts";
+import type { HookName } from "./use-create-pool.ts";
 import type { PoolSummary } from "./types.ts";
 
 /**
@@ -27,6 +29,10 @@ export interface DerivedAddCtx {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Hook bound to the existing pool, recovered from pair + fee tier.
+   *  Null = no-hook pool. Lets the Add-Liquidity form lock onto the
+   *  pool's actual hook instead of the pair's default recommendation. */
+  hook: HookName | null;
 }
 
 function symbolToToken(s: string): TokenSymbol | null {
@@ -55,9 +61,11 @@ export function parseFeeTier(meta: string | null): FeeTier | null {
  * mapped to our supported set. Caller is still responsible for
  * verifying the v4 pool exists on-chain (via /api/pool-state).
  */
-export function tryDeriveAddCtx(pool: Pick<PoolSummary, "symbol" | "feeTier">): DerivedAddCtx | null {
+export function tryDeriveAddCtx(
+  pool: Pick<PoolSummary, "symbol" | "feeTier">,
+): DerivedAddCtx | null {
   const pair = parsePairSymbol(pool.symbol);
   const fee = parseFeeTier(pool.feeTier);
   if (!pair || fee === null) return null;
-  return { tokenA: pair[0], tokenB: pair[1], fee };
+  return { tokenA: pair[0], tokenB: pair[1], fee, hook: hookForPairAndFee(pair[0], pair[1], fee) };
 }
