@@ -71,6 +71,14 @@ export function extractRawReason(input: unknown): string {
   if (typeof input === "object") {
     const maybeMessage = (input as { message?: unknown }).message;
     if (typeof maybeMessage === "string") return maybeMessage;
+    try {
+      return JSON.stringify(input);
+    } catch {
+      return "Unknown error";
+    }
   }
+  // Objects are handled above; remaining values are primitives where
+  // String() is safe and never yields "[object Object]".
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
   return String(input);
 }

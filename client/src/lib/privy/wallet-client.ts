@@ -30,7 +30,7 @@ export function useArcWalletClient() {
   const { wallets } = useWallets();
 
   return useCallback(async () => {
-    const active = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
+    const active = wallets.find((w) => w.walletClientType === "privy") ?? wallets.at(0);
     if (!active) return null;
 
     if (active.chainId && active.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {

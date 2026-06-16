@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- context module: Provider component + useConfirmedAction hook live together. */
 import { createContext, useCallback, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -93,12 +94,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             {pending?.description && <DialogDescription>{pending.description}</DialogDescription>}
           </DialogHeader>
           {pending?.doubleConfirm && doubleConfirmed && (
-            <p className="text-sm text-amber">
-              Are you sure? Click confirm again to proceed.
-            </p>
+            <p className="text-sm text-amber">Are you sure? Click confirm again to proceed.</p>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => close(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                close(false);
+              }}
+            >
               {pending?.cancelLabel ?? "Cancel"}
             </Button>
             <Button

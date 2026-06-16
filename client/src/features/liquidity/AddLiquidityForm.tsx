@@ -17,6 +17,7 @@ import type { HookName } from "./use-create-pool.ts";
 import {
   HOOK_DESCRIPTIONS,
   HOOK_LABELS,
+  feeForHook,
   hookCompatibilityError,
   recommendedHookForPair,
 } from "./hook-recommendations.ts";
@@ -97,7 +98,10 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   //   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook
   // `useHook` defaults to on, so the recommended hook is the default.
   const pairHook = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
-  const [useHook, setUseHook] = useState(true);
+  // When locked onto an existing pool, honor that pool's actual hook
+  // (ctx.hook is null for no-hook pools). Otherwise (create / chat flows)
+  // default the recommended hook on, preserving prior behavior.
+  const [useHook, setUseHook] = useState(locked ? ctx.hook != null : true);
   const hook: HookName | "none" = useMemo(
     () => (pairHook && useHook ? pairHook : "none"),
     [pairHook, useHook],
@@ -105,10 +109,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   // Fee tier follows the pool that actually exists on-chain: USDC/EURC
   // Stable Protection → 0.01%; cirBTC Dynamic Fee → 0.05% (the funded,
   // correct-price pools); Volatile (no-hook) → 0.30%.
-  const fee: FeeTier = useMemo(
-    () => (hook === "stable-protection" ? 100 : hook === "dynamic-fee" ? 500 : 3000),
-    [hook],
-  );
+  const fee: FeeTier = useMemo(() => feeForHook(hook === "none" ? null : hook), [hook]);
 
   // Chain-switch handling lives in the parent: App.tsx keys this component
   // on `chainId`, so a network change remounts the form and the useState

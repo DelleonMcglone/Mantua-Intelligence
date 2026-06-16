@@ -8,8 +8,8 @@ const KNOWN: AssetSymbol[] = ["USDC", "EURC", "cirBTC"];
  * back to a neutral coin-with-initial badge for unknown symbols.
  */
 export function TokenIcon({ symbol, size = 20 }: { symbol: TokenSymbol; size?: number }) {
-  if ((KNOWN as readonly string[]).includes(symbol)) {
-    return <AssetIcon symbol={symbol as AssetSymbol} size={size} />;
+  if (KNOWN.includes(symbol)) {
+    return <AssetIcon symbol={symbol} size={size} />;
   }
   const initial = symbol.slice(0, 1).toUpperCase();
   return (

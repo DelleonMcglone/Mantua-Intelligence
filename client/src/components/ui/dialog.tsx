@@ -1,5 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- Radix dialog wrappers: re-exported parts + components co-located by design. */
 import { forwardRef } from "react";
-import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributes } from "react";
+import type { ComponentPropsWithoutRef, ComponentRef, HTMLAttributes } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
@@ -10,7 +11,7 @@ export const DialogPortal = DialogPrimitive.Portal;
 export const DialogClose = DialogPrimitive.Close;
 
 export const DialogOverlay = forwardRef<
-  ElementRef<typeof DialogPrimitive.Overlay>,
+  ComponentRef<typeof DialogPrimitive.Overlay>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
@@ -27,7 +28,7 @@ export const DialogOverlay = forwardRef<
 DialogOverlay.displayName = "DialogOverlay";
 
 export const DialogContent = forwardRef<
-  ElementRef<typeof DialogPrimitive.Content>,
+  ComponentRef<typeof DialogPrimitive.Content>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
   <DialogPortal>
@@ -62,7 +63,7 @@ export const DialogHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElem
 DialogHeader.displayName = "DialogHeader";
 
 export const DialogTitle = forwardRef<
-  ElementRef<typeof DialogPrimitive.Title>,
+  ComponentRef<typeof DialogPrimitive.Title>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
@@ -74,7 +75,7 @@ export const DialogTitle = forwardRef<
 DialogTitle.displayName = "DialogTitle";
 
 export const DialogDescription = forwardRef<
-  ElementRef<typeof DialogPrimitive.Description>,
+  ComponentRef<typeof DialogPrimitive.Description>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
@@ -87,10 +88,7 @@ DialogDescription.displayName = "DialogDescription";
 
 export const DialogFooter = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-6",
-      className,
-    )}
+    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-6", className)}
     {...props}
   />
 );

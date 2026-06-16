@@ -17,13 +17,7 @@ interface LogoProps {
 
 export function BaseLogo({ size = 16 }: LogoProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <rect x="2" y="2" width="28" height="28" rx="7" fill="#0000ff" />
     </svg>
   );
@@ -34,13 +28,7 @@ export function ArcLogo({ size = 16 }: LogoProps) {
   const bgId = `arc-bg-${uid}`;
   const archId = `arc-arch-${uid}`;
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={bgId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#244a82" />
@@ -63,6 +51,9 @@ export function ArcLogo({ size = 16 }: LogoProps) {
 
 export function NetworkLogo({ network, size = 16 }: { network: NetworkKey; size?: number }) {
   switch (network) {
+    // `network` is a single-value union today; the switch is kept so adding
+    // a NetworkKey forces a new case here.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     case "arc":
       return <ArcLogo size={size} />;
   }

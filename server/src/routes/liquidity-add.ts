@@ -172,6 +172,7 @@ liquidityAddRouter.post(
       .from(users)
       .where(eq(users.privyUserId, req.privyUserId))
       .limit(1);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
     if (!user) {
       res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
       return;
@@ -199,7 +200,7 @@ liquidityAddRouter.post(
       chainId: v.chainId,
       params,
       outcome: v.outcome,
-      usdValue: usdValue > 0 ? String(usdValue.toFixed(2)) : null,
+      usdValue: usdValue > 0 ? usdValue.toFixed(2) : null,
     });
 
     if (v.outcome === "success") {
@@ -208,6 +209,7 @@ liquidityAddRouter.post(
         .from(pools)
         .where(eq(pools.poolKeyHash, v.poolKeyHash))
         .limit(1);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty when the pool isn't tracked yet.
       if (pool) {
         await db.insert(positions).values({
           userId: user.id,
@@ -221,7 +223,14 @@ liquidityAddRouter.post(
         });
       }
     }
-    await logAudit({ ...ctx, chainId: v.chainId, action: "add_liquidity", outcome: v.outcome, txHash: v.txHash, params });
+    await logAudit({
+      ...ctx,
+      chainId: v.chainId,
+      action: "add_liquidity",
+      outcome: v.outcome,
+      txHash: v.txHash,
+      params,
+    });
     res.json({ ok: true });
   },
 );

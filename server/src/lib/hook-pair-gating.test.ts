@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {

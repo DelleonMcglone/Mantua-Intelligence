@@ -1,4 +1,5 @@
 import type { TokenSymbol } from "@/lib/tokens.ts";
+import type { FeeTier } from "./fee-tiers.ts";
 import type { HookName } from "./use-create-pool.ts";
 
 export const HOOK_LABELS: Record<HookName, string> = {
@@ -63,6 +64,27 @@ export function recommendedHookForPair(a: TokenSymbol, b: TokenSymbol): HookName
     if ((a === pa && b === pb) || (a === pb && b === pa)) return rec.hook;
   }
   return null;
+}
+
+/**
+ * Canonical fee tier each hook's pools are created/swapped at, mirroring
+ * the Add-Liquidity + Swap flows: Stable Protection 0.01%, Dynamic Fee
+ * 0.05%, no hook 0.30%. Single source of truth for the hook→fee mapping.
+ */
+export function feeForHook(hook: HookName | null): FeeTier {
+  return hook === "stable-protection" ? 100 : hook === "dynamic-fee" ? 500 : 3000;
+}
+
+/**
+ * Recover the hook bound to an existing pool from its pair + fee tier.
+ * A pair's recommended hook is active only when the pool sits at that
+ * hook's canonical fee tier; any other tier (e.g. 0.30%) is a no-hook
+ * pool. Returns null for no-hook pools. Inverse of `feeForHook`.
+ */
+export function hookForPairAndFee(a: TokenSymbol, b: TokenSymbol, fee: FeeTier): HookName | null {
+  const rec = recommendedHookForPair(a, b);
+  if (!rec) return null;
+  return fee === feeForHook(rec) ? rec : null;
 }
 
 /**

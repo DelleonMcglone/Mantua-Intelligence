@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises -- node:test describe/it return promises the runner awaits internally */
 /**
  * P9-001 — `effectivePoolFee` + `isFeeTier` unit tests. The
  * dynamic-fee override has been the source of two production

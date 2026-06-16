@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- shared agent UI primitives co-located by design. */
 import type { CSSProperties, ReactNode } from "react";
 
 /**

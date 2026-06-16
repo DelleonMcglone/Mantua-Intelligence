@@ -22,9 +22,15 @@ declare module "express-serve-static-core" {
  */
 export const attachAuth: RequestHandler = async (req, _res, next) => {
   const header = req.get("authorization");
-  if (!header?.startsWith("Bearer ")) return next();
+  if (!header?.startsWith("Bearer ")) {
+    next();
+    return;
+  }
   const token = header.slice("Bearer ".length).trim();
-  if (!token) return next();
+  if (!token) {
+    next();
+    return;
+  }
   try {
     const claims = await getPrivyClient().verifyAuthToken(token);
     req.privyUserId = claims.userId;

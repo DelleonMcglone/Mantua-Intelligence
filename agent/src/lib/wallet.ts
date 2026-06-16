@@ -20,7 +20,11 @@ export function createArcWalletProvider(env: AgentEnv): ViemWalletProvider {
   // AgentKit and this workspace each resolve their own (byte-identical)
   // viem 2.38.3 copy because the monorepo root holds viem 2.48.4, so the
   // WalletClient types are nominally distinct across copies. The runtime
-  // object is the same shape; cast at this single boundary.
+  // object is the same shape; cast at this single boundary. Route through an
+  // `unknown`-typed local (a plain assignment, not an assertion) so the
+  // type-aware lint never has to relate viem's deep WalletClient generic to
+  // the constructor arg — that comparison overflows the type checker.
   type ViemWalletProviderArg = ConstructorParameters<typeof ViemWalletProvider>[0];
-  return new ViemWalletProvider(walletClient as unknown as ViemWalletProviderArg);
+  const opaqueClient: unknown = walletClient;
+  return new ViemWalletProvider(opaqueClient as ViemWalletProviderArg);
 }

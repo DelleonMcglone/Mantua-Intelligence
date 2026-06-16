@@ -20,6 +20,8 @@ interface OnchainPositionWire {
   liquidity: string;
   amountA: string;
   amountB: string;
+  fees0: string;
+  fees1: string;
 }
 
 interface State {
@@ -77,6 +79,8 @@ export function useOnchainPositions(walletAddress?: string | null): State {
           hook: p.hook,
           amountA: p.amountA,
           amountB: p.amountB,
+          fees0: p.fees0,
+          fees1: p.fees1,
           txHash: "",
           // Preserve server order (newest-first) without a real timestamp.
           createdAt: res.positions.length - i,

@@ -38,6 +38,7 @@ export async function getDailyCap(address: string): Promise<number> {
     .innerJoin(userPreferences, eq(userPreferences.userId, users.id))
     .where(eq(users.primaryAddress, lower))
     .limit(1);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty when no row matches.
   if (user) return Math.min(Number(user.cap), HARD_DAILY_CAP_USD);
 
   const [agent] = await db
@@ -45,6 +46,7 @@ export async function getDailyCap(address: string): Promise<number> {
     .from(agentWallets)
     .where(eq(agentWallets.address, lower))
     .limit(1);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty when no row matches.
   if (agent) return Math.min(Number(agent.cap), HARD_DAILY_CAP_USD);
 
   return DEFAULT_DAILY_CAP_USD;
@@ -59,8 +61,11 @@ export async function getDailySpend(
   const [row] = await db
     .select({ spent: dailyWalletSpend.spentUsd })
     .from(dailyWalletSpend)
-    .where(and(eq(dailyWalletSpend.walletAddress, lower), eq(dailyWalletSpend.spendDate, spendDate)))
+    .where(
+      and(eq(dailyWalletSpend.walletAddress, lower), eq(dailyWalletSpend.spendDate, spendDate)),
+    )
     .limit(1);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty when no row matches.
   return row ? Number(row.spent) : 0;
 }
 
@@ -83,7 +88,7 @@ export async function checkSpendingCap(address: string, usdAmount: number): Prom
   if (usdAmount > HARD_DAILY_CAP_USD) {
     throw new SafetyError(
       "spending_cap_hard_ceiling",
-      `Single transaction $${usdAmount} exceeds the absolute ceiling of $${HARD_DAILY_CAP_USD}.`,
+      `Single transaction $${String(usdAmount)} exceeds the absolute ceiling of $${String(HARD_DAILY_CAP_USD)}.`,
       { usdAmount, hardCeiling: HARD_DAILY_CAP_USD },
     );
   }
@@ -91,7 +96,7 @@ export async function checkSpendingCap(address: string, usdAmount: number): Prom
   if (spent + usdAmount > cap) {
     throw new SafetyError(
       "spending_cap_exceeded",
-      `Daily cap $${cap} would be exceeded ($${spent} already spent today, +$${usdAmount}).`,
+      `Daily cap $${String(cap)} would be exceeded ($${String(spent)} already spent today, +$${String(usdAmount)}).`,
       { cap, spent, usdAmount },
     );
   }

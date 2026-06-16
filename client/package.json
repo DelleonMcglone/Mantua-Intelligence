@@ -12,8 +12,6 @@
     "test": "find src -name '*.test.ts' | xargs tsx --test"
   },
   "dependencies": {
-    "@circle-fin/adapter-viem-v2": "^1.11.2",
-    "@circle-fin/app-kit": "^1.7.0",
     "@privy-io/react-auth": "3.22.2",
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-slot": "1.2.4",

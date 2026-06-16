@@ -5,13 +5,7 @@
  * typo aliasing, verb routing, generic analyze openers.
  *
  * Each block name maps to the `detectIntent` branch under test.
- *
- * node:test's `describe`/`it` API returns Promises that the runner
- * awaits internally; disabling the rule file-wide is the cleanest fix
- * for the surrounding noise (matches the same pattern other test files
- * in the project carry as baseline).
  */
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {

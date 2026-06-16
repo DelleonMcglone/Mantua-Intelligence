@@ -220,6 +220,10 @@ export interface OnchainQuoteArgs {
   /** Target chain for the on-chain quote. Defaults to Base Sepolia
    *  for legacy callers that haven't been threaded yet. */
   chainId?: SupportedTestnetChainId;
+  /** Internal: skip on-chain fee-tier auto-resolution because the caller
+   *  already resolved which tier is initialized (avoids redundant slot0
+   *  reads on every binary-search probe). */
+  _skipResolve?: boolean;
 }
 
 export interface OnchainQuoteResult {
@@ -237,6 +241,33 @@ function resolveHookAddress(
   if (!hook) return "0x0000000000000000000000000000000000000000";
   if (!HOOK_NAMES.includes(hook)) return "0x0000000000000000000000000000000000000000";
   return getHookAddress(hook, chainId) ?? "0x0000000000000000000000000000000000000000";
+}
+
+/** Standard static fee tiers, probed when the requested tier has no pool. */
+const CANDIDATE_FEES: readonly FeeTier[] = [100, 500, 3000, 10000];
+
+/**
+ * Find the fee tier whose pool is actually initialized on-chain for this
+ * pair + hook. The UI derives a tier from the hook (e.g. no-hook → 0.30%),
+ * but the real pool may sit at a different standard tier — a no-hook
+ * USDC/EURC pool created at 0.01%, say. Probe the requested tier first,
+ * then the other standard tiers; return null if none is initialized.
+ */
+async function resolveInitializedFee(
+  tokenIn: TokenSymbol,
+  tokenOut: TokenSymbol,
+  hook: HookName | null,
+  requestedFee: FeeTier,
+  chainId: SupportedTestnetChainId,
+): Promise<FeeTier | null> {
+  const hookAddr = resolveHookAddress(hook, chainId);
+  const tiers: FeeTier[] = [requestedFee, ...CANDIDATE_FEES.filter((f) => f !== requestedFee)];
+  for (const fee of tiers) {
+    const { key } = buildPoolKey(tokenIn, tokenOut, fee, hookAddr, hook, chainId);
+    const slot0 = await readSlot0(key, chainId);
+    if (slot0) return fee;
+  }
+  return null;
 }
 
 /**
@@ -301,6 +332,14 @@ export async function findMaxQuotableInputV4(
     assertHookPairAllowedBySymbol(rest.hook, rest.tokenIn, rest.tokenOut);
   }
 
+  // Resolve the actually-initialized fee tier once, then reuse it for every
+  // probe (each probe skips re-resolving to keep the RPC fan-out bounded).
+  const chainId = rest.chainId ?? DEFAULT_CHAIN_ID;
+  const resolvedFee =
+    (await resolveInitializedFee(rest.tokenIn, rest.tokenOut, rest.hook, rest.fee, chainId)) ??
+    rest.fee;
+  const probe = { ...rest, fee: resolvedFee, _skipResolve: true };
+
   // Direct probe at the full upper bound — if it works, the pool can
   // absorb the user's whole balance and no cap is needed. On failure
   // we hold onto the raw viem error so we can decode V4Quoter's
@@ -308,7 +347,7 @@ export async function findMaxQuotableInputV4(
   // revert reason when every later probe also reverts.
   const firstError = await (async (): Promise<unknown> => {
     try {
-      await quoteExactInputV4({ ...rest, amountInRaw: upperBound });
+      await quoteExactInputV4({ ...probe, amountInRaw: upperBound });
       return null;
     } catch (err) {
       return err;
@@ -323,7 +362,7 @@ export async function findMaxQuotableInputV4(
     const mid = (lo + hi) / 2n;
     if (mid === lo) break;
     try {
-      await quoteExactInputV4({ ...rest, amountInRaw: mid });
+      await quoteExactInputV4({ ...probe, amountInRaw: mid });
       lo = mid;
     } catch {
       hi = mid;
@@ -346,18 +385,17 @@ export async function findMaxQuotableInputV4(
     // an initialized pool reports a hook/liquidity rejection, not a
     // missing pool. One extra eth_call, only on the undecodable path.
     if (!decodedRevert.hookReasonDecoded && !decodedRevert.decoded) {
-      const probeChainId = args.chainId ?? DEFAULT_CHAIN_ID;
       try {
-        const hookAddr = resolveHookAddress(args.hook, probeChainId);
+        const hookAddr = resolveHookAddress(args.hook, chainId);
         const { key } = buildPoolKey(
           args.tokenIn,
           args.tokenOut,
-          args.fee,
+          resolvedFee,
           hookAddr,
           args.hook,
-          probeChainId,
+          chainId,
         );
-        const slot0 = await readSlot0(key, probeChainId);
+        const slot0 = await readSlot0(key, chainId);
         reason = slot0
           ? "The pool exists but the swap was rejected — the hook may have paused swaps (e.g. Stable Protection's circuit breaker during a depeg) or liquidity is out of range. Try a smaller amount or a different hook."
           : "No pool is initialized for this pair at this fee tier and hook. Try a different fee tier, hook, or pair.";
@@ -405,14 +443,14 @@ export async function quoteExactInputV4(args: OnchainQuoteArgs): Promise<Onchain
   }
   const chainId = args.chainId ?? DEFAULT_CHAIN_ID;
   const hookAddress = resolveHookAddress(args.hook, chainId);
-  const { key } = buildPoolKey(
-    args.tokenIn,
-    args.tokenOut,
-    args.fee,
-    hookAddress,
-    args.hook,
-    chainId,
-  );
+  // The UI derives the fee tier from the hook, which may not match the tier
+  // the pool was actually created at. Resolve to the initialized tier so the
+  // quote (and the swap calldata built from this poolKey) hit the real pool.
+  const fee = args._skipResolve
+    ? args.fee
+    : ((await resolveInitializedFee(args.tokenIn, args.tokenOut, args.hook, args.fee, chainId)) ??
+      args.fee);
+  const { key } = buildPoolKey(args.tokenIn, args.tokenOut, fee, hookAddress, args.hook, chainId);
 
   const tokenInAddr = getToken(args.tokenIn, chainId).native
     ? "0x0000000000000000000000000000000000000000"

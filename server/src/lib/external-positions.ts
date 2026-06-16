@@ -83,7 +83,7 @@ async function enrichOne(tokenId: string): Promise<OnchainEnrichment | null> {
       poolKey,
       tickLower: decoded.tickLower,
       tickUpper: decoded.tickUpper,
-      liquidity: liquidity as bigint,
+      liquidity,
     };
   } catch (err) {
     logger.warn({ err, tokenId }, "external-positions: enrichment failed; dropping position");
@@ -107,8 +107,8 @@ function toEnriched(sub: SubgraphPosition, on: OnchainEnrichment): EnrichedPosit
     poolKeyHash: mantuaPoolKeyHash(on.poolKey),
     token0: on.poolKey.currency0.toLowerCase(),
     token1: on.poolKey.currency1.toLowerCase(),
-    fee: Number(on.poolKey.fee),
-    tickSpacing: Number(on.poolKey.tickSpacing),
+    fee: on.poolKey.fee,
+    tickSpacing: on.poolKey.tickSpacing,
     hookAddress,
   };
 }

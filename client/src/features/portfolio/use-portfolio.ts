@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { ApiError, api } from "@/lib/api.ts";
-import { getTokens, type TokenSymbol } from "@/lib/tokens.ts";
+import { getTokens, type Token, type TokenSymbol } from "@/lib/tokens.ts";
 import type { SupportedTestnetChainId } from "@/lib/chains.ts";
 
 interface PortfolioBalance {
@@ -74,6 +74,7 @@ export function usePortfolio(): PortfolioState {
 
   useEffect(() => {
     if (!ready || !authenticated || !wallet) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset to the disconnected state.
       setState({
         balances: [],
         transactions: [],
@@ -89,9 +90,7 @@ export function usePortfolio(): PortfolioState {
 
     const tick = async () => {
       try {
-        const data = await api.get<PortfolioResponse>(
-          `/api/portfolio?chainId=${String(chainId)}`,
-        );
+        const data = await api.get<PortfolioResponse>(`/api/portfolio?chainId=${String(chainId)}`);
         if (cancelled) return;
         setState({
           balances: data.balances,
@@ -103,7 +102,11 @@ export function usePortfolio(): PortfolioState {
       } catch (err) {
         if (cancelled) return;
         const message =
-          err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Unknown error";
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
         setState((s) => ({ ...s, loading: false, error: message }));
       } finally {
         if (!cancelled) timer = setTimeout(() => void tick(), POLL_MS);
@@ -144,20 +147,22 @@ export function toDisplayAssets(
 ): DisplayAsset[] {
   const tokens = getTokens(chainId);
   return balances.map((b) => {
-      const meta = tokens[b.symbol];
-      const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
-      const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;
-      return {
-        symbol: b.symbol,
-        name: meta?.name ?? b.symbol,
-        qty: formatQty(qtyNum, b.decimals),
-        val: formatUsd(b.usdValue),
-        price: unitPrice > 0 ? formatUsd(unitPrice) : "—",
-        pct: 0,
-        balanceRaw: b.balanceRaw,
-        decimals: b.decimals,
-      };
-    });
+    // `b.symbol` is a balance symbol that may not be in the registry, so
+    // the lookup can miss — widen to `| undefined` for the `?? b.symbol`.
+    const meta = tokens[b.symbol] as Token | undefined;
+    const qtyNum = Number(b.balanceRaw) / Math.pow(10, b.decimals);
+    const unitPrice = qtyNum > 0 ? b.usdValue / qtyNum : 0;
+    return {
+      symbol: b.symbol,
+      name: meta?.name ?? b.symbol,
+      qty: formatQty(qtyNum, b.decimals),
+      val: formatUsd(b.usdValue),
+      price: unitPrice > 0 ? formatUsd(unitPrice) : "—",
+      pct: 0,
+      balanceRaw: b.balanceRaw,
+      decimals: b.decimals,
+    };
+  });
 }
 
 function formatQty(value: number, decimals: number): string {

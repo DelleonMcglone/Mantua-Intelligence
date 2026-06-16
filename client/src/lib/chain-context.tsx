@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- context module: Provider component + useCurrentChainId/useChainContext hooks live together. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import {
@@ -73,6 +74,9 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
 
   const setChainId = useCallback(
     async (next: SupportedTestnetChainId) => {
+      // Guards re-selecting the current chain; always-equal today because
+      // SupportedTestnetChainId is a single literal, but defensive for growth.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (next === chainId) return;
       if (!wallet) {
         // No wallet yet — just remember the selection; we'll switch

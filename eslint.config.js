@@ -45,6 +45,10 @@ export default tseslint.config(
   },
   {
     files: ["server/**/*.ts"],
+    // Workspace config files (e.g. drizzle.config.ts) live outside the
+    // tsconfig `include`, so don't apply the type-aware project to them —
+    // the out-of-project override below handles them instead.
+    ignores: ["server/**/*.config.{js,cjs,mjs,ts}"],
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.node,
@@ -82,12 +86,26 @@ export default tseslint.config(
       "api/**/*.ts",
       "contracts/script/**/*.ts",
       "eslint.config.js",
-      "*.config.{js,cjs,mjs,ts}",
+      // Config files at the repo root or inside a workspace (e.g.
+      // server/drizzle.config.ts) live outside any tsconfig `include`, so
+      // type-aware linting can't resolve them — treat them as plain Node
+      // scripts.
+      "**/*.config.{js,cjs,mjs,ts}",
     ],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.node,
+    },
+  },
+  // Allow intentionally-unused identifiers prefixed with `_` (kept-for-shape
+  // function params, caught errors, etc.) across all workspaces.
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
     },
   },
 );

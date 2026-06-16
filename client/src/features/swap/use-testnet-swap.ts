@@ -9,13 +9,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import {
-  createPublicClient,
-  createWalletClient,
-  custom,
-  http,
-  parseAbi,
-} from "viem";
+import { createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getChainInfo, getRpcUrl } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
@@ -34,7 +28,13 @@ const erc20 = parseAbi([
 interface QuoteRes {
   amountOut: string;
   gasEstimate: string;
-  poolKey: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string };
+  poolKey: {
+    currency0: string;
+    currency1: string;
+    fee: number;
+    tickSpacing: number;
+    hooks: string;
+  };
   zeroForOne: boolean;
 }
 
@@ -56,14 +56,7 @@ export interface TestnetSwapArgs {
 }
 
 interface State {
-  status:
-    | "idle"
-    | "quoting"
-    | "approving"
-    | "signing"
-    | "pending"
-    | "success"
-    | "error";
+  status: "idle" | "quoting" | "approving" | "signing" | "pending" | "success" | "error";
   amountOut?: string;
   approvalTx?: `0x${string}`;
   txHash?: `0x${string}`;
@@ -115,6 +108,7 @@ export function useTestnetMaxInput(args: {
 
   useEffect(() => {
     if (!args.enabled || args.balanceRaw === 0n || args.tokenIn === args.tokenOut) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset when the effect's inputs are disabled.
       setState({ maxInputRaw: null, loading: false, reason: null });
       return;
     }
@@ -165,6 +159,7 @@ export function useTestnetQuote(args: {
 
   useEffect(() => {
     if (!args.enabled || args.amountInRaw === "0" || args.tokenIn === args.tokenOut) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset when the effect's inputs are disabled.
       setState({ data: null, loading: false, error: null });
       return;
     }
@@ -245,12 +240,12 @@ export function useTestnetSwap() {
       const tokenIn = getToken(args.tokenIn, chainId);
       if (calldata.approvalTarget && !tokenIn.native) {
         const tokenAddr = tokenIn.address;
-        const allowance = (await publicClient.readContract({
+        const allowance = await publicClient.readContract({
           address: tokenAddr,
           abi: erc20,
           functionName: "allowance",
           args: [owner, calldata.approvalTarget],
-        })) as bigint;
+        });
         if (allowance < FRESH_APPROVAL_THRESHOLD) {
           setState({
             status: "approving",
@@ -298,9 +293,7 @@ export function useTestnetSwap() {
         status: receipt.status === "success" ? "success" : "error",
         txHash,
         amountOut: calldata.quote.amountOut,
-        ...(receipt.status === "success"
-          ? {}
-          : { error: new Error("Transaction reverted") }),
+        ...(receipt.status === "success" ? {} : { error: new Error("Transaction reverted") }),
       });
       return txHash;
     } catch (err) {

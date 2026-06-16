@@ -113,18 +113,21 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
   }, [localPools]);
   const tokenPrices = useTokenPrices(symbolsForPricing);
 
-  // Sum every local position's `amountA * priceA + amountB * priceB`
-  // bucketed by the pool's localStorage key. POC-grade — the real
-  // TVL would walk on-chain liquidity through tick math + token
-  // prices; this is good enough to stop showing $0.00 on pools we
-  // know the user just deposited into.
+  // Sum each position's `amountA * priceA + amountB * priceB`, bucketed
+  // by the pool's key. Source the amounts on-chain (authoritative — every
+  // owned position carries live amounts, including pools with no
+  // localStorage breadcrumb, e.g. a No-Hook pool whose mint-capture never
+  // landed), falling back to the breadcrumb while that read is in flight.
+  // POC-grade: a token with no USD price (e.g. cirBTC) contributes 0 for
+  // its side.
   const localTvlByKey = useMemo<Record<string, number>>(() => {
     if (IS_MAINNET) return {};
     const out: Record<string, number> = {};
     const accum = (key: string, addend: number) => {
       out[key] = (out[key] ?? 0) + addend;
     };
-    for (const pos of localPositions) {
+    const source = onchainPositions.data ?? localPositions;
+    for (const pos of source) {
       const [a, b] = [pos.tokenA, pos.tokenB].sort();
       const key = `${String(pos.chainId)}|${a}|${b}|${String(pos.fee)}|${pos.hook ?? "none"}`;
       const amA = parseFloat(pos.amountA);
@@ -135,7 +138,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
       accum(key, (Number.isFinite(amB) ? amB : 0) * pB);
     }
     return out;
-  }, [localPositions, tokenPrices.prices]);
+  }, [onchainPositions.data, localPositions, tokenPrices.prices]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -203,7 +206,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
         };
       });
     return [...local, ...remote];
-  }, [data, localPools, ownedPoolKeys]);
+  }, [data, localPools, ownedPoolKeys, localTvlByKey]);
 
   const totals = useMemo(() => {
     const tvl = enriched.reduce((s, p) => s + (p.tvlUsd || 0), 0);

@@ -16,11 +16,7 @@
  *     official testnet tokens, WETH is the canonical OP-stack address.
  */
 
-import {
-  ARC_TESTNET_CHAIN_ID,
-  DEFAULT_CHAIN_ID,
-  type SupportedTestnetChainId,
-} from "./chains.ts";
+import { ARC_TESTNET_CHAIN_ID, DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -42,9 +38,33 @@ export interface Token {
 // prices off bitcoin's CoinGecko id.
 // Mirror of client/src/lib/tokens.ts — keep both in sync.
 const TOKENS_ARC_TESTNET = {
-  USDC: { symbol: "USDC", name: "USD Coin", address: "0x3600000000000000000000000000000000000000", decimals: 6, coingeckoId: "usd-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
-  EURC: { symbol: "EURC", name: "Euro Coin", address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", decimals: 6, coingeckoId: "euro-coin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
-  cirBTC: { symbol: "cirBTC", name: "Circle Wrapped BTC", address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF", decimals: 8, coingeckoId: "bitcoin", native: false, chainId: ARC_TESTNET_CHAIN_ID },
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x3600000000000000000000000000000000000000",
+    decimals: 6,
+    coingeckoId: "usd-coin",
+    native: false,
+    chainId: ARC_TESTNET_CHAIN_ID,
+  },
+  EURC: {
+    symbol: "EURC",
+    name: "Euro Coin",
+    address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+    decimals: 6,
+    coingeckoId: "euro-coin",
+    native: false,
+    chainId: ARC_TESTNET_CHAIN_ID,
+  },
+  cirBTC: {
+    symbol: "cirBTC",
+    name: "Circle Wrapped BTC",
+    address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF",
+    decimals: 8,
+    coingeckoId: "bitcoin",
+    native: false,
+    chainId: ARC_TESTNET_CHAIN_ID,
+  },
 } as const satisfies Record<string, Token>;
 
 export type TokenSymbol = keyof typeof TOKENS_ARC_TESTNET;
@@ -57,9 +77,15 @@ export function getTokens(chainId: SupportedTestnetChainId): Record<string, Toke
   return TOKENS_BY_CHAIN[chainId];
 }
 
-export function getToken(symbol: string, chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID): Token {
+export function getToken(
+  symbol: string,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
+): Token {
   const tokens = getTokens(chainId);
-  const t = tokens[symbol];
+  // `symbol` is arbitrary input, so the index can miss at runtime; widen to
+  // `| undefined` (the project has noUncheckedIndexedAccess off) to keep the
+  // guard below type-correct.
+  const t = tokens[symbol] as Token | undefined;
   if (!t) throw new Error(`Unknown token symbol on chain ${String(chainId)}: ${symbol}`);
   return t;
 }
