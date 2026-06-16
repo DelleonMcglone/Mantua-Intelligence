@@ -99,7 +99,9 @@ export function EarningsTabBody({
             </div>
           )}
           {positions.map((p) => (
-            <PositionRow key={p.tokenId} p={p} />
+            // tokenIds collide across per-hook PositionManagers, so key on
+            // hook + tokenId to keep duplicate ids distinct.
+            <PositionRow key={`${p.hookAddress ?? "none"}-${p.tokenId}`} p={p} />
           ))}
         </div>
       )}

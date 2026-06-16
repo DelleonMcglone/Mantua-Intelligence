@@ -101,6 +101,9 @@ function PositionRow({
           {feeLabel} · token #{position.tokenId ?? "—"} · liquidity{" "}
           {truncateLong(position.liquidity)}
         </div>
+        {position.feesLabel && (
+          <div className="text-[11px] text-green mt-0.5">Fees earned: {position.feesLabel}</div>
+        )}
         {position.openedTx && (
           <a
             href={getExplorerTxUrl(chainId, position.openedTx)}

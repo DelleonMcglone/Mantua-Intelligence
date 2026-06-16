@@ -27,6 +27,7 @@ import {
   type HookName,
 } from "./v4-contracts.ts";
 import { decodePositionInfo } from "./v4-position-info.ts";
+import { readAccruedFees } from "./v4-accrued-fees.ts";
 import { getAmountsForLiquidity } from "./amounts-for-liquidity.ts";
 import { getSqrtRatioAtTick } from "./tick-math.ts";
 import { readSlot0 } from "./v4-state-view.ts";
@@ -58,6 +59,17 @@ export interface OnchainPosition {
    *  formatted to the token's decimals (max 6 fractional digits). */
   amountA: string;
   amountB: string;
+  /** Raw on-chain currency addresses (currency0 = tokenA, currency1 =
+   *  tokenB) and the pool's hook address — null for no-hook pools. Carried
+   *  so the earnings/sweep routes can value + collect fees without a
+   *  DB round-trip. */
+  token0: `0x${string}`;
+  token1: `0x${string}`;
+  hookAddress: `0x${string}` | null;
+  /** Uncollected swap fees in raw base units (fees0 = tokenA, fees1 =
+   *  tokenB), read from live v4 feeGrowthInside state. "0" when none. */
+  fees0: string;
+  fees1: string;
 }
 
 interface PoolKeyView {
@@ -210,6 +222,20 @@ async function readOnePosition(
       liquidity: liq,
     });
 
+    // Uncollected swap fees from live feeGrowthInside state. Reuses the exact
+    // on-chain poolKey (DynamicFee pools carry the fee flag, not a UI tier), so
+    // the poolId matches; degrade to 0 on a read error rather than drop the
+    // whole position.
+    let fees = { amount0: 0n, amount1: 0n };
+    try {
+      fees = await readAccruedFees(key, tokenId, tickLower, tickUpper, chainId);
+    } catch (err) {
+      logger.warn(
+        { err, positionManager, tokenId: tokenId.toString() },
+        "onchain-positions: accrued-fee read failed",
+      );
+    }
+
     return {
       chainId,
       tokenId: tokenId.toString(),
@@ -223,6 +249,14 @@ async function readOnePosition(
       liquidity: liq.toString(),
       amountA: fmtAmount(amount0, tokens[symA].decimals),
       amountB: fmtAmount(amount1, tokens[symB].decimals),
+      token0: poolKey.currency0,
+      token1: poolKey.currency1,
+      hookAddress:
+        poolKey.hooks.toLowerCase() === "0x0000000000000000000000000000000000000000"
+          ? null
+          : poolKey.hooks,
+      fees0: fees.amount0.toString(),
+      fees1: fees.amount1.toString(),
     };
   } catch (err) {
     logger.warn(

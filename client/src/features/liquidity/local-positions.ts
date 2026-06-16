@@ -22,6 +22,11 @@ export interface LocalPosition {
   hook: HookName | null;
   amountA: string;
   amountB: string;
+  /** Uncollected swap fees in raw base units (fees0 = tokenA, fees1 =
+   *  tokenB). Present on on-chain-discovered rows; absent on the legacy
+   *  localStorage breadcrumb. */
+  fees0?: string;
+  fees1?: string;
   txHash: string;
   createdAt: number;
   owner?: PositionOwner;
@@ -35,6 +40,11 @@ interface LegacyLocalPosition {
   hook: HookName | null;
   amountA: string;
   amountB: string;
+  /** Uncollected swap fees in raw base units (fees0 = tokenA, fees1 =
+   *  tokenB). Present on on-chain-discovered rows; absent on the legacy
+   *  localStorage breadcrumb. */
+  fees0?: string;
+  fees1?: string;
   txHash: string;
   createdAt: number;
   owner?: PositionOwner;

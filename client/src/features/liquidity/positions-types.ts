@@ -14,4 +14,7 @@ export interface Position {
   fee: number;
   tickSpacing: number;
   hookAddress: string | null;
+  /** Pre-formatted uncollected-fees label (e.g. "0.0123 USDC · 0.0001 cirBTC")
+   *  for on-chain-discovered rows; undefined when fee data isn't available. */
+  feesLabel?: string | null;
 }

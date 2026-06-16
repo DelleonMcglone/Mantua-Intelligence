@@ -4,6 +4,7 @@ import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { CHAIN_INFO } from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
+import { formatFeesEarned } from "@/features/liquidity/position-adapters.ts";
 import {
   getAgentLocalPositions,
   getUserLocalPositions,
@@ -29,6 +30,8 @@ interface PortfolioPosition {
   up: boolean;
   source: "mantua" | "external";
   hook: HookName;
+  /** Pre-formatted uncollected-fees label, or null when unavailable. */
+  fees?: string | null;
   /** Original LocalPosition for testnet rows — present iff the row
    *  came from `localPositions.map(localPositionToRow)`. Used to
    *  derive the `local:*` pool id for the click-through nav. */
@@ -73,6 +76,7 @@ function localPositionToRow(p: LocalPosition): PortfolioPosition {
     up: true,
     source: "mantua",
     hook: localHookLabel(p.hook),
+    fees: formatFeesEarned(p.fees0, p.fees1, p.tokenA, p.tokenB),
     src: p,
   };
 }
@@ -395,9 +399,15 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
                     </div>
                     <div className="text-right">
                       <div className="text-[14px] font-medium font-mono">{p.value}</div>
-                      <div className={`text-[12px] font-mono ${p.up ? "text-green" : "text-red"}`}>
-                        {p.pnl} · {p.pct}
-                      </div>
+                      {p.fees ? (
+                        <div className="text-[12px] font-mono text-green">Fees: {p.fees}</div>
+                      ) : (
+                        <div
+                          className={`text-[12px] font-mono ${p.up ? "text-green" : "text-red"}`}
+                        >
+                          {p.pnl} · {p.pct}
+                        </div>
+                      )}
                     </div>
                     <ChevronRight className="h-3.5 w-3.5 text-text-mute" />
                   </div>

@@ -1,20 +1,14 @@
 import { Router, type Request, type Response } from "express";
 import { formatUnits } from "viem";
-import { and, eq } from "drizzle-orm";
-import { db } from "../db/client.ts";
-import { pools, positions } from "../db/schema/trading.ts";
-import { users } from "../db/schema/users.ts";
 import { logger } from "../lib/logger.ts";
 import { DEFAULT_CHAIN_ID } from "../lib/chains.ts";
 import { getTokens, type Token } from "../lib/tokens.ts";
 import { tokenAmountUsdForToken } from "../lib/usd-pricing.ts";
-import { readAccruedFees } from "../lib/v4-accrued-fees.ts";
+import { readOnchainPositions } from "../lib/v4-onchain-positions.ts";
 import { buildCollectFeesCalldata } from "../lib/v4-remove-liquidity.ts";
 import { requireAuth } from "../middleware/auth.ts";
 
 export const earningsRouter = Router();
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /** Look up a known token by address (case-insensitive). null if unknown. */
 function tokenByAddress(address: string): Token | null {
@@ -44,77 +38,37 @@ interface EarningPosition {
  * fees report 0. Token amounts are exact; USD is best-effort from price feeds.
  */
 earningsRouter.get("/api/earnings", requireAuth, async (req: Request, res: Response) => {
-  if (!req.privyUserId) {
-    res.status(401).json({ error: "Auth required", code: "UNAUTHENTICATED" });
+  const wallet = req.walletAddress as `0x${string}` | undefined;
+  if (!wallet) {
+    res.json({ totalAccruedUsd: 0, positions: [] });
     return;
   }
   try {
-    const [user] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.privyUserId, req.privyUserId))
-      .limit(1);
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
-    if (!user) {
-      res.json({ totalAccruedUsd: 0, positions: [] });
-      return;
-    }
-
-    const rows = await db
-      .select({
-        tokenId: positions.tokenId,
-        tickLower: positions.tickLower,
-        tickUpper: positions.tickUpper,
-        token0: pools.token0,
-        token1: pools.token1,
-        fee: pools.fee,
-        tickSpacing: pools.tickSpacing,
-        hookAddress: pools.hookAddress,
-      })
-      .from(positions)
-      .innerJoin(pools, eq(positions.poolId, pools.id))
-      .where(and(eq(positions.userId, user.id), eq(positions.status, "open")));
+    // Source positions on-chain (authoritative; no DB row needed on testnet).
+    // Each position already carries its uncollected fees in raw base units.
+    const onchain = await readOnchainPositions(wallet);
 
     const out: EarningPosition[] = [];
     let totalAccruedUsd = 0;
-    for (const r of rows) {
-      if (!r.tokenId) continue;
-      const t0 = tokenByAddress(r.token0);
-      const t1 = tokenByAddress(r.token1);
-      let accrued: { amount0: bigint; amount1: bigint } = { amount0: 0n, amount1: 0n };
-      try {
-        accrued = await readAccruedFees(
-          {
-            currency0: r.token0 as `0x${string}`,
-            currency1: r.token1 as `0x${string}`,
-            fee: r.fee,
-            tickSpacing: r.tickSpacing,
-            hooks: (r.hookAddress ?? ZERO_ADDRESS) as `0x${string}`,
-          },
-          BigInt(r.tokenId),
-          r.tickLower,
-          r.tickUpper,
-        );
-      } catch (err) {
-        // Read failures (rwa-gate periphery edge, RPC blip) degrade to 0 for
-        // that position rather than 500 the whole tab.
-        logger.warn({ err, tokenId: r.tokenId }, "accrued-fee read failed");
-      }
-
-      const usd0 = t0 ? await tokenAmountUsdForToken(t0, accrued.amount0) : 0;
-      const usd1 = t1 ? await tokenAmountUsdForToken(t1, accrued.amount1) : 0;
+    for (const p of onchain) {
+      const t0 = tokenByAddress(p.token0);
+      const t1 = tokenByAddress(p.token1);
+      const a0 = BigInt(p.fees0);
+      const a1 = BigInt(p.fees1);
+      const usd0 = t0 ? await tokenAmountUsdForToken(t0, a0) : 0;
+      const usd1 = t1 ? await tokenAmountUsdForToken(t1, a1) : 0;
       const accruedUsd = usd0 + usd1;
       totalAccruedUsd += accruedUsd;
 
       out.push({
-        tokenId: r.tokenId,
-        hookAddress: r.hookAddress,
-        sym0: t0?.symbol ?? r.token0,
-        sym1: t1?.symbol ?? r.token1,
-        accrued0: accrued.amount0.toString(),
-        accrued1: accrued.amount1.toString(),
-        accrued0Human: t0 ? Number(formatUnits(accrued.amount0, t0.decimals)) : 0,
-        accrued1Human: t1 ? Number(formatUnits(accrued.amount1, t1.decimals)) : 0,
+        tokenId: p.tokenId,
+        hookAddress: p.hookAddress,
+        sym0: p.tokenA,
+        sym1: p.tokenB,
+        accrued0: p.fees0,
+        accrued1: p.fees1,
+        accrued0Human: t0 ? Number(formatUnits(a0, t0.decimals)) : 0,
+        accrued1Human: t1 ? Number(formatUnits(a1, t1.decimals)) : 0,
         accruedUsd,
       });
     }
@@ -154,41 +108,20 @@ earningsRouter.post(
       return;
     }
     try {
-      const [user] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.privyUserId, req.privyUserId))
-        .limit(1);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drizzle types the row as defined, but the array is empty for an unknown user.
-      if (!user) {
-        res.json({ txs: [] });
-        return;
-      }
-
-      const rows = await db
-        .select({
-          tokenId: positions.tokenId,
-          token0: pools.token0,
-          token1: pools.token1,
-          hookAddress: pools.hookAddress,
-        })
-        .from(positions)
-        .innerJoin(pools, eq(positions.poolId, pools.id))
-        .where(and(eq(positions.userId, user.id), eq(positions.status, "open")));
-
+      // Collect from every open on-chain position (no DB row required).
+      const onchain = await readOnchainPositions(recipient);
       const deadlineSeconds = Math.floor(Date.now() / 1000) + 1200;
       const txs: SweepTx[] = [];
-      for (const r of rows) {
-        if (!r.tokenId) continue; // no on-chain id → nothing to collect
+      for (const p of onchain) {
         const cd = buildCollectFeesCalldata({
-          tokenId: BigInt(r.tokenId),
-          currency0: r.token0 as `0x${string}`,
-          currency1: r.token1 as `0x${string}`,
-          hookAddress: r.hookAddress as `0x${string}` | null,
+          tokenId: BigInt(p.tokenId),
+          currency0: p.token0,
+          currency1: p.token1,
+          hookAddress: p.hookAddress,
           recipient,
           deadlineSeconds,
         });
-        txs.push({ ...cd, tokenId: r.tokenId, pair: `${r.token0}/${r.token1}` });
+        txs.push({ ...cd, tokenId: p.tokenId, pair: `${p.tokenA}/${p.tokenB}` });
       }
 
       res.json({ txs });
