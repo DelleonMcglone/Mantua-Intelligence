@@ -29,14 +29,6 @@ const schema = z.object({
     .min(1)
     .default("HNCFA9TyBqpo5qpe6QreQABAA1kV8g46mhkCcicu6v2R"),
 
-  // Coinbase CDP — legacy agent-wallet provider (Base). Being replaced by
-  // Circle Developer-Controlled Wallets on Arc; kept until every consumer is
-  // migrated off it (agent-send / swap / liquidity).
-  CDP_PROJECT_ID: z.string().min(1).optional(),
-  CDP_API_KEY_NAME: z.string().min(1).optional(),
-  CDP_API_KEY_PRIVATE_KEY: z.string().min(1).optional(),
-  CDP_WALLET_SECRET: z.string().min(1).optional(),
-
   // Circle Developer-Controlled Wallets — the agent-wallet provider on Arc.
   // CIRCLE_API_KEY: a Standard key from the Circle Developer Console.
   // CIRCLE_ENTITY_SECRET: your registered 32-byte entity secret (hex).

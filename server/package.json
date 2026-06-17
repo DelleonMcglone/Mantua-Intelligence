@@ -17,7 +17,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "@circle-fin/developer-controlled-wallets": "^10.6.0",
-    "@coinbase/cdp-sdk": "^1.48.2",
     "@privy-io/server-auth": "1.32.5",
     "drizzle-orm": "0.45.2",
     "express": "5.2.1",

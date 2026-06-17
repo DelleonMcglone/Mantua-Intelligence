@@ -3,7 +3,7 @@ import { z } from "zod";
 import { swapFromAgentWallet } from "../lib/agent-swap.ts";
 import { AgentWalletNotFoundError } from "../lib/agent-wallet.ts";
 import { logAudit } from "../lib/audit.ts";
-import { CdpUnavailableError } from "../lib/cdp/client.ts";
+import { CircleUnavailableError } from "../lib/circle/client.ts";
 import { SafetyError } from "../lib/errors.ts";
 import { logger } from "../lib/logger.ts";
 import { getRequestContext } from "../lib/request-context.ts";
@@ -75,8 +75,8 @@ agentSwapRouter.post(
         res.status(403).json({ error: err.message, code: err.code, details: err.details });
         return;
       }
-      if (err instanceof CdpUnavailableError) {
-        res.status(503).json({ error: err.message, code: "CDP_UNAVAILABLE" });
+      if (err instanceof CircleUnavailableError) {
+        res.status(503).json({ error: err.message, code: "CIRCLE_UNAVAILABLE" });
         return;
       }
       logger.error({ err }, "agent swap failed");

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AgentWalletNotFoundError } from "../lib/agent-wallet.ts";
 import { sendFromAgentWallet } from "../lib/agent-send.ts";
 import { logAudit } from "../lib/audit.ts";
-import { CdpUnavailableError } from "../lib/cdp/client.ts";
+import { CircleUnavailableError } from "../lib/circle/client.ts";
 import { SafetyError } from "../lib/errors.ts";
 import { logger } from "../lib/logger.ts";
 import { getRequestContext } from "../lib/request-context.ts";
@@ -72,8 +72,8 @@ agentSendRouter.post(
         res.status(403).json({ error: err.message, code: err.code, details: err.details });
         return;
       }
-      if (err instanceof CdpUnavailableError) {
-        res.status(503).json({ error: err.message, code: "CDP_UNAVAILABLE" });
+      if (err instanceof CircleUnavailableError) {
+        res.status(503).json({ error: err.message, code: "CIRCLE_UNAVAILABLE" });
         return;
       }
       logger.error({ err }, "agent send failed");
@@ -84,9 +84,9 @@ agentSendRouter.post(
         params: { to, symbol: token, amountDecimal: amount },
         reason: err instanceof Error ? err.message : "unknown",
       });
-      // Upstream CDP / RPC errors land here.
+      // Upstream Circle / RPC errors land here.
       res.status(502).json({
-        error: "Send failed at the upstream CDP/RPC layer.",
+        error: "Send failed at the upstream Circle/RPC layer.",
         code: "UPSTREAM_FAILURE",
       });
     }
