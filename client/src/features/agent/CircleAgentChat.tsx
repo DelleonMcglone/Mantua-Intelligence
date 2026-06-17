@@ -93,19 +93,6 @@ function renderAction(key: ActionKey): ReactNode {
   }
 }
 
-const INPUT_STYLE: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  padding: "10px 12px",
-  background: "var(--bg-elev)",
-  border: "1px solid var(--border-soft)",
-  borderRadius: 10,
-  color: "var(--text)",
-  fontSize: 13,
-  outline: "none",
-  fontFamily: "inherit",
-};
-
 const CHIP_STYLE: CSSProperties = {
   fontSize: 12,
   color: "var(--text-dim)",
@@ -120,7 +107,6 @@ const CHIP_STYLE: CSSProperties = {
 export function CircleAgentChat({ onClose }: Props) {
   const agent = useAgentPortfolio();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
   const idRef = useRef(0);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -143,26 +129,34 @@ export function CircleAgentChat({ onClose }: Props) {
     ]);
   };
 
-  const submitText = () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-    const lower = text.toLowerCase();
-    const match = ACTIONS.find((a) => a.keywords.some((k) => lower.includes(k)));
-    if (match) {
-      trigger(match.key, text);
-      return;
-    }
-    setMessages((m) => [
-      ...m,
-      { id: nextId(), role: "user", text },
-      {
-        id: nextId(),
-        role: "agent",
-        text: "I can create or fund your agent wallet, query on-chain data, swap, send, or add liquidity. Pick one below or rephrase.",
-      },
-    ]);
-  };
+  // The agent has no input of its own — the global "Ask Mantua" bar
+  // (App.tsx) forwards typed text here via the `mantua:agent-input` event
+  // while the agent panel is open. Keyword-match it to an action, else
+  // reply with the menu. `idRef` is a ref (no effect dep needed).
+  useEffect(() => {
+    const onInput = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail.trim();
+      if (!text) return;
+      const mkId = () => (idRef.current += 1);
+      const lower = text.toLowerCase();
+      const match = ACTIONS.find((a) => a.keywords.some((k) => lower.includes(k)));
+      setMessages((m) => [
+        ...m,
+        { id: mkId(), role: "user", text },
+        match
+          ? { id: mkId(), role: "agent", text: match.intro, node: renderAction(match.key) }
+          : {
+              id: mkId(),
+              role: "agent",
+              text: "I can create or fund your agent wallet, query on-chain data, swap, send, or add liquidity. Pick one below or rephrase.",
+            },
+      ]);
+    };
+    window.addEventListener("mantua:agent-input", onInput);
+    return () => {
+      window.removeEventListener("mantua:agent-input", onInput);
+    };
+  }, []);
 
   return (
     <>
@@ -247,7 +241,7 @@ export function CircleAgentChat({ onClose }: Props) {
       </div>
 
       <div style={{ borderTop: "1px solid var(--border-soft)", padding: 12 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {ACTIONS.map((a) => (
             <button
               key={a.key}
@@ -260,19 +254,6 @@ export function CircleAgentChat({ onClose }: Props) {
               {a.label}
             </button>
           ))}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            style={INPUT_STYLE}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitText();
-            }}
-            placeholder="Ask your agent… e.g. “fund agent wallet”"
-          />
         </div>
       </div>
     </>
