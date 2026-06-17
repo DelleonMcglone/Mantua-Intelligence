@@ -1,21 +1,23 @@
 /**
- * Entry point — boots the Arc AgentKit instance and prints the registered
- * actions. Confirms the wallet/network layer + custom action providers
- * load against the configured env. Wire this AgentKit into your LLM loop
- * (e.g. getLangChainTools) as the next step.
+ * Entry point — builds the Arc agent's action registry and prints the
+ * registered actions. Confirms the wallet/network layer + action providers
+ * load against the configured env. Wire this registry into an LLM tool loop
+ * (enumerate getActions(), dispatch invoke(args)) as the next step.
  */
 import { createArcAgentKit } from "./agent.ts";
 
-async function main(): Promise<void> {
-  const agentkit = await createArcAgentKit();
+function main(): void {
+  const agentkit = createArcAgentKit();
   const actions = agentkit.getActions();
-  console.log(`Arc AgentKit ready — ${String(actions.length)} actions registered:`);
+  console.log(`Arc agent ready — ${String(actions.length)} actions registered:`);
   for (const action of actions) {
     console.log(`  • ${action.name}`);
   }
 }
 
-main().catch((err: unknown) => {
+try {
+  main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}

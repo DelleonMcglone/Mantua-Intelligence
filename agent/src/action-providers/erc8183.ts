@@ -9,13 +9,9 @@
  * `complete`. So create and fund are exposed as two actions (a provider
  * must set the budget in between); settle_job maps to `complete`.
  */
-import {
-  type ActionProvider,
-  type EvmWalletProvider,
-  customActionProvider,
-} from "@coinbase/agentkit";
 import { encodeFunctionData } from "viem";
 import { z } from "zod";
+import { type ActionProvider, type AgentWallet, customActionProvider } from "../lib/action-kit.ts";
 import { AGENTIC_COMMERCE_ABI } from "../abis/erc8183.ts";
 import { ERC20_ABI } from "../abis/erc20.ts";
 import { ARC_EXPLORER_URL } from "../config/arc-chain.ts";
@@ -34,29 +30,35 @@ export interface Erc8183Config {
   usdc: Asset;
 }
 
-export function createErc8183ActionProvider(cfg: Erc8183Config): ActionProvider<EvmWalletProvider> {
-  return customActionProvider<EvmWalletProvider>([
+const createJobSchema = z.object({
+  provider: z.string(),
+  evaluator: z.string(),
+  description: z.string().min(1),
+  hook: z.string().optional(),
+  expiresInSeconds: z.number().int().positive().optional(),
+});
+const fundJobSchema = z.object({
+  jobId: z.string().regex(/^\d+$/, "jobId must be a number"),
+  amountUSDC: z.string(),
+});
+const settleJobSchema = z.object({
+  jobId: z.string().regex(/^\d+$/, "jobId must be a number"),
+  reason: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{64}$/)
+    .optional(),
+});
+const jobIdSchema = z.object({ jobId: z.string().regex(/^\d+$/, "jobId must be a number") });
+
+export function createErc8183ActionProvider(cfg: Erc8183Config): ActionProvider {
+  return customActionProvider([
     {
       name: "create_job",
       description:
         "Create an ERC-8183 job on Arc. Specify the provider and evaluator addresses, a description, and optionally a hook address and expiry. Funding is a separate step (fund_job) after the provider sets the budget.",
-      schema: z.object({
-        provider: z.string(),
-        evaluator: z.string(),
-        description: z.string().min(1),
-        hook: z.string().optional(),
-        expiresInSeconds: z.number().int().positive().optional(),
-      }),
-      invoke: async (
-        wallet: EvmWalletProvider,
-        args: {
-          provider: string;
-          evaluator: string;
-          description: string;
-          hook?: string;
-          expiresInSeconds?: number;
-        },
-      ) => {
+      schema: createJobSchema,
+      invoke: async (wallet: AgentWallet, raw: unknown) => {
+        const args = createJobSchema.parse(raw);
         const provider = requireAddress(args.provider, "provider");
         const evaluator = requireAddress(args.evaluator, "evaluator");
         const hook = args.hook ? requireAddress(args.hook, "hook") : ZERO;
@@ -83,11 +85,9 @@ export function createErc8183ActionProvider(cfg: Erc8183Config): ActionProvider<
       name: "fund_job",
       description:
         "Fund an ERC-8183 job's escrow with USDC (6-decimal ERC-20). Approves the AgenticCommerce contract then funds. Amount must equal the budget set by the provider.",
-      schema: z.object({
-        jobId: z.string().regex(/^\d+$/, "jobId must be a number"),
-        amountUSDC: z.string(),
-      }),
-      invoke: async (wallet: EvmWalletProvider, args: { jobId: string; amountUSDC: string }) => {
+      schema: fundJobSchema,
+      invoke: async (wallet: AgentWallet, raw: unknown) => {
+        const args = fundJobSchema.parse(raw);
         requirePositiveAmount(args.amountUSDC, "amountUSDC");
         const units = toErc20Units(args.amountUSDC);
         const approveData = encodeFunctionData({
@@ -114,14 +114,9 @@ export function createErc8183ActionProvider(cfg: Erc8183Config): ActionProvider<
       name: "settle_job",
       description:
         "Settle an ERC-8183 job (evaluator `complete`), releasing the USDC escrow to the provider. Optional reason is a 0x 32-byte hash.",
-      schema: z.object({
-        jobId: z.string().regex(/^\d+$/, "jobId must be a number"),
-        reason: z
-          .string()
-          .regex(/^0x[a-fA-F0-9]{64}$/)
-          .optional(),
-      }),
-      invoke: async (wallet: EvmWalletProvider, args: { jobId: string; reason?: string }) => {
+      schema: settleJobSchema,
+      invoke: async (wallet: AgentWallet, raw: unknown) => {
+        const args = settleJobSchema.parse(raw);
         const reason = (args.reason ?? ZERO_BYTES32) as `0x${string}`;
         const data = encodeFunctionData({
           abi: AGENTIC_COMMERCE_ABI,
@@ -136,15 +131,16 @@ export function createErc8183ActionProvider(cfg: Erc8183Config): ActionProvider<
     {
       name: "get_job_status",
       description: "Read whether an ERC-8183 job has its budget set (escrow funding precondition).",
-      schema: z.object({ jobId: z.string().regex(/^\d+$/, "jobId must be a number") }),
-      invoke: async (wallet: EvmWalletProvider, args: { jobId: string }) => {
+      schema: jobIdSchema,
+      invoke: async (wallet: AgentWallet, raw: unknown) => {
+        const { jobId } = jobIdSchema.parse(raw);
         const hasBudget = await wallet.readContract({
           address: cfg.agenticCommerce,
           abi: AGENTIC_COMMERCE_ABI,
           functionName: "jobHasBudget",
-          args: [BigInt(args.jobId)],
+          args: [BigInt(jobId)],
         });
-        return `Job ${args.jobId}: budget set = ${String(hasBudget)}.`;
+        return `Job ${jobId}: budget set = ${String(hasBudget)}.`;
       },
     },
   ]);

@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { EvmWalletProvider } from "@coinbase/agentkit";
+import type { AgentWallet } from "../lib/action-kit.ts";
 import { createBalancesActionProvider } from "./balances.ts";
 import { createErc8004ActionProvider } from "./erc8004.ts";
 import { createErc8183ActionProvider } from "./erc8183.ts";
@@ -16,10 +16,8 @@ const ADDR = "0x3600000000000000000000000000000000000000" as const;
 // getActions only binds the wallet into invoke; it never calls wallet
 // methods, so a minimal stub is enough to enumerate action names.
 const stubWallet = {
-  getName: () => "arc-viem-wallet",
   getAddress: () => ADDR,
-  getNetwork: () => ({ protocolFamily: "evm", networkId: "arc-testnet", chainId: "5042002" }),
-} as unknown as EvmWalletProvider;
+} as unknown as AgentWallet;
 
 function names(actions: { name: string }[]): string[] {
   return actions.map((a) => a.name);

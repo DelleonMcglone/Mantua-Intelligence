@@ -1,7 +1,6 @@
 /**
- * Arc testnet as a custom viem chain. AgentKit's built-in
- * CHAIN_ID_TO_NETWORK_ID map does not include Arc, so the agent runs on
- * ViemWalletProvider over this custom chain rather than CdpWalletProvider.
+ * Arc testnet as a custom viem chain — the agent talks to Arc directly over
+ * plain viem clients built from this chain definition.
  *
  * nativeCurrency.decimals = 18 because Arc's native gas token (USDC) uses
  * 18 decimals for gas/fee math. This is intentionally NOT the 6-decimal
