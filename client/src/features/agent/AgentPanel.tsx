@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AgentChatGrid, type ChatActionKey } from "./AgentChatGrid.tsx";
 import { AgentModePicker } from "./AgentModePicker.tsx";
 import { AutonomousFlow } from "./AutonomousFlow.tsx";
+import { QueryFlow } from "./QueryFlow.tsx";
 import { SendFlow } from "./SendFlow.tsx";
 import { SwapFlow } from "./SwapFlow.tsx";
 import { WalletFlow } from "./WalletFlow.tsx";
@@ -10,7 +11,7 @@ interface AgentPanelProps {
   onClose: () => void;
 }
 
-type Step = "mode" | "chat" | "auto" | "wallet" | "send" | "swap";
+type Step = "mode" | "chat" | "auto" | "wallet" | "send" | "swap" | "query";
 
 /**
  * Mantua Prototype — `AgentPanel`. Entry point for the Phase 6 agent
@@ -42,7 +43,11 @@ export function AgentPanel({ onClose }: AgentPanelProps) {
       setStep("swap");
       return;
     }
-    // liq + query don't have flows in pass 1; no-op.
+    if (k === "query") {
+      setStep("query");
+      return;
+    }
+    // liq doesn't have a flow yet; no-op.
   };
 
   if (step === "mode") {
@@ -74,6 +79,7 @@ export function AgentPanel({ onClose }: AgentPanelProps) {
   if (step === "wallet") return <WalletFlow onClose={backToChat} />;
   if (step === "send") return <SendFlow onClose={backToChat} />;
   if (step === "swap") return <SwapFlow onClose={backToChat} />;
+  if (step === "query") return <QueryFlow onClose={backToChat} />;
   // step === "auto" — default arm; TS narrows the union for us.
   return (
     <AutonomousFlow
