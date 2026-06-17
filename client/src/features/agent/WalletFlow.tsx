@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { api } from "@/lib/api.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
+  AgentActionError,
+  AgentActionSuccess,
   AgentNotReady,
-  AgentUnavailableNotice,
   AgentWalletStrip,
   fmtUnits,
   fmtUsd,
+  useAgentAction,
 } from "./agent-gate.tsx";
 import {
   BigVal,
@@ -18,22 +20,27 @@ import {
 } from "./agent-primitives.tsx";
 
 /**
- * F1 — Agent wallet. Read-only view of the LIVE CDP agent wallet
- * (address + balances + total value) via `useAgentPortfolio`. When no
- * agent wallet is provisioned, shows an honest empty state. Fund /
- * withdraw run through the agent wallet once on-chain execution ships —
- * surfaced as an explicit "not available yet" notice rather than the old
- * mock provision/fund/withdraw simulation.
+ * F1 — Agent wallet. Read-only view of the LIVE Circle agent wallet on Arc
+ * (address + balances + total value) via `useAgentPortfolio`. When no agent
+ * wallet is provisioned, shows an honest empty state with a provision
+ * button. "Fund" requests testnet USDC from Circle's faucet via
+ * `POST /api/agent/fund`; balances re-poll once it lands.
  */
 
 interface Props {
   onClose: () => void;
 }
 
+interface AgentFundResult {
+  agentAddress: string;
+  blockchain: string;
+}
+
 export function WalletFlow({ onClose }: Props) {
   const agent = useAgentPortfolio();
-  const [showNotice, setShowNotice] = useState(false);
+  const fund = useAgentAction<AgentFundResult>();
   const total = agent.balances.reduce((sum, b) => sum + b.usdValue, 0);
+  const funding = fund.status === "loading";
 
   return (
     <>
@@ -83,16 +90,25 @@ export function WalletFlow({ onClose }: Props) {
             <div style={{ padding: 14, borderTop: "1px solid var(--border-soft)" }}>
               <button
                 type="button"
-                style={{ ...BTN_GHOST, width: "100%" }}
+                disabled={funding}
+                style={{ ...BTN_GHOST, width: "100%", opacity: funding ? 0.6 : 1 }}
                 onClick={() => {
-                  setShowNotice(true);
+                  void fund.run(() => api.post<AgentFundResult>("/api/agent/fund", {}));
                 }}
               >
-                Fund / withdraw
+                {funding ? "Requesting…" : "Fund with testnet USDC"}
               </button>
-              {showNotice && (
+              {fund.status === "success" && (
                 <div style={{ marginTop: 10 }}>
-                  <AgentUnavailableNotice action="funding & withdrawals" />
+                  <AgentActionSuccess
+                    title="Faucet requested"
+                    detail="Circle is sending testnet USDC to the agent wallet — balances refresh once it lands."
+                  />
+                </div>
+              )}
+              {fund.status === "error" && fund.error && (
+                <div style={{ marginTop: 10 }}>
+                  <AgentActionError message={fund.error} />
                 </div>
               )}
             </div>

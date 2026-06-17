@@ -27,7 +27,7 @@ interface AgentPortfolioResponse {
 }
 
 export interface AgentPortfolioState {
-  /** Agent CDP address, or null until the wallet has been provisioned. */
+  /** Agent wallet address (Circle on Arc), or null until provisioned. */
   agentAddress: string | null;
   balances: AgentBalance[];
   loading: boolean;
@@ -42,7 +42,7 @@ const POLL_MS = 30_000;
 /**
  * Live agent-wallet portfolio polling. Mirrors `usePortfolio` but hits
  * `/api/agent/portfolio`, which 404s with code `AGENT_WALLET_NOT_FOUND`
- * for users who haven't provisioned an agent CDP wallet yet.
+ * for users who haven't provisioned a Circle agent wallet yet.
  */
 export function useAgentPortfolio(): AgentPortfolioState {
   const { authenticated, ready } = usePrivy();

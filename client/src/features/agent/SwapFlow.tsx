@@ -1,10 +1,14 @@
 import { useState, type CSSProperties } from "react";
+import { api } from "@/lib/api.ts";
+import { getToken } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
+  AgentActionError,
+  AgentActionSuccess,
   AgentNotReady,
-  AgentUnavailableNotice,
   AgentWalletStrip,
   fmtUnits,
+  useAgentAction,
 } from "./agent-gate.tsx";
 import {
   BTN_PRIMARY,
@@ -17,16 +21,19 @@ import {
 
 /**
  * F3 — Swap tokens from the agent wallet. Real agent address + balances
- * via `useAgentPortfolio`; the pay amount is a user input. The previous
- * mock peg-zone theater (MODERATE/CRITICAL rings, a "Demo: simulate
- * CRITICAL peg" button, hardcoded 100 USDC → 0.02756 ETH quotes and a
- * fake tx hash) is gone. Agent swap routing/quoting/execution isn't wired
- * yet, so the receive side reads "—" and submitting shows an honest
- * notice instead of fabricating a result.
+ * via `useAgentPortfolio`; the pay amount is a user input. Submitting runs
+ * a real Uniswap v4 swap through `POST /api/agent/swap` (the agent's Circle
+ * wallet on Arc); the received amount + tx hash come back from the server.
  */
 
 interface Props {
   onClose: () => void;
+}
+
+interface AgentSwapResult {
+  txHash: string;
+  explorerUrl: string;
+  amountOutRaw: string;
 }
 
 const TOKEN_INPUT_STYLE: CSSProperties = {
@@ -76,12 +83,17 @@ const LABEL_STYLE: CSSProperties = {
 export function SwapFlow({ onClose }: Props) {
   const agent = useAgentPortfolio();
   const [amount, setAmount] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const swap = useAgentAction<AgentSwapResult>();
 
   const payBal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
   const paySym = payBal?.symbol ?? "USDC";
   const payDisplay = payBal ? fmtUnits(payBal.balanceRaw, payBal.decimals) : "0";
   const receiveSym = paySym === "USDC" ? "EURC" : "USDC";
+  const busy = swap.status === "loading";
+  const receiveDisplay =
+    swap.status === "success" && swap.result
+      ? fmtUnits(swap.result.amountOutRaw, getToken(receiveSym).decimals)
+      : "—";
 
   return (
     <>
@@ -106,7 +118,7 @@ export function SwapFlow({ onClose }: Props) {
                   value={amount}
                   onChange={(e) => {
                     setAmount(e.target.value);
-                    setSubmitted(false);
+                    if (swap.status !== "idle") swap.reset();
                   }}
                   placeholder="0.00"
                 />
@@ -127,14 +139,14 @@ export function SwapFlow({ onClose }: Props) {
               <div style={LABEL_STYLE}>RECEIVE</div>
               <div style={TOKEN_INPUT_STYLE}>
                 <span className="mono" style={{ ...AMOUNT_STYLE, color: "var(--text-mute)" }}>
-                  —
+                  {receiveDisplay}
                 </span>
                 <div style={TOKEN_PICK_STYLE}>
                   <TokenChip sym={receiveSym} size={18} /> {receiveSym}
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-                Quote appears once agent swap routing is live.
+                Received amount is settled on-chain by the swap.
               </div>
             </div>
 
@@ -145,17 +157,30 @@ export function SwapFlow({ onClose }: Props) {
                 width: "100%",
                 padding: 12,
                 marginTop: 8,
-                opacity: amount ? 1 : 0.5,
+                opacity: amount && !busy ? 1 : 0.5,
               }}
-              disabled={!amount}
+              disabled={!amount || busy}
               onClick={() => {
-                setSubmitted(true);
+                void swap.run(() =>
+                  api.post<AgentSwapResult>("/api/agent/swap", {
+                    tokenIn: paySym,
+                    tokenOut: receiveSym,
+                    amountIn: amount,
+                  }),
+                );
               }}
             >
-              Review swap
+              {busy ? "Swapping…" : "Swap"}
             </button>
 
-            {submitted && <AgentUnavailableNotice action="swaps" />}
+            {swap.status === "success" && swap.result && (
+              <AgentActionSuccess
+                title={`Swapped ${amount} ${paySym} → ${receiveDisplay} ${receiveSym}`}
+                txHash={swap.result.txHash}
+                explorerUrl={swap.result.explorerUrl}
+              />
+            )}
+            {swap.status === "error" && swap.error && <AgentActionError message={swap.error} />}
           </div>
         </>
       )}

@@ -1,17 +1,26 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { api } from "@/lib/api.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
-import { AgentNotReady, AgentUnavailableNotice, AgentWalletStrip } from "./agent-gate.tsx";
-import { BTN_GHOST, PANEL_BODY } from "./agent-primitives.tsx";
+import {
+  AgentActionError,
+  AgentActionSuccess,
+  AgentNotReady,
+  AgentWalletStrip,
+  shortAddr,
+  useAgentAction,
+} from "./agent-gate.tsx";
+import { Banner, BTN_GHOST, BTN_PRIMARY, DetailRows, PANEL_BODY } from "./agent-primitives.tsx";
 
 /**
- * F7 — Autonomous mode. Drives off the LIVE agent wallet
- * (`useAgentPortfolio`). The example prompts below are illustrative
- * suggestions. The previous mock theater — fake parse → confirm →
- * execute → done steps with hardcoded amounts, hooks, a daily cap, and a
- * fabricated tx hash — is gone; autonomous execution isn't wired yet, so
- * picking an instruction shows an honest notice instead of faking a run.
+ * F7 — Autonomous mode. A natural-language instruction is parsed into a
+ * structured intent by `POST /api/agent/instruction`, then the user
+ * confirms execution: `send` and `swap` intents run through their real
+ * agent endpoints (the Circle wallet on Arc). Other intent kinds are
+ * surfaced honestly — the server defers their auto-execution — and
+ * `clarify`/`reject` show the model's question/reason. Nothing fires
+ * without an explicit confirm; spending caps are enforced server-side.
  */
 
 interface Props {
@@ -20,16 +29,131 @@ interface Props {
   onBack?: () => void;
 }
 
+type AgentIntent =
+  | {
+      kind: "swap";
+      tokenIn: string;
+      tokenOut: string;
+      amountIn: string;
+      slippageTolerance?: number;
+    }
+  | { kind: "send"; to: string; token: string; amount: string }
+  | {
+      kind: "add_liquidity";
+      tokenA: string;
+      tokenB: string;
+      fee: number;
+      amountA: string;
+      amountB: string;
+    }
+  | { kind: "remove_liquidity"; positionId: string; percentage: number }
+  | { kind: "query"; type: "pools" | "pool" | "chart"; poolId?: string; days?: number }
+  | { kind: "wallet"; action: "create" | "info" | "set_cap"; dailyCapUsd?: number }
+  | { kind: "clarify"; question: string }
+  | { kind: "reject"; reason: string };
+
+interface ParseResult {
+  intent: AgentIntent;
+  raw: string;
+  model: string;
+}
+
+interface ExecResult {
+  txHash: string;
+  explorerUrl: string;
+}
+
 const AUTONOMOUS_PROMPTS = [
-  "Swap 0.1 ETH to USDC on Base",
-  "Move my idle USDC into the highest-APR stable pool",
-  "Monitor cbBTC price and alert if it drops below $60k",
-  "Rebalance my portfolio to 60% ETH / 40% USDC",
+  "Swap 25 USDC to EURC",
+  "Send 10 USDC to 0x0000000000000000000000000000000000000000",
+  "Show me the available pools",
+  "Set my daily spend cap to 250 USDC",
 ];
+
+const INTENT_LABEL: Record<AgentIntent["kind"], string> = {
+  swap: "Swap",
+  send: "Send",
+  add_liquidity: "Add liquidity",
+  remove_liquidity: "Remove liquidity",
+  query: "Query",
+  wallet: "Wallet",
+  clarify: "Needs clarification",
+  reject: "Out of scope",
+};
+
+function intentRows(intent: AgentIntent): { label: string; value: ReactNode }[] {
+  switch (intent.kind) {
+    case "send":
+      return [
+        { label: "To", value: shortAddr(intent.to) },
+        { label: "Amount", value: `${intent.amount} ${intent.token}` },
+      ];
+    case "swap":
+      return [
+        { label: "Pay", value: `${intent.amountIn} ${intent.tokenIn}` },
+        { label: "Receive", value: intent.tokenOut },
+      ];
+    case "add_liquidity":
+      return [
+        { label: "Pair", value: `${intent.tokenA} / ${intent.tokenB}` },
+        { label: "Amounts", value: `${intent.amountA} / ${intent.amountB}` },
+        { label: "Fee", value: `${String(intent.fee / 10_000)}%` },
+      ];
+    case "remove_liquidity":
+      return [
+        { label: "Position", value: intent.positionId },
+        { label: "Remove", value: `${String(intent.percentage)}%` },
+      ];
+    case "query":
+      return [{ label: "Type", value: intent.type }];
+    case "wallet":
+      return [
+        { label: "Action", value: intent.action },
+        ...(intent.dailyCapUsd !== undefined
+          ? [{ label: "Daily cap", value: `$${String(intent.dailyCapUsd)}` }]
+          : []),
+      ];
+    case "clarify":
+      return [{ label: "Question", value: intent.question }];
+    case "reject":
+      return [{ label: "Reason", value: intent.reason }];
+  }
+}
 
 export function AutonomousFlow({ onClose, onBack }: Props) {
   const agent = useAgentPortfolio();
-  const [instr, setInstr] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const parse = useAgentAction<ParseResult>();
+  const exec = useAgentAction<ExecResult>();
+
+  const intent = parse.status === "success" ? (parse.result?.intent ?? null) : null;
+  const parsing = parse.status === "loading";
+  const executing = exec.status === "loading";
+
+  const resetAll = () => {
+    parse.reset();
+    exec.reset();
+  };
+
+  const runExec = (intent: AgentIntent) => {
+    if (intent.kind === "send") {
+      void exec.run(() =>
+        api.post<ExecResult>("/api/agent/send", {
+          to: intent.to,
+          amount: intent.amount,
+          token: intent.token,
+        }),
+      );
+    } else if (intent.kind === "swap") {
+      void exec.run(() =>
+        api.post<ExecResult>("/api/agent/swap", {
+          tokenIn: intent.tokenIn,
+          tokenOut: intent.tokenOut,
+          amountIn: intent.amountIn,
+        }),
+      );
+    }
+  };
 
   return (
     <>
@@ -65,59 +189,134 @@ export function AutonomousFlow({ onClose, onBack }: Props) {
       ) : (
         <>
           <AgentWalletStrip agent={agent} />
-          {instr === null ? (
-            <div className="flex-1 overflow-auto px-5 pt-2 pb-5 flex flex-col">
-              <div className="flex flex-col items-center text-center mt-8 mb-6 gap-2">
-                <div className="text-[56px] leading-none" aria-hidden>
-                  🤖
-                </div>
-                <div className="text-[20px] font-semibold mt-1">Your autonomous agent is ready</div>
-                <div className="text-[13px] text-text-dim">
-                  Pick an example instruction to get started
-                </div>
+          {intent === null ? (
+            <div style={PANEL_BODY}>
+              <div style={{ fontSize: 11, color: "var(--text-mute)", letterSpacing: ".06em" }}>
+                INSTRUCTION
               </div>
-              <div className="flex flex-col gap-2.5 max-w-[560px] w-full mx-auto">
+              <textarea
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (parse.status !== "idle") parse.reset();
+                }}
+                placeholder="Tell the agent what to do — e.g. “Swap 25 USDC to EURC”."
+                rows={3}
+                style={{
+                  width: "100%",
+                  resize: "vertical",
+                  padding: "10px 12px",
+                  background: "var(--bg-elev)",
+                  border: "1px solid var(--border-soft)",
+                  borderRadius: 10,
+                  color: "var(--text)",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {AUTONOMOUS_PROMPTS.map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => {
-                      setInstr(p);
+                      setText(p);
+                      parse.reset();
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-3 bg-bg-elev border border-border-soft rounded-md text-left text-[13px] text-text hover:border-accent hover:bg-row-hover transition-colors cursor-pointer"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-dim)",
+                      background: "var(--chip)",
+                      border: "1px solid var(--border-soft)",
+                      borderRadius: 99,
+                      padding: "5px 10px",
+                      cursor: "pointer",
+                    }}
                   >
-                    <span className="text-accent text-[14px] leading-none">›</span>
-                    <span className="flex-1">{p}</span>
+                    {p}
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                disabled={!text.trim() || parsing}
+                style={{
+                  ...BTN_PRIMARY,
+                  width: "100%",
+                  padding: 12,
+                  opacity: text.trim() && !parsing ? 1 : 0.5,
+                }}
+                onClick={() => {
+                  void parse.run(() =>
+                    api.post<ParseResult>("/api/agent/instruction", { text: text.trim() }),
+                  );
+                }}
+              >
+                {parsing ? "Interpreting…" : "Interpret instruction"}
+              </button>
+              {parse.status === "error" && parse.error && (
+                <AgentActionError message={parse.error} />
+              )}
             </div>
           ) : (
             <div style={PANEL_BODY}>
               <div style={{ fontSize: 11, color: "var(--text-mute)", letterSpacing: ".06em" }}>
-                INSTRUCTION
+                INTERPRETED AS · {INTENT_LABEL[intent.kind]}
               </div>
-              <div
-                style={{
-                  fontSize: 14,
-                  color: "var(--text)",
-                  padding: "10px 12px",
-                  background: "var(--bg-elev)",
-                  border: "1px solid var(--border-soft)",
-                  borderRadius: 10,
-                }}
-              >
-                {instr}
-              </div>
-              <AgentUnavailableNotice action="autonomous execution" />
+              <DetailRows rows={intentRows(intent)} />
+
+              {exec.status === "success" && exec.result ? (
+                <AgentActionSuccess
+                  title="Executed"
+                  txHash={exec.result.txHash}
+                  explorerUrl={exec.result.explorerUrl}
+                />
+              ) : intent.kind === "send" || intent.kind === "swap" ? (
+                <>
+                  {exec.status === "error" && exec.error && (
+                    <AgentActionError message={exec.error} />
+                  )}
+                  <button
+                    type="button"
+                    disabled={executing}
+                    style={{
+                      ...BTN_PRIMARY,
+                      width: "100%",
+                      padding: 12,
+                      opacity: executing ? 0.6 : 1,
+                    }}
+                    onClick={() => {
+                      runExec(intent);
+                    }}
+                  >
+                    {executing
+                      ? "Executing…"
+                      : `Confirm ${intent.kind === "send" ? "send" : "swap"}`}
+                  </button>
+                </>
+              ) : intent.kind === "clarify" ? (
+                <Banner tone="warn" icon="?" title="Needs more detail">
+                  {intent.question}
+                </Banner>
+              ) : intent.kind === "reject" ? (
+                <Banner tone="error" icon="⊘" title="Can't do that one">
+                  {intent.reason}
+                </Banner>
+              ) : (
+                <Banner tone="info" icon="ℹ" title="Parsed, but not auto-executed here">
+                  {INTENT_LABEL[intent.kind]} actions run from their own panel — autonomous mode
+                  executes sends and swaps directly.
+                </Banner>
+              )}
+
               <button
                 type="button"
                 style={{ ...BTN_GHOST, alignSelf: "flex-start" }}
-                onClick={() => {
-                  setInstr(null);
-                }}
+                onClick={resetAll}
               >
-                Try another instruction
+                New instruction
               </button>
             </div>
           )}

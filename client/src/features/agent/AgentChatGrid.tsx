@@ -1,7 +1,7 @@
 import { ArrowLeft, History, Plus, X } from "lucide-react";
 
 const CHAT_ACTIONS = [
-  { k: "wallet", t: "Create & Manage Wallet", d: "Create agent wallet via CDP", e: "🔑" },
+  { k: "wallet", t: "Create & Manage Wallet", d: "Create a Circle agent wallet on Arc", e: "🔑" },
   { k: "fund", t: "Fund Agent Wallet", d: "Get tokens", e: "🚰" },
   { k: "query", t: "Query On-Chain Data", d: "Fetch any crypto data", e: "🔍" },
   { k: "liq", t: "Liquidity", d: "Add/remove liquidity from a pool", e: "💧" },

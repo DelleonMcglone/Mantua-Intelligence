@@ -1,10 +1,13 @@
 import { useState, type CSSProperties } from "react";
+import { api } from "@/lib/api.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
+  AgentActionError,
+  AgentActionSuccess,
   AgentNotReady,
-  AgentUnavailableNotice,
   AgentWalletStrip,
   fmtUnits,
+  useAgentAction,
 } from "./agent-gate.tsx";
 import {
   BTN_PRIMARY,
@@ -17,14 +20,20 @@ import {
 
 /**
  * F2 — Send tokens from the agent wallet. Real agent address + balances
- * via `useAgentPortfolio`; recipient and amount are user inputs (no more
- * pre-filled vitalik.eth / fake resolved address / fake RECENT list).
- * On-chain agent sends aren't wired yet, so submitting shows an honest
- * notice instead of fabricating a tx hash + success.
+ * via `useAgentPortfolio`; recipient and amount are user inputs. Submitting
+ * runs a real ERC-20 transfer through `POST /api/agent/send` (the agent's
+ * Circle wallet on Arc) and surfaces the tx hash + ArcScan link on success.
  */
 
 interface Props {
   onClose: () => void;
+}
+
+interface AgentSendResult {
+  txHash: string;
+  explorerUrl: string;
+  agentAddress: string;
+  usdValue: number;
 }
 
 const INPUT_STYLE: CSSProperties = {
@@ -50,11 +59,12 @@ export function SendFlow({ onClose }: Props) {
   const agent = useAgentPortfolio();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const send = useAgentAction<AgentSendResult>();
 
   const bal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
   const sym = bal?.symbol ?? "USDC";
   const balDisplay = bal ? fmtUnits(bal.balanceRaw, bal.decimals) : "0";
+  const busy = send.status === "loading";
 
   return (
     <>
@@ -78,7 +88,7 @@ export function SendFlow({ onClose }: Props) {
                 value={recipient}
                 onChange={(e) => {
                   setRecipient(e.target.value);
-                  setSubmitted(false);
+                  if (send.status !== "idle") send.reset();
                 }}
                 placeholder="0x… address"
               />
@@ -102,7 +112,7 @@ export function SendFlow({ onClose }: Props) {
                   value={amount}
                   onChange={(e) => {
                     setAmount(e.target.value);
-                    setSubmitted(false);
+                    if (send.status !== "idle") send.reset();
                   }}
                   placeholder="0.00"
                   className="mono"
@@ -145,17 +155,30 @@ export function SendFlow({ onClose }: Props) {
                 ...BTN_PRIMARY,
                 width: "100%",
                 padding: 12,
-                opacity: recipient && amount ? 1 : 0.5,
+                opacity: recipient && amount && !busy ? 1 : 0.5,
               }}
-              disabled={!recipient || !amount}
+              disabled={!recipient || !amount || busy}
               onClick={() => {
-                setSubmitted(true);
+                void send.run(() =>
+                  api.post<AgentSendResult>("/api/agent/send", {
+                    to: recipient,
+                    amount,
+                    token: sym,
+                  }),
+                );
               }}
             >
-              Send
+              {busy ? "Sending…" : "Send"}
             </button>
 
-            {submitted && <AgentUnavailableNotice action="sends" />}
+            {send.status === "success" && send.result && (
+              <AgentActionSuccess
+                title={`Sent ${amount} ${sym}`}
+                txHash={send.result.txHash}
+                explorerUrl={send.result.explorerUrl}
+              />
+            )}
+            {send.status === "error" && send.error && <AgentActionError message={send.error} />}
           </div>
         </>
       )}
