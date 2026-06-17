@@ -1,37 +1,29 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api.ts";
+import type { PoolSummary } from "@/features/liquidity/types.ts";
 import { AgentActionError } from "./agent-gate.tsx";
 import { PANEL_BODY, PANEL_HEAD, PANEL_TITLE, Spinner, X_CLOSE } from "./agent-primitives.tsx";
 
 /**
- * F-query — "Query On-Chain Data". Calls the authenticated
- * `GET /api/agent/query?type=pools` endpoint (a thin DefiLlama wrapper)
- * and lists the top Uniswap pools by TVL. Read-only market data, so this
- * flow doesn't require a provisioned agent wallet.
+ * F-query — "Query On-Chain Data". Calls the app's `GET /api/pools`
+ * endpoint and lists the Arc pools (the same data the Pools page shows,
+ * with real on-chain TVL). Read-only, so it needs no provisioned agent
+ * wallet.
  */
 
 interface Props {
   onClose: () => void;
 }
 
-interface QueryPool {
-  pool: string;
-  chain: string;
-  project: string;
-  symbol: string;
-  tvlUsd: number;
-  apy?: number | null;
-}
-
 interface PoolsResponse {
-  pools: QueryPool[];
+  pools: PoolSummary[];
 }
 
 const fmtCompactUsd = (n: number): string =>
   `$${n.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 2 })}`;
 
 export function QueryFlow({ onClose }: Props) {
-  const [pools, setPools] = useState<QueryPool[] | null>(null);
+  const [pools, setPools] = useState<PoolSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +33,7 @@ export function QueryFlow({ onClose }: Props) {
     // the result/error asynchronously.
     let cancelled = false;
     api
-      .get<PoolsResponse>("/api/agent/query?type=pools")
+      .get<PoolsResponse>("/api/pools")
       .then((data) => {
         if (!cancelled) setPools(data.pools);
       })
@@ -74,7 +66,7 @@ export function QueryFlow({ onClose }: Props) {
 
       <div style={{ ...PANEL_BODY, gap: 8 }}>
         <div style={{ fontSize: 11, color: "var(--text-mute)", letterSpacing: ".06em" }}>
-          TOP UNISWAP POOLS BY TVL · DEFILLAMA
+          ARC POOLS BY TVL
         </div>
 
         {loading && (
@@ -96,7 +88,7 @@ export function QueryFlow({ onClose }: Props) {
           !error &&
           pools?.slice(0, 12).map((p) => (
             <div
-              key={p.pool}
+              key={p.id}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -108,14 +100,15 @@ export function QueryFlow({ onClose }: Props) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{p.symbol}</div>
                 <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 1 }}>
-                  {p.project} · {p.chain}
+                  {p.project}
+                  {p.feeTier ? ` · ${p.feeTier}` : ""}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div className="mono" style={{ fontSize: 13 }}>
                   {fmtCompactUsd(p.tvlUsd)}
                 </div>
-                {p.apy != null && (
+                {p.apy > 0 && (
                   <div
                     className="mono"
                     style={{ fontSize: 11, color: "var(--green)", marginTop: 1 }}
