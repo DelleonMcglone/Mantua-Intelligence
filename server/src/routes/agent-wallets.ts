@@ -50,7 +50,7 @@ agentWalletsRouter.post(
     }
     const ctx = getRequestContext(req);
     try {
-      const wallet = await getOrCreateAgentWallet(privyUserId);
+      const wallet = await getOrCreateAgentWallet(privyUserId, req.walletAddress);
       await logAudit({
         ...ctx,
         action: "agent_wallet_provision",

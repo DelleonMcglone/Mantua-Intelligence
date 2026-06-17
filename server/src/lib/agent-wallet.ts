@@ -4,6 +4,7 @@ import { agentWallets, type AgentWallet } from "../db/schema/agent.ts";
 import { users } from "../db/schema/users.ts";
 import { deriveAgentAccountName } from "./agent-wallet-name.ts";
 import { getAgentWalletSetId, getCircleClient } from "./circle/client.ts";
+import { recordFirstSeen } from "./wallet-age.ts";
 
 export { deriveAgentAccountName };
 
@@ -32,7 +33,10 @@ export class AgentWalletNotFoundError extends Error {
  * P6-003 — provision (or return) the user's single agent wallet.
  *
  * Order of operations:
- *   1. Resolve our internal user.id from privyUserId. Errors if absent.
+ *   1. Resolve our internal user.id from privyUserId. If no user row exists
+ *      yet, record first-seen with `primaryAddress` (the authenticated
+ *      wallet) so provisioning self-heals on a user's first agent action.
+ *      Errors only if we also have no wallet address to record.
  *   2. If an `agent_wallets` row already exists for this user, return it
  *      (cheap path; Circle is not contacted).
  *   3. Otherwise create a Circle Developer-Controlled Wallet on Arc Testnet
@@ -45,18 +49,34 @@ export class AgentWalletNotFoundError extends Error {
  *
  * One wallet per user — enforced by the unique `user_id` constraint.
  */
-export async function getOrCreateAgentWallet(privyUserId: string): Promise<AgentWallet> {
+export async function getOrCreateAgentWallet(
+  privyUserId: string,
+  primaryAddress?: string,
+): Promise<AgentWallet> {
   // Indexing into the array (rather than destructuring) gives TS the
   // correct `T | undefined` narrowing — drizzle's destructured-element
   // type is otherwise too loose and the `if (!x)` guard becomes a
   // no-op under @typescript-eslint/no-unnecessary-condition.
-  const userRows = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.privyUserId, privyUserId))
-    .limit(1);
-  const user = userRows.at(0);
-  if (!user) throw new UserNotFoundError(privyUserId);
+  const lookupUser = async () =>
+    (
+      await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.privyUserId, privyUserId))
+        .limit(1)
+    ).at(0);
+
+  let user = await lookupUser();
+  if (!user) {
+    // No user row yet — record first-seen so provisioning works on the
+    // user's first agent action (the connect-time hook was never wired).
+    // Without a wallet address there's nothing to record, so surface the
+    // original "connect your primary wallet" error.
+    if (!primaryAddress) throw new UserNotFoundError(privyUserId);
+    await recordFirstSeen(privyUserId, primaryAddress);
+    user = await lookupUser();
+    if (!user) throw new UserNotFoundError(privyUserId);
+  }
 
   const existingRows = await db
     .select()
