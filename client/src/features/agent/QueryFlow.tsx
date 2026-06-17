@@ -24,15 +24,13 @@ interface Props {
 }
 
 type Topic =
-  | "arc-pools"
-  | "market-summary"
-  | "top-stablecoins"
-  | "eurc-peg"
-  | "usdc-eurc-pool"
-  | "cirbtc-price"
   | "mantua-hooks"
-  | "coinbase-prices"
-  | "token-price";
+  | "market-summary"
+  | "cirbtc-price"
+  | "eurc-peg"
+  | "top-stablecoins"
+  | "usdc-24h-volume"
+  | "coinbase-prices";
 
 interface AnalyzeMetric {
   label: string;
@@ -52,12 +50,13 @@ interface AnalyzeResponse {
 }
 
 const SUGGESTIONS: { topic: Topic; q: string }[] = [
-  { topic: "arc-pools", q: "Live Arc hook pools" },
-  { topic: "market-summary", q: "USDC & EURC market summary" },
-  { topic: "top-stablecoins", q: "Top stablecoins" },
-  { topic: "eurc-peg", q: "Is EURC holding its peg?" },
-  { topic: "cirbtc-price", q: "cirBTC price" },
-  { topic: "mantua-hooks", q: "About Mantua hooks" },
+  { topic: "mantua-hooks", q: "Learn about Mantua hooks" },
+  { topic: "market-summary", q: "Stablecoin market summary for USDC and EURC" },
+  { topic: "cirbtc-price", q: "Show me cirBTC price" },
+  { topic: "eurc-peg", q: "Is EURC holding its peg right now?" },
+  { topic: "top-stablecoins", q: "Show me top performing stablecoins" },
+  { topic: "usdc-24h-volume", q: "What is USDC's 24h volume trend?" },
+  { topic: "coinbase-prices", q: "Coinbase spot prices for USDC, EURC, cirBTC" },
 ];
 
 const LABEL_STYLE: CSSProperties = {
@@ -80,35 +79,19 @@ const CARD_STYLE: CSSProperties = {
   lineHeight: 1.4,
 };
 
-const INPUT_STYLE: CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  padding: "10px 12px",
-  background: "var(--bg-elev)",
-  border: "1px solid var(--border-soft)",
-  borderRadius: 10,
-  color: "var(--text)",
-  fontSize: 13,
-  outline: "none",
-  fontFamily: "inherit",
-};
-
 export function QueryFlow({ onClose }: Props) {
   const [view, setView] = useState<"menu" | "result">("menu");
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tokenInput, setTokenInput] = useState("");
 
-  const runQuery = async (topic: Topic, symbol?: string) => {
+  const runQuery = async (topic: Topic) => {
     setView("result");
     setLoading(true);
     setError(null);
     setData(null);
     try {
-      const params = new URLSearchParams({ topic });
-      if (symbol) params.set("symbol", symbol);
-      const res = await api.get<AnalyzeResponse>(`/api/analyze?${params.toString()}`);
+      const res = await api.get<AnalyzeResponse>(`/api/analyze?topic=${topic}`);
       setData(res);
     } catch (err) {
       setError(
@@ -149,33 +132,6 @@ export function QueryFlow({ onClose }: Props) {
                   {s.q}
                 </button>
               ))}
-            </div>
-
-            <div style={{ ...LABEL_STYLE, marginTop: 6 }}>LOOK UP ANY TOKEN PRICE</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                style={INPUT_STYLE}
-                value={tokenInput}
-                onChange={(e) => {
-                  setTokenInput(e.target.value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && tokenInput.trim()) {
-                    void runQuery("token-price", tokenInput.trim());
-                  }
-                }}
-                placeholder="e.g. ETH, BTC, SOL, PENDLE…"
-              />
-              <button
-                type="button"
-                style={{ ...BTN_GHOST, opacity: tokenInput.trim() ? 1 : 0.5 }}
-                disabled={!tokenInput.trim()}
-                onClick={() => {
-                  void runQuery("token-price", tokenInput.trim());
-                }}
-              >
-                Look up
-              </button>
             </div>
           </>
         ) : (
