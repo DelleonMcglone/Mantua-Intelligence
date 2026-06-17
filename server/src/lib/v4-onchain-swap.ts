@@ -279,6 +279,14 @@ async function resolveInitializedFee(
  * available liquidity.
  */
 function friendlyQuoterError(err: unknown): Error {
+  // Prefer the specific inner hook/pool revert (CircuitBreakerTripped,
+  // PoolNotConfigured, NotWhitelisted, NotEnoughLiquidity, …) when we can
+  // unwrap it — the generic "missing liquidity" fallback below is misleading
+  // for an initialized pool whose hook actively rejected the swap.
+  const inner = decodeQuoterRevert(err);
+  const specific = inner.hookReasonDecoded ?? inner.decoded;
+  if (specific) return new Error(specific, { cause: err });
+
   const msg = err instanceof Error ? err.message : String(err);
   if (/0x6190b2b0|UnexpectedRevertBytes/i.test(msg)) {
     return new Error(
