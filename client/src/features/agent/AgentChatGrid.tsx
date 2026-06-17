@@ -95,13 +95,15 @@ export function AgentChatGrid({ onBackToMode, onClose, onPick }: Props) {
               onClick={() => {
                 onPick(a.k);
               }}
-              className="text-left p-3.5 bg-bg-elev border border-border-soft rounded-md min-h-[120px] flex flex-col cursor-pointer hover:border-accent transition-all"
+              className="text-left p-3.5 bg-bg-elev border border-border-soft rounded-md min-h-[120px] flex flex-col justify-between cursor-pointer hover:border-accent transition-all"
             >
-              <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
-                <a.Icon className="h-4 w-4 text-accent" />
+              <div>
+                <div className="text-[13px] font-semibold leading-tight">{a.t}</div>
+                <div className="text-[11px] text-text-dim mt-1 leading-snug">{a.d}</div>
               </div>
-              <div className="text-[13px] font-semibold mt-3 leading-tight">{a.t}</div>
-              <div className="text-[11px] text-text-dim mt-1 leading-snug">{a.d}</div>
+              <div className="text-text-dim mt-3">
+                <a.Icon className="h-4 w-4" />
+              </div>
             </button>
           ))}
         </div>

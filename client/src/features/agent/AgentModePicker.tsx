@@ -45,8 +45,8 @@ export function AgentModePicker({ onClose, onPickChat, onPickAutonomous }: Props
         </button>
       </div>
       <div className="px-7 py-7 flex-1 overflow-auto flex flex-col items-center">
-        <div className="h-14 w-14 rounded-full bg-accent/15 flex items-center justify-center mt-4">
-          <Bot className="h-7 w-7 text-accent" />
+        <div className="h-14 w-14 rounded-full bg-bg-elev border border-border-soft flex items-center justify-center mt-4">
+          <Bot className="h-7 w-7 text-text-dim" />
         </div>
         <div className="text-[22px] font-semibold mt-4 -tracking-[0.01em]">Choose Agent Mode</div>
         <div className="text-[13px] text-text-dim mt-1.5">
@@ -56,27 +56,31 @@ export function AgentModePicker({ onClose, onPickChat, onPickAutonomous }: Props
           <button
             type="button"
             onClick={onPickChat}
-            className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px]"
+            className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px] flex flex-col justify-between"
           >
-            <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
-              <MessageSquare className="h-4 w-4 text-accent" />
+            <div>
+              <div className="text-[15px] font-semibold">Chat Mode</div>
+              <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
+                Interactive action cards with guided steps
+              </div>
             </div>
-            <div className="text-[15px] font-semibold mt-5">Chat Mode</div>
-            <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
-              Interactive action cards with guided steps
+            <div className="text-text-dim mt-3">
+              <MessageSquare className="h-4 w-4" />
             </div>
           </button>
           <button
             type="button"
             onClick={onPickAutonomous}
-            className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px]"
+            className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px] flex flex-col justify-between"
           >
-            <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-accent" />
+            <div>
+              <div className="text-[15px] font-semibold">Autonomous Mode</div>
+              <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
+                Give the agent an instruction &amp; it executes autonomously
+              </div>
             </div>
-            <div className="text-[15px] font-semibold mt-5">Autonomous Mode</div>
-            <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
-              Give the agent an instruction &amp; it executes autonomously
+            <div className="text-text-dim mt-3">
+              <Bot className="h-4 w-4" />
             </div>
           </button>
         </div>
