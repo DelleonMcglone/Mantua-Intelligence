@@ -1,12 +1,33 @@
-import { ArrowLeft, History, Plus, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  Coins,
+  Droplets,
+  History,
+  Plus,
+  Search,
+  Send,
+  Wallet,
+  X,
+} from "lucide-react";
 
 const CHAT_ACTIONS = [
-  { k: "wallet", t: "Create & Manage Wallet", d: "Create a Circle agent wallet on Arc", e: "🔑" },
-  { k: "fund", t: "Fund Agent Wallet", d: "Get tokens", e: "🚰" },
-  { k: "query", t: "Query On-Chain Data", d: "Fetch any crypto data", e: "🔍" },
-  { k: "liq", t: "Liquidity", d: "Add/remove liquidity from a pool", e: "💧" },
-  { k: "swap", t: "Swap Tokens", d: "Exchange between tokens in agent wallet", e: "🔄" },
-  { k: "send", t: "Send Tokens", d: "Transfer tokens to any address", e: "📩" },
+  {
+    k: "wallet",
+    t: "Create & Manage Wallet",
+    d: "Create a Circle agent wallet on Arc",
+    Icon: Wallet,
+  },
+  { k: "fund", t: "Fund Agent Wallet", d: "Get tokens", Icon: Coins },
+  { k: "query", t: "Query On-Chain Data", d: "Fetch any crypto data", Icon: Search },
+  { k: "liq", t: "Liquidity", d: "Add/remove liquidity from a pool", Icon: Droplets },
+  {
+    k: "swap",
+    t: "Swap Tokens",
+    d: "Exchange between tokens in agent wallet",
+    Icon: ArrowLeftRight,
+  },
+  { k: "send", t: "Send Tokens", d: "Transfer tokens to any address", Icon: Send },
 ] as const;
 
 export type ChatActionKey = (typeof CHAT_ACTIONS)[number]["k"];
@@ -76,7 +97,9 @@ export function AgentChatGrid({ onBackToMode, onClose, onPick }: Props) {
               }}
               className="text-left p-3.5 bg-bg-elev border border-border-soft rounded-md min-h-[120px] flex flex-col cursor-pointer hover:border-accent transition-all"
             >
-              <div className="text-[22px]">{a.e}</div>
+              <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
+                <a.Icon className="h-4 w-4 text-accent" />
+              </div>
               <div className="text-[13px] font-bold mt-3 leading-tight">{a.t}</div>
               <div className="text-[11px] text-text-dim mt-1 leading-snug">{a.d}</div>
             </button>
