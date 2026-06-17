@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- shared agent UI primitives co-located by design. */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { TokenIcon } from "@/features/swap/TokenIcon.tsx";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 
@@ -101,6 +101,48 @@ export const PANEL_BODY: CSSProperties = {
  */
 export function TokenChip({ sym, size = 22 }: { sym: string; size?: number }) {
   return <TokenIcon symbol={sym as TokenSymbol} size={size} />;
+}
+
+// ── Copy button ───────────────────────────────────────────────────
+
+/**
+ * Tiny inline copy affordance. Writes `value` to the clipboard and flips to
+ * a brief "Copied" confirmation. Used for the agent wallet address.
+ */
+export function CopyButton({
+  value,
+  label = "Copy",
+  size = 11,
+}: {
+  value: string;
+  label?: string;
+  size?: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard.writeText(value);
+        setCopied(true);
+        window.setTimeout(() => {
+          setCopied(false);
+        }, 1200);
+      }}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: copied ? "var(--green)" : "var(--text-dim)",
+        cursor: "pointer",
+        fontSize: size,
+        padding: 0,
+        fontFamily: "inherit",
+      }}
+      aria-label={`${label} ${value}`}
+    >
+      {copied ? "✓ Copied" : "⎘ Copy"}
+    </button>
+  );
 }
 
 // ── Banner (warn/error/success/info) ──────────────────────────────

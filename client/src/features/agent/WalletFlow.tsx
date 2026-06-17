@@ -12,6 +12,7 @@ import {
   Banner,
   BigVal,
   BTN_GHOST,
+  CopyButton,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -120,8 +121,25 @@ export function WalletFlow({ onClose }: Props) {
                         Open faucet.circle.com ↗
                       </a>
                       {agent.agentAddress && (
-                        <span className="mono" style={{ color: "var(--text-dim)", fontSize: 11 }}>
-                          {agent.agentAddress}
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span
+                            className="mono"
+                            style={{
+                              color: "var(--text-dim)",
+                              fontSize: 11,
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {agent.agentAddress}
+                          </span>
+                          <CopyButton value={agent.agentAddress} label="Copy agent address" />
                         </span>
                       )}
                     </div>

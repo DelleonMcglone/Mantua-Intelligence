@@ -4,7 +4,14 @@ import { ApiError, api } from "@/lib/api.ts";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerAddressUrl } from "@/lib/chains.ts";
 import { AgentStrip } from "./AgentStrip.tsx";
-import { Banner, BTN_PRIMARY, PANEL_BODY, Spinner, TxRow } from "./agent-primitives.tsx";
+import {
+  Banner,
+  BTN_PRIMARY,
+  CopyButton,
+  PANEL_BODY,
+  Spinner,
+  TxRow,
+} from "./agent-primitives.tsx";
 import type { AgentPortfolioState } from "./use-agent-portfolio.ts";
 
 /**
@@ -132,17 +139,18 @@ export function AgentWalletStrip({
     <AgentStrip
       label={label}
       addr={
-        <>
-          {shortAddr(agent.agentAddress)}{" "}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {shortAddr(agent.agentAddress)}
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: "var(--text-dim)", marginLeft: 4, textDecoration: "none" }}
+            style={{ color: "var(--text-dim)", textDecoration: "none" }}
           >
             ↗
           </a>
-        </>
+          <CopyButton value={agent.agentAddress} label="Copy agent address" />
+        </span>
       }
     />
   );
