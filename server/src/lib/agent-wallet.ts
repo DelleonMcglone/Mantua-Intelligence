@@ -3,9 +3,12 @@ import { db } from "../db/client.ts";
 import { agentWallets, type AgentWallet } from "../db/schema/agent.ts";
 import { users } from "../db/schema/users.ts";
 import { deriveAgentAccountName } from "./agent-wallet-name.ts";
-import { getCdpClient } from "./cdp/client.ts";
+import { getAgentWalletSetId, getCircleClient } from "./circle/client.ts";
 
 export { deriveAgentAccountName };
+
+/** Blockchain id Circle uses for Arc Testnet. */
+const ARC_TESTNET = "ARC-TESTNET" as const;
 
 export class UserNotFoundError extends Error {
   constructor(privyUserId: string) {
@@ -31,18 +34,16 @@ export class AgentWalletNotFoundError extends Error {
  * Order of operations:
  *   1. Resolve our internal user.id from privyUserId. Errors if absent.
  *   2. If an `agent_wallets` row already exists for this user, return it
- *      (cheap path; CDP is not contacted).
- *   3. Otherwise call `cdp.evm.getOrCreateAccount` — itself idempotent on
- *      the CDP side via the derived name — and persist the result with
- *      `onConflictDoNothing` on the unique `cdp_wallet_id` index. The
- *      onConflict path covers a concurrent-request race where two
- *      requests both passed step 2 simultaneously.
+ *      (cheap path; Circle is not contacted).
+ *   3. Otherwise create a Circle Developer-Controlled Wallet on Arc Testnet
+ *      (SCA account) in the agent wallet set, and persist it with
+ *      `onConflictDoNothing` on the unique `user_id` index. The onConflict
+ *      path covers a concurrent-request race where two requests both passed
+ *      step 2 simultaneously (the loser's freshly-created Circle wallet is
+ *      simply left unused).
  *   4. If the insert returned nothing (race lost), re-read.
  *
- * This is one-wallet-per-user by design; the `agent_wallets` schema
- * doesn't enforce that uniqueness yet (it allows multiple wallets per
- * userId), but P6-003 only ever provisions one. Multi-wallet-per-user
- * is a v2.x conversation.
+ * One wallet per user — enforced by the unique `user_id` constraint.
  */
 export async function getOrCreateAgentWallet(privyUserId: string): Promise<AgentWallet> {
   // Indexing into the array (rather than destructuring) gives TS the
@@ -65,17 +66,26 @@ export async function getOrCreateAgentWallet(privyUserId: string): Promise<Agent
   const existing = existingRows.at(0);
   if (existing) return existing;
 
-  const name = deriveAgentAccountName(user.id);
-  const account = await getCdpClient().evm.getOrCreateAccount({ name });
+  const walletSetId = await getAgentWalletSetId();
+  const created = await getCircleClient().createWallets({
+    blockchains: [ARC_TESTNET],
+    count: 1,
+    walletSetId,
+    accountType: "SCA",
+  });
+  const wallet = created.data?.wallets.at(0);
+  if (!wallet?.id || !wallet.address) {
+    throw new Error("Circle createWallets returned no wallet");
+  }
 
   const insertRows = await db
     .insert(agentWallets)
     .values({
       userId: user.id,
-      cdpWalletId: name,
-      address: account.address.toLowerCase(),
+      circleWalletId: wallet.id,
+      address: wallet.address.toLowerCase(),
     })
-    .onConflictDoNothing({ target: agentWallets.cdpWalletId })
+    .onConflictDoNothing({ target: agentWallets.userId })
     .returning();
   const row = insertRows.at(0);
   if (row) return row;

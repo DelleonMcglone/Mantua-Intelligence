@@ -92,8 +92,10 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
     ...(slippageTolerance !== undefined ? { slippageTolerance } : {}),
   });
 
+  // TODO(phase-2): replace this CDP/Base signing path with a Circle Developer-
+  // Controlled Wallet contract execution on Arc. Not UI-wired yet.
   const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
+  const account = await cdp.evm.getAccount({ name: wallet.circleWalletId });
 
   let signature: string | undefined;
   if (quote.permitData) {

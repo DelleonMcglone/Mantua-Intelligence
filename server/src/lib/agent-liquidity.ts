@@ -202,8 +202,10 @@ export async function addLiquidityFromAgentWallet(
     (await tokenAmountUsd(tokenA, amountARaw)) + (await tokenAmountUsd(tokenB, amountBRaw));
   await checkSpendingCap(wallet.address, usdValue);
 
+  // TODO(phase-2): replace this CDP/Base signing path with a Circle Developer-
+  // Controlled Wallet contract execution on Arc. Not UI-wired yet.
   const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
+  const account = await cdp.evm.getAccount({ name: wallet.circleWalletId });
 
   const approvalTxA = await ensurePermit2Approval(account, tA.native ? ZERO_ADDRESS : tA.address);
   const approvalTxB = await ensurePermit2Approval(account, tB.native ? ZERO_ADDRESS : tB.address);
@@ -424,8 +426,10 @@ export async function removeLiquidityFromAgentWallet(
     deadlineSeconds,
   });
 
+  // TODO(phase-2): replace this CDP/Base signing path with a Circle Developer-
+  // Controlled Wallet contract execution on Arc. Not UI-wired yet.
   const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
+  const account = await cdp.evm.getAccount({ name: wallet.circleWalletId });
   const networked = await account.useNetwork(CDP_NETWORK);
   const tx = await networked.sendTransaction({
     transaction: {

@@ -15,6 +15,13 @@
       "when": 1778822400000,
       "tag": "0001_add_pools_chain_id",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781280000000,
+      "tag": "0002_agent_circle_wallet",
+      "breakpoints": true
     }
   ]
 }

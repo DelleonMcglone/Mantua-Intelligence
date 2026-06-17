@@ -20,7 +20,7 @@ export const agentWalletsRouter = Router();
 
 interface AgentWalletDto {
   address: string;
-  cdpWalletId: string;
+  circleWalletId: string;
   label: string | null;
   dailyCapUsd: string;
   status: string;
@@ -30,7 +30,7 @@ interface AgentWalletDto {
 function toDto(w: AgentWallet): AgentWalletDto {
   return {
     address: w.address,
-    cdpWalletId: w.cdpWalletId,
+    circleWalletId: w.circleWalletId,
     label: w.label,
     dailyCapUsd: w.dailyCapUsd,
     status: w.status,
@@ -55,7 +55,7 @@ agentWalletsRouter.post(
         ...ctx,
         action: "agent_wallet_provision",
         outcome: "success",
-        params: { agentAddress: wallet.address, cdpWalletId: wallet.cdpWalletId },
+        params: { agentAddress: wallet.address, circleWalletId: wallet.circleWalletId },
       });
       res.json(toDto(wallet));
     } catch (err) {

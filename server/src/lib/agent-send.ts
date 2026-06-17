@@ -64,8 +64,10 @@ export async function sendFromAgentWallet(args: AgentSendArgs): Promise<AgentSen
   const usdValue = await tokenAmountUsd(symbol, amountAtomic);
   await checkSpendingCap(wallet.address, usdValue);
 
+  // TODO(phase-2): replace this CDP/Base signing path with a Circle Developer-
+  // Controlled Wallet contract execution on Arc. Not UI-wired yet.
   const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
+  const account = await cdp.evm.getAccount({ name: wallet.circleWalletId });
   const networked = await account.useNetwork(CDP_NETWORK);
 
   // CDP TransferOptions accepts the literal "eth" for the native asset
