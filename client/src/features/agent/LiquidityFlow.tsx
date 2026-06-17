@@ -11,6 +11,7 @@ import {
 } from "./agent-gate.tsx";
 import {
   BTN_PRIMARY,
+  EMBED_BODY,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -27,6 +28,8 @@ import {
 
 interface Props {
   onClose: () => void;
+  /** When true, render inline (no panel header / wallet strip) for the chat. */
+  embedded?: boolean;
 }
 
 interface AddLiquidityResult {
@@ -86,7 +89,7 @@ const SELECT_STYLE: CSSProperties = {
   flexShrink: 0,
 };
 
-export function LiquidityFlow({ onClose }: Props) {
+export function LiquidityFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [tokenA, setTokenA] = useState<string>(SYMBOLS[0] ?? "USDC");
   const [tokenB, setTokenB] = useState<string>(SYMBOLS[1] ?? "EURC");
@@ -111,19 +114,21 @@ export function LiquidityFlow({ onClose }: Props) {
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>Add liquidity</div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+      {!embedded && (
+        <div style={PANEL_HEAD}>
+          <div style={PANEL_TITLE}>Add liquidity</div>
+          <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
 
       {!agent.agentAddress ? (
         <AgentNotReady agent={agent} />
       ) : (
         <>
-          <AgentWalletStrip agent={agent} label="From agent wallet" />
-          <div style={{ ...PANEL_BODY, gap: 10 }}>
+          {!embedded && <AgentWalletStrip agent={agent} label="From agent wallet" />}
+          <div style={{ ...(embedded ? EMBED_BODY : PANEL_BODY), gap: 10 }}>
             <div>
               <div style={LABEL_STYLE}>TOKEN A</div>
               <div style={ROW_STYLE}>

@@ -11,6 +11,7 @@ import {
 } from "./agent-gate.tsx";
 import {
   BTN_PRIMARY,
+  EMBED_BODY,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -27,6 +28,8 @@ import {
 
 interface Props {
   onClose: () => void;
+  /** When true, render inline (no panel header / wallet strip) for the chat. */
+  embedded?: boolean;
 }
 
 interface AgentSendResult {
@@ -55,7 +58,7 @@ const LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
-export function SendFlow({ onClose }: Props) {
+export function SendFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -68,19 +71,21 @@ export function SendFlow({ onClose }: Props) {
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>Send</div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+      {!embedded && (
+        <div style={PANEL_HEAD}>
+          <div style={PANEL_TITLE}>Send</div>
+          <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
 
       {!agent.agentAddress ? (
         <AgentNotReady agent={agent} />
       ) : (
         <>
-          <AgentWalletStrip agent={agent} label="From agent wallet" />
-          <div style={PANEL_BODY}>
+          {!embedded && <AgentWalletStrip agent={agent} label="From agent wallet" />}
+          <div style={embedded ? EMBED_BODY : PANEL_BODY}>
             <div>
               <div style={LABEL_STYLE}>RECIPIENT</div>
               <input

@@ -13,6 +13,7 @@ import {
   BigVal,
   BTN_GHOST,
   CopyButton,
+  EMBED_BODY,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -30,6 +31,8 @@ import {
 
 interface Props {
   onClose: () => void;
+  /** When true, render inline (no panel header / wallet strip) for the chat. */
+  embedded?: boolean;
 }
 
 interface AgentFundResult {
@@ -37,7 +40,7 @@ interface AgentFundResult {
   blockchain: string;
 }
 
-export function WalletFlow({ onClose }: Props) {
+export function WalletFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const fund = useAgentAction<AgentFundResult>();
   const total = agent.balances.reduce((sum, b) => sum + b.usdValue, 0);
@@ -45,21 +48,23 @@ export function WalletFlow({ onClose }: Props) {
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>
-          <span style={{ fontSize: 14 }}>🤖</span> Agent wallet
+      {!embedded && (
+        <div style={PANEL_HEAD}>
+          <div style={PANEL_TITLE}>
+            <span style={{ fontSize: 14 }}>🤖</span> Agent wallet
+          </div>
+          <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+      )}
 
       {!agent.agentAddress ? (
         <AgentNotReady agent={agent} />
       ) : (
         <>
-          <AgentWalletStrip agent={agent} />
-          <div style={{ ...PANEL_BODY, padding: 0 }}>
+          {!embedded && <AgentWalletStrip agent={agent} />}
+          <div style={embedded ? EMBED_BODY : { ...PANEL_BODY, padding: 0 }}>
             <div style={{ padding: 14 }}>
               <BigVal label="TOTAL VALUE" value={fmtUsd(total)} padding="14px 12px" />
             </div>

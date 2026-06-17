@@ -91,6 +91,14 @@ export const PANEL_BODY: CSSProperties = {
   overflow: "auto",
 };
 
+/** Body container for a flow rendered inline inside a chat bubble — no
+ *  panel padding / flex / scroll (the bubble owns those). */
+export const EMBED_BODY: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
 // ── Token chip (.tok) ─────────────────────────────────────────────
 
 /**

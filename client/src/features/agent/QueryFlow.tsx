@@ -4,6 +4,7 @@ import { AgentActionError } from "./agent-gate.tsx";
 import {
   BTN_GHOST,
   DetailRows,
+  EMBED_BODY,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -21,6 +22,8 @@ import {
 
 interface Props {
   onClose: () => void;
+  /** When true, render inline (no panel header) for the chat. */
+  embedded?: boolean;
 }
 
 type Topic =
@@ -79,7 +82,7 @@ const CARD_STYLE: CSSProperties = {
   lineHeight: 1.4,
 };
 
-export function QueryFlow({ onClose }: Props) {
+export function QueryFlow({ onClose, embedded = false }: Props) {
   const [view, setView] = useState<"menu" | "result">("menu");
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,14 +111,16 @@ export function QueryFlow({ onClose }: Props) {
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>Query On-Chain Data</div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+      {!embedded && (
+        <div style={PANEL_HEAD}>
+          <div style={PANEL_TITLE}>Query On-Chain Data</div>
+          <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
 
-      <div style={{ ...PANEL_BODY, gap: 10 }}>
+      <div style={{ ...(embedded ? EMBED_BODY : PANEL_BODY), gap: 10 }}>
         {view === "menu" ? (
           <>
             <div style={LABEL_STYLE}>MARKET &amp; ON-CHAIN DATA · COINGECKO · DEFILLAMA</div>
