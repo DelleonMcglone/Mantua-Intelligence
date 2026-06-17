@@ -41,8 +41,12 @@ agentFundRouter.post(
       }
       logger.error({ err }, "agent fund failed");
       res.status(502).json({
+        // Circle's programmatic faucet (POST /v1/faucet/drips) requires a
+        // mainnet-upgraded account, so on a test key it returns Forbidden.
+        // The public faucet (faucet.circle.com) sends USDC on Arc to any
+        // address with no upgrade — point the user there.
         error:
-          "Faucet request failed — Circle's testnet faucet may require a mainnet-upgraded account. Fund the agent address manually via the Arc testnet faucet.",
+          "Circle's programmatic faucet needs a mainnet-upgraded account. Use the public faucet at faucet.circle.com to send testnet USDC to the agent address on Arc.",
         code: "FAUCET_FAILED",
       });
     }

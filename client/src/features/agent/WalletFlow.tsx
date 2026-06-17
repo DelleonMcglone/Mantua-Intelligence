@@ -1,7 +1,6 @@
 import { api } from "@/lib/api.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
-  AgentActionError,
   AgentActionSuccess,
   AgentNotReady,
   AgentWalletStrip,
@@ -10,6 +9,7 @@ import {
   useAgentAction,
 } from "./agent-gate.tsx";
 import {
+  Banner,
   BigVal,
   BTN_GHOST,
   PANEL_BODY,
@@ -108,7 +108,24 @@ export function WalletFlow({ onClose }: Props) {
               )}
               {fund.status === "error" && fund.error && (
                 <div style={{ marginTop: 10 }}>
-                  <AgentActionError message={fund.error} />
+                  <Banner tone="warn" icon="⚠" title="Use the public faucet">
+                    {fund.error}
+                    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <a
+                        href="https://faucet.circle.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "var(--accent)", textDecoration: "none" }}
+                      >
+                        Open faucet.circle.com ↗
+                      </a>
+                      {agent.agentAddress && (
+                        <span className="mono" style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                          {agent.agentAddress}
+                        </span>
+                      )}
+                    </div>
+                  </Banner>
                 </div>
               )}
             </div>
