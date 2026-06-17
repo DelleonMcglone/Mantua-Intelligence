@@ -49,6 +49,43 @@ export interface AgentSwapResult {
   network: typeof AGENT_NETWORK;
 }
 
+export interface AgentSwapQuote {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  amountInRaw: string;
+  amountOutRaw: string;
+}
+
+/**
+ * Live no-hook quote for the agent UI — what the agent would receive
+ * swapping `amountIn` of `tokenIn` for `tokenOut`. Read-only (no wallet,
+ * no execution); mirrors the quote `swapFromAgentWallet` runs at execution
+ * so the form estimate matches the eventual fill closely.
+ */
+export async function quoteAgentSwap(args: {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  amountIn: string;
+}): Promise<AgentSwapQuote> {
+  const { tokenIn, tokenOut, amountIn } = args;
+  if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");
+  const amountAtomic = parseUnits(amountIn, getToken(tokenIn).decimals);
+  if (amountAtomic <= 0n) throw new Error("amountIn must be positive");
+  const quote = await quoteExactInputV4({
+    tokenIn,
+    tokenOut,
+    fee: DEFAULT_PROBE_FEE,
+    hook: null,
+    amountInRaw: amountAtomic,
+  });
+  return {
+    tokenIn,
+    tokenOut,
+    amountInRaw: amountAtomic.toString(),
+    amountOutRaw: quote.amountOut,
+  };
+}
+
 export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwapResult> {
   const { privyUserId, tokenIn, tokenOut, amountIn } = args;
   if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");

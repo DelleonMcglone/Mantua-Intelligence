@@ -1,6 +1,7 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { formatUnits } from "viem";
 import { api } from "@/lib/api.ts";
-import { ACTIVE_CHAIN_ID, getUserFacingTokenSymbols } from "@/lib/tokens.ts";
+import { ACTIVE_CHAIN_ID, getToken, getUserFacingTokenSymbols } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
   AgentActionError,
@@ -111,6 +112,31 @@ export function LiquidityFlow({ onClose, embedded = false }: Props) {
     if (v === tokenA) setTokenA(tokenB);
     if (add.status !== "idle") add.reset();
   };
+
+  // Suggest the paired amount from the live pool price when token A's amount
+  // changes (debounced). It stays editable. State is only set in the async
+  // callback, so no synchronous setState-in-effect.
+  useEffect(() => {
+    const a = amountA.trim();
+    if (!a || Number(a) <= 0 || tokenA === tokenB) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ tokenIn: tokenA, tokenOut: tokenB, amountIn: a });
+      void api
+        .get<{ amountOutRaw: string }>(`/api/agent/swap/quote?${params.toString()}`)
+        .then((r) => {
+          if (!cancelled)
+            setAmountB(formatUnits(BigInt(r.amountOutRaw), getToken(tokenB).decimals));
+        })
+        .catch(() => {
+          /* leave amount B for manual entry if the quote fails */
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amountA, tokenA, tokenB]);
 
   return (
     <>

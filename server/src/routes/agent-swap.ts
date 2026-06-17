@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { swapFromAgentWallet } from "../lib/agent-swap.ts";
+import { quoteAgentSwap, swapFromAgentWallet } from "../lib/agent-swap.ts";
 import { AgentWalletNotFoundError } from "../lib/agent-wallet.ts";
 import { logAudit } from "../lib/audit.ts";
 import { CircleUnavailableError } from "../lib/circle/client.ts";
@@ -9,7 +9,7 @@ import { logger } from "../lib/logger.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { isTokenSymbol } from "../lib/tokens.ts";
 import { requireAuth } from "../middleware/auth.ts";
-import { writeRateLimiter } from "../middleware/rate-limit.ts";
+import { walletRateLimiter, writeRateLimiter } from "../middleware/rate-limit.ts";
 
 export const agentSwapRouter = Router();
 
@@ -20,6 +20,39 @@ const swapSchema = z.object({
   /** Optional fractional-percent slippage (e.g. 0.5 = 0.5%). */
   slippageTolerance: z.number().positive().max(5).optional(),
 });
+
+const quoteSchema = z.object({
+  tokenIn: z.string().refine(isTokenSymbol, "Unsupported tokenIn on this network"),
+  tokenOut: z.string().refine(isTokenSymbol, "Unsupported tokenOut on this network"),
+  amountIn: z.string().regex(/^\d+(\.\d+)?$/, "amountIn must be a positive decimal string"),
+});
+
+/**
+ * Read-only live quote for the agent swap / add-liquidity forms. No wallet
+ * needed — just the on-chain no-hook v4 quote for the pair.
+ */
+agentSwapRouter.get(
+  "/api/agent/swap/quote",
+  walletRateLimiter,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const parsed = quoteSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ error: "Invalid query", code: "BAD_REQUEST", details: parsed.error.issues });
+      return;
+    }
+    try {
+      const quote = await quoteAgentSwap(parsed.data);
+      res.json(quote);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Quote failed";
+      logger.warn({ err, query: parsed.data }, "agent swap quote failed");
+      res.status(502).json({ error: `Quote failed: ${message}`, code: "QUOTE_FAILED" });
+    }
+  },
+);
 
 agentSwapRouter.post(
   "/api/agent/swap",

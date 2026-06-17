@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api.ts";
 import { getToken } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
@@ -86,6 +86,7 @@ const LABEL_STYLE: CSSProperties = {
 export function SwapFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [amount, setAmount] = useState("");
+  const [quotedOut, setQuotedOut] = useState<string | null>(null);
   const swap = useAgentAction<AgentSwapResult>();
 
   const payBal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
@@ -93,10 +94,34 @@ export function SwapFlow({ onClose, embedded = false }: Props) {
   const payDisplay = payBal ? fmtUnits(payBal.balanceRaw, payBal.decimals) : "0";
   const receiveSym = paySym === "USDC" ? "EURC" : "USDC";
   const busy = swap.status === "loading";
-  const receiveDisplay =
-    swap.status === "success" && swap.result
-      ? fmtUnits(swap.result.amountOutRaw, getToken(receiveSym).decimals)
-      : "—";
+
+  // Live no-hook quote as the user types (debounced) — shows an estimated
+  // receive amount before the swap. State is only set in async callbacks.
+  useEffect(() => {
+    const a = amount.trim();
+    if (!a || Number(a) <= 0 || paySym === receiveSym) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ tokenIn: paySym, tokenOut: receiveSym, amountIn: a });
+      void api
+        .get<{ amountOutRaw: string }>(`/api/agent/swap/quote?${params.toString()}`)
+        .then((r) => {
+          if (!cancelled) setQuotedOut(r.amountOutRaw);
+        })
+        .catch(() => {
+          /* leave the estimate blank on quote failure */
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount, paySym, receiveSym]);
+
+  const finalOut =
+    swap.status === "success" && swap.result ? swap.result.amountOutRaw : (quotedOut ?? null);
+  const receiveDisplay = finalOut ? fmtUnits(finalOut, getToken(receiveSym).decimals) : "—";
+  const isEstimate = swap.status !== "success" && quotedOut !== null;
 
   return (
     <>
@@ -123,6 +148,7 @@ export function SwapFlow({ onClose, embedded = false }: Props) {
                   value={amount}
                   onChange={(e) => {
                     setAmount(e.target.value);
+                    setQuotedOut(null);
                     if (swap.status !== "idle") swap.reset();
                   }}
                   placeholder="0.00"
@@ -144,14 +170,16 @@ export function SwapFlow({ onClose, embedded = false }: Props) {
               <div style={LABEL_STYLE}>RECEIVE</div>
               <div style={TOKEN_INPUT_STYLE}>
                 <span className="mono" style={{ ...AMOUNT_STYLE, color: "var(--text-mute)" }}>
-                  {receiveDisplay}
+                  {isEstimate ? `≈ ${receiveDisplay}` : receiveDisplay}
                 </span>
                 <div style={TOKEN_PICK_STYLE}>
                   <TokenChip sym={receiveSym} size={18} /> {receiveSym}
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-                Received amount is settled on-chain by the swap.
+                {isEstimate
+                  ? "Estimated from the live pool — final amount settles on-chain."
+                  : "Received amount is settled on-chain by the swap."}
               </div>
             </div>
 
