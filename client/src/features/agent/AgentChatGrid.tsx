@@ -100,7 +100,7 @@ export function AgentChatGrid({ onBackToMode, onClose, onPick }: Props) {
               <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
                 <a.Icon className="h-4 w-4 text-accent" />
               </div>
-              <div className="text-[13px] font-bold mt-3 leading-tight">{a.t}</div>
+              <div className="text-[13px] font-semibold mt-3 leading-tight">{a.t}</div>
               <div className="text-[11px] text-text-dim mt-1 leading-snug">{a.d}</div>
             </button>
           ))}

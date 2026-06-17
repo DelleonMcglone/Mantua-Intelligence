@@ -1,4 +1,4 @@
-import { History, Plus, X } from "lucide-react";
+import { Bot, History, MessageSquare, Plus, X } from "lucide-react";
 
 interface Props {
   onClose: () => void;
@@ -45,8 +45,10 @@ export function AgentModePicker({ onClose, onPickChat, onPickAutonomous }: Props
         </button>
       </div>
       <div className="px-7 py-7 flex-1 overflow-auto flex flex-col items-center">
-        <div className="text-[40px] leading-none mt-4">🤖</div>
-        <div className="text-[22px] font-bold mt-4 -tracking-[0.01em]">Choose Agent Mode</div>
+        <div className="h-14 w-14 rounded-full bg-accent/15 flex items-center justify-center mt-4">
+          <Bot className="h-7 w-7 text-accent" />
+        </div>
+        <div className="text-[22px] font-semibold mt-4 -tracking-[0.01em]">Choose Agent Mode</div>
         <div className="text-[13px] text-text-dim mt-1.5">
           How would you like to interact with the agent?
         </div>
@@ -56,9 +58,11 @@ export function AgentModePicker({ onClose, onPickChat, onPickAutonomous }: Props
             onClick={onPickChat}
             className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px]"
           >
-            <div className="text-[26px]">💬</div>
-            <div className="text-[15px] font-bold mt-5">Chat Mode</div>
-            <div className="text-[12px] text-text-dim mt-1.5 leading-snug">
+            <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
+              <MessageSquare className="h-4 w-4 text-accent" />
+            </div>
+            <div className="text-[15px] font-semibold mt-5">Chat Mode</div>
+            <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
               Interactive action cards with guided steps
             </div>
           </button>
@@ -67,9 +71,11 @@ export function AgentModePicker({ onClose, onPickChat, onPickAutonomous }: Props
             onClick={onPickAutonomous}
             className="text-left p-4 bg-bg-elev border border-border-soft rounded-md cursor-pointer hover:border-accent transition-all min-h-[140px]"
           >
-            <div className="text-[26px]">🤖</div>
-            <div className="text-[15px] font-bold mt-5">Autonomous Mode</div>
-            <div className="text-[12px] text-text-dim mt-1.5 leading-snug">
+            <div className="h-9 w-9 rounded-full bg-accent/15 flex items-center justify-center">
+              <Bot className="h-4 w-4 text-accent" />
+            </div>
+            <div className="text-[15px] font-semibold mt-5">Autonomous Mode</div>
+            <div className="text-[12.5px] text-text-dim mt-2 leading-relaxed">
               Give the agent an instruction &amp; it executes autonomously
             </div>
           </button>
