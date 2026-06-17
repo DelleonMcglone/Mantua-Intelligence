@@ -1,8 +1,15 @@
-import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
+import { createRequire } from "node:module";
+import type * as DCW from "@circle-fin/developer-controlled-wallets";
 import { env } from "../../env.ts";
 import { logger } from "../logger.ts";
 
-type CircleClient = ReturnType<typeof initiateDeveloperControlledWalletsClient>;
+// The SDK ships a CJS build whose factory doesn't resolve through the
+// tsx/esbuild ESM loader (neither named nor namespace import works at runtime),
+// so load it via require(). The type-only `DCW` import supplies the types.
+const req = createRequire(import.meta.url);
+const dcw = req("@circle-fin/developer-controlled-wallets") as typeof DCW;
+
+type CircleClient = ReturnType<typeof DCW.initiateDeveloperControlledWalletsClient>;
 
 let cached: CircleClient | null = null;
 let cachedWalletSetId: string | null = null;
@@ -29,7 +36,7 @@ export function getCircleClient(): CircleClient {
   if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET) {
     throw new CircleUnavailableError();
   }
-  cached = initiateDeveloperControlledWalletsClient({
+  cached = dcw.initiateDeveloperControlledWalletsClient({
     apiKey: CIRCLE_API_KEY,
     entitySecret: CIRCLE_ENTITY_SECRET,
   });

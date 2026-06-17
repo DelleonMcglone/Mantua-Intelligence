@@ -30,6 +30,12 @@ pnpm-debug.log*
 .env.staging
 !.env.example
 
+# Circle entity-secret recovery files (never commit — back up offline)
+circle-entity-secret-recovery.dat
+**/circle-entity-secret-recovery.dat
+recovery_file_*.dat
+**/recovery_file_*.dat
+
 # Build output
 dist/
 build/
