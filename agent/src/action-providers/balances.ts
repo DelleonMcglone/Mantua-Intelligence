@@ -5,11 +5,7 @@
  * There is no test ETH on Arc — gas is native USDC only; top up via the
  * Circle faucet (see docs/funding-runbook.md).
  */
-import {
-  type ActionProvider,
-  type EvmWalletProvider,
-  customActionProvider,
-} from "@coinbase/agentkit";
+import { type ActionProvider, type AgentWallet, customActionProvider } from "../lib/action-kit.ts";
 import { formatUnits } from "viem";
 import { z } from "zod";
 import { ERC20_ABI } from "../abis/erc20.ts";
@@ -24,16 +20,14 @@ export interface BalancesConfig {
   lowGasWarnUsdc: number;
 }
 
-export function createBalancesActionProvider(
-  cfg: BalancesConfig,
-): ActionProvider<EvmWalletProvider> {
-  return customActionProvider<EvmWalletProvider>([
+export function createBalancesActionProvider(cfg: BalancesConfig): ActionProvider {
+  return customActionProvider([
     {
       name: "check_balances",
       description:
         "Report the agent's Arc balances for USDC, EURC, and cirBTC (ERC-20) plus the native USDC gas balance, warning when gas is low.",
       schema: z.object({}),
-      invoke: async (wallet: EvmWalletProvider) => {
+      invoke: async (wallet: AgentWallet) => {
         const address = wallet.getAddress() as `0x${string}`;
         const lines = await Promise.all(
           cfg.allowlist.all().map(async (a) => {

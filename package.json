@@ -19,7 +19,7 @@
     "verify:hooks": "tsx contracts/script/verify-hooks.ts --write",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

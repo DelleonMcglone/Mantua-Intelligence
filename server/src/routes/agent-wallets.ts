@@ -9,7 +9,7 @@ import {
   UserNotFoundError,
 } from "../lib/agent-wallet.ts";
 import { logAudit } from "../lib/audit.ts";
-import { CdpUnavailableError } from "../lib/cdp/client.ts";
+import { CircleUnavailableError } from "../lib/circle/client.ts";
 import { HARD_DAILY_CAP_USD } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
 import { getRequestContext } from "../lib/request-context.ts";
@@ -20,7 +20,7 @@ export const agentWalletsRouter = Router();
 
 interface AgentWalletDto {
   address: string;
-  cdpWalletId: string;
+  circleWalletId: string;
   label: string | null;
   dailyCapUsd: string;
   status: string;
@@ -30,7 +30,7 @@ interface AgentWalletDto {
 function toDto(w: AgentWallet): AgentWalletDto {
   return {
     address: w.address,
-    cdpWalletId: w.cdpWalletId,
+    circleWalletId: w.circleWalletId,
     label: w.label,
     dailyCapUsd: w.dailyCapUsd,
     status: w.status,
@@ -50,12 +50,12 @@ agentWalletsRouter.post(
     }
     const ctx = getRequestContext(req);
     try {
-      const wallet = await getOrCreateAgentWallet(privyUserId);
+      const wallet = await getOrCreateAgentWallet(privyUserId, req.walletAddress);
       await logAudit({
         ...ctx,
         action: "agent_wallet_provision",
         outcome: "success",
-        params: { agentAddress: wallet.address, cdpWalletId: wallet.cdpWalletId },
+        params: { agentAddress: wallet.address, circleWalletId: wallet.circleWalletId },
       });
       res.json(toDto(wallet));
     } catch (err) {
@@ -66,8 +66,8 @@ agentWalletsRouter.post(
         });
         return;
       }
-      if (err instanceof CdpUnavailableError) {
-        res.status(503).json({ error: err.message, code: "CDP_UNAVAILABLE" });
+      if (err instanceof CircleUnavailableError) {
+        res.status(503).json({ error: err.message, code: "CIRCLE_UNAVAILABLE" });
         return;
       }
       logger.error({ err }, "agent wallet provision failed");

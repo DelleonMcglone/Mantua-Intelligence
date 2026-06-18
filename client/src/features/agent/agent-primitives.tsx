@@ -1,5 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- shared agent UI primitives co-located by design. */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { TokenIcon } from "@/features/swap/TokenIcon.tsx";
+import type { TokenSymbol } from "@/lib/tokens.ts";
 
 /**
  * Shared atoms for the agent flows — verbatim ports of the small
@@ -89,48 +91,65 @@ export const PANEL_BODY: CSSProperties = {
   overflow: "auto",
 };
 
+/** Body container for a flow rendered inline inside a chat bubble — no
+ *  panel padding / flex / scroll (the bubble owns those). */
+export const EMBED_BODY: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
 // ── Token chip (.tok) ─────────────────────────────────────────────
 
-const TOK_COLORS: Record<string, { bg: string; fg: string }> = {
-  ETH: { bg: "#627eea", fg: "#fff" },
-  WETH: { bg: "#627eea", fg: "#fff" },
-  BTC: { bg: "#0052ff", fg: "#fff" },
-  cbBTC: { bg: "#0052ff", fg: "#fff" },
-  USDC: { bg: "#2775ca", fg: "#fff" },
-  USDT: { bg: "#26a17b", fg: "#fff" },
-  EURC: { bg: "#003399", fg: "#ffcc00" },
-};
-
-const TOK_LETTER: Record<string, string> = {
-  ETH: "E",
-  WETH: "E",
-  BTC: "₿",
-  cbBTC: "₿",
-  USDC: "U",
-  USDT: "T",
-  EURC: "€",
-};
-
+/**
+ * Token mark for the agent flows. Delegates to the app's canonical
+ * `TokenIcon` (the same USDC / EURC / cirBTC `AssetIcon` marks used in the
+ * portfolio + swap UIs) so the agent panel matches the rest of the app,
+ * with a neutral coin-initial fallback for any unknown symbol.
+ */
 export function TokenChip({ sym, size = 22 }: { sym: string; size?: number }) {
-  const c = TOK_COLORS[sym] ?? { bg: "#3a3a45", fg: "#fff" };
+  return <TokenIcon symbol={sym as TokenSymbol} size={size} />;
+}
+
+// ── Copy button ───────────────────────────────────────────────────
+
+/**
+ * Tiny inline copy affordance. Writes `value` to the clipboard and flips to
+ * a brief "Copied" confirmation. Used for the agent wallet address.
+ */
+export function CopyButton({
+  value,
+  label = "Copy",
+  size = 11,
+}: {
+  value: string;
+  label?: string;
+  size?: number;
+}) {
+  const [copied, setCopied] = useState(false);
   return (
-    <span
-      style={{
-        width: size,
-        height: size,
-        borderRadius: 99,
-        flexShrink: 0,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: Math.max(8, Math.round(size * 0.4)),
-        fontWeight: 700,
-        background: c.bg,
-        color: c.fg,
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard.writeText(value);
+        setCopied(true);
+        window.setTimeout(() => {
+          setCopied(false);
+        }, 1200);
       }}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: copied ? "var(--green)" : "var(--text-dim)",
+        cursor: "pointer",
+        fontSize: size,
+        padding: 0,
+        fontFamily: "inherit",
+      }}
+      aria-label={`${label} ${value}`}
     >
-      {TOK_LETTER[sym] ?? sym.slice(0, 1)}
-    </span>
+      {copied ? "✓ Copied" : "⎘ Copy"}
+    </button>
   );
 }
 

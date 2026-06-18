@@ -1,17 +1,15 @@
-import { useTheme } from "@/hooks/use-theme.tsx";
-
 /**
- * Mantua "M" mark — uses the artist-supplied PNGs in
- * `public/assets/`. The `*-dark.png` variant has a black background
- * (worn over the dark theme) and the `*-light.png` variant has a white
- * background (worn over the light theme).
+ * Mantua "M" mark — a single transparent-background gradient logo that
+ * reads on both light and dark themes, so no per-theme swap is needed.
+ *
+ * (The old `mantua-logo-light.png` had a dark purple→black square baked
+ * into it, so it showed as a black box in light mode. We always use the
+ * transparent `mantua-logo-dark.png` instead.)
  */
 export function Logo({ size = 30 }: { size?: number }) {
-  const { theme } = useTheme();
-  const src = theme === "light" ? "/assets/mantua-logo-light.png" : "/assets/mantua-logo-dark.png";
   return (
     <img
-      src={src}
+      src="/assets/mantua-logo-dark.png"
       width={size}
       height={size}
       alt="Mantua"

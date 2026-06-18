@@ -1,13 +1,18 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { api } from "@/lib/api.ts";
+import { ACTIVE_CHAIN_ID, getToken, getUserFacingTokenSymbols } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
+  AgentActionError,
+  AgentActionSuccess,
   AgentNotReady,
-  AgentUnavailableNotice,
   AgentWalletStrip,
   fmtUnits,
+  useAgentAction,
 } from "./agent-gate.tsx";
 import {
   BTN_PRIMARY,
+  EMBED_BODY,
   PANEL_BODY,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -17,16 +22,21 @@ import {
 
 /**
  * F3 — Swap tokens from the agent wallet. Real agent address + balances
- * via `useAgentPortfolio`; the pay amount is a user input. The previous
- * mock peg-zone theater (MODERATE/CRITICAL rings, a "Demo: simulate
- * CRITICAL peg" button, hardcoded 100 USDC → 0.02756 ETH quotes and a
- * fake tx hash) is gone. Agent swap routing/quoting/execution isn't wired
- * yet, so the receive side reads "—" and submitting shows an honest
- * notice instead of fabricating a result.
+ * via `useAgentPortfolio`; the pay amount is a user input. Submitting runs
+ * a real Uniswap v4 swap through `POST /api/agent/swap` (the agent's Circle
+ * wallet on Arc); the received amount + tx hash come back from the server.
  */
 
 interface Props {
   onClose: () => void;
+  /** When true, render inline (no panel header / wallet strip) for the chat. */
+  embedded?: boolean;
+}
+
+interface AgentSwapResult {
+  txHash: string;
+  explorerUrl: string;
+  amountOutRaw: string;
 }
 
 const TOKEN_INPUT_STYLE: CSSProperties = {
@@ -73,31 +83,92 @@ const LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
-export function SwapFlow({ onClose }: Props) {
+const SELECT_STYLE: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "var(--text)",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  cursor: "pointer",
+};
+
+const SYMBOLS = getUserFacingTokenSymbols(ACTIVE_CHAIN_ID);
+
+export function SwapFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [amount, setAmount] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [paySym, setPaySym] = useState<string>(SYMBOLS[0] ?? "USDC");
+  const [receiveSym, setReceiveSym] = useState<string>(SYMBOLS[1] ?? "EURC");
+  const [quotedOut, setQuotedOut] = useState<string | null>(null);
+  const swap = useAgentAction<AgentSwapResult>();
 
-  const payBal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
-  const paySym = payBal?.symbol ?? "USDC";
+  const payBal = agent.balances.find((b) => b.symbol === paySym) ?? null;
   const payDisplay = payBal ? fmtUnits(payBal.balanceRaw, payBal.decimals) : "0";
-  const receiveSym = paySym === "USDC" ? "EURC" : "USDC";
+  const busy = swap.status === "loading";
+
+  const resetQuote = () => {
+    setQuotedOut(null);
+    if (swap.status !== "idle") swap.reset();
+  };
+  // Keep the two sides distinct — picking one equal to the other swaps them.
+  const pickPay = (v: string) => {
+    if (v === receiveSym) setReceiveSym(paySym);
+    setPaySym(v);
+    resetQuote();
+  };
+  const pickReceive = (v: string) => {
+    if (v === paySym) setPaySym(receiveSym);
+    setReceiveSym(v);
+    resetQuote();
+  };
+
+  // Live no-hook quote as the user types (debounced) — shows an estimated
+  // receive amount before the swap. State is only set in async callbacks.
+  useEffect(() => {
+    const a = amount.trim();
+    if (!a || Number(a) <= 0 || paySym === receiveSym) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ tokenIn: paySym, tokenOut: receiveSym, amountIn: a });
+      void api
+        .get<{ amountOutRaw: string }>(`/api/agent/swap/quote?${params.toString()}`)
+        .then((r) => {
+          if (!cancelled) setQuotedOut(r.amountOutRaw);
+        })
+        .catch(() => {
+          /* leave the estimate blank on quote failure */
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount, paySym, receiveSym]);
+
+  const finalOut =
+    swap.status === "success" && swap.result ? swap.result.amountOutRaw : (quotedOut ?? null);
+  const receiveDisplay = finalOut ? fmtUnits(finalOut, getToken(receiveSym).decimals) : "—";
+  const isEstimate = swap.status !== "success" && quotedOut !== null;
 
   return (
     <>
-      <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>Swap</div>
-        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
-          ✕
-        </button>
-      </div>
+      {!embedded && (
+        <div style={PANEL_HEAD}>
+          <div style={PANEL_TITLE}>Swap</div>
+          <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+      )}
 
       {!agent.agentAddress ? (
         <AgentNotReady agent={agent} />
       ) : (
         <>
-          <AgentWalletStrip agent={agent} label="From agent wallet" />
-          <div style={{ ...PANEL_BODY, gap: 8 }}>
+          {!embedded && <AgentWalletStrip agent={agent} label="From agent wallet" />}
+          <div style={{ ...(embedded ? EMBED_BODY : PANEL_BODY), gap: 8 }}>
             <div>
               <div style={LABEL_STYLE}>PAY</div>
               <div style={TOKEN_INPUT_STYLE}>
@@ -106,12 +177,27 @@ export function SwapFlow({ onClose }: Props) {
                   value={amount}
                   onChange={(e) => {
                     setAmount(e.target.value);
-                    setSubmitted(false);
+                    setQuotedOut(null);
+                    if (swap.status !== "idle") swap.reset();
                   }}
                   placeholder="0.00"
                 />
                 <div style={TOKEN_PICK_STYLE}>
-                  <TokenChip sym={paySym} size={18} /> {paySym}
+                  <TokenChip sym={paySym} size={18} />
+                  <select
+                    value={paySym}
+                    onChange={(e) => {
+                      pickPay(e.target.value);
+                    }}
+                    style={SELECT_STYLE}
+                    aria-label="Pay token"
+                  >
+                    {SYMBOLS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
@@ -127,14 +213,30 @@ export function SwapFlow({ onClose }: Props) {
               <div style={LABEL_STYLE}>RECEIVE</div>
               <div style={TOKEN_INPUT_STYLE}>
                 <span className="mono" style={{ ...AMOUNT_STYLE, color: "var(--text-mute)" }}>
-                  —
+                  {isEstimate ? `≈ ${receiveDisplay}` : receiveDisplay}
                 </span>
                 <div style={TOKEN_PICK_STYLE}>
-                  <TokenChip sym={receiveSym} size={18} /> {receiveSym}
+                  <TokenChip sym={receiveSym} size={18} />
+                  <select
+                    value={receiveSym}
+                    onChange={(e) => {
+                      pickReceive(e.target.value);
+                    }}
+                    style={SELECT_STYLE}
+                    aria-label="Receive token"
+                  >
+                    {SYMBOLS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-                Quote appears once agent swap routing is live.
+                {isEstimate
+                  ? "Estimated from the live pool — final amount settles on-chain."
+                  : "Received amount is settled on-chain by the swap."}
               </div>
             </div>
 
@@ -145,17 +247,30 @@ export function SwapFlow({ onClose }: Props) {
                 width: "100%",
                 padding: 12,
                 marginTop: 8,
-                opacity: amount ? 1 : 0.5,
+                opacity: amount && !busy ? 1 : 0.5,
               }}
-              disabled={!amount}
+              disabled={!amount || busy}
               onClick={() => {
-                setSubmitted(true);
+                void swap.run(() =>
+                  api.post<AgentSwapResult>("/api/agent/swap", {
+                    tokenIn: paySym,
+                    tokenOut: receiveSym,
+                    amountIn: amount,
+                  }),
+                );
               }}
             >
-              Review swap
+              {busy ? "Swapping…" : "Swap"}
             </button>
 
-            {submitted && <AgentUnavailableNotice action="swaps" />}
+            {swap.status === "success" && swap.result && (
+              <AgentActionSuccess
+                title={`Swapped ${amount} ${paySym} → ${receiveDisplay} ${receiveSym}`}
+                txHash={swap.result.txHash}
+                explorerUrl={swap.result.explorerUrl}
+              />
+            )}
+            {swap.status === "error" && swap.error && <AgentActionError message={swap.error} />}
           </div>
         </>
       )}

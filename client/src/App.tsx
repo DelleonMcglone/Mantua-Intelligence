@@ -144,6 +144,13 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
       </div>
       <InputBar
         onSubmit={(text) => {
+          // While the agent panel is open, the global bar drives the agent
+          // conversation instead of route-navigating. CircleAgentChat listens
+          // for this event (it has no input of its own).
+          if (route.kind === "agent") {
+            window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
+            return;
+          }
           handleChatCommand(text, setRoute);
         }}
       />

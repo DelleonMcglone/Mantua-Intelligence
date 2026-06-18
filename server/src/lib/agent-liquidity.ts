@@ -1,71 +1,49 @@
 import { eq } from "drizzle-orm";
-import { type Address, type Hex, encodeFunctionData, parseAbi, parseUnits } from "viem";
+import { type Address, parseAbi, parseUnits } from "viem";
 import { db } from "../db/client.ts";
 import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
-import { getCdpClient } from "./cdp/client.ts";
-import { ACTIVE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
-import { buildPermit2BatchTypedData } from "./permit2.ts";
+import { executeAgentAbiCall, executeAgentCalldata } from "./circle/execute.ts";
+import { DEFAULT_CHAIN_ID } from "./chains.ts";
+import { ACTIVE_CHAIN_ID } from "./constants.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "./v4-add-liquidity.ts";
-import { PERMIT2, type FeeTier } from "./v4-contracts.ts";
+import { getHookAddress, PERMIT2, type FeeTier, type HookName } from "./v4-contracts.ts";
 import { buildRemoveLiquidityCalldata } from "./v4-remove-liquidity.ts";
 import { readSlot0 } from "./v4-state-view.ts";
 
-const CDP_NETWORK: "base" | "base-sepolia" = IS_MAINNET ? "base" : "base-sepolia";
-const MAX_UINT = (1n << 256n) - 1n;
-/** Same heuristic as the client's `ensurePermit2Approval`. */
-const FRESH_APPROVAL_THRESHOLD = 1n << 255n;
+const AGENT_NETWORK = "arc-testnet" as const;
+const MAX_UINT256 = (1n << 256n) - 1n;
+const MAX_UINT160 = (1n << 160n) - 1n;
+const MAX_UINT48 = (1n << 48n) - 1n;
+/** Treat an allowance at/above this as "already approved" (same heuristic as the client). */
+const FRESH_APPROVAL_THRESHOLD = 1n << 159n;
 
 const ERC20_ABI = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
 ]);
 
-const PM_PERMIT_BATCH_ABI = [
+const PERMIT2_ALLOWANCE_ABI = [
   {
     type: "function",
-    name: "permitBatch",
-    stateMutability: "nonpayable",
+    name: "allowance",
+    stateMutability: "view",
     inputs: [
       { type: "address", name: "owner" },
-      {
-        type: "tuple",
-        name: "permitBatch",
-        components: [
-          {
-            type: "tuple[]",
-            name: "details",
-            components: [
-              { type: "address", name: "token" },
-              { type: "uint160", name: "amount" },
-              { type: "uint48", name: "expiration" },
-              { type: "uint48", name: "nonce" },
-            ],
-          },
-          { type: "address", name: "spender" },
-          { type: "uint256", name: "sigDeadline" },
-        ],
-      },
-      { type: "bytes", name: "signature" },
+      { type: "address", name: "token" },
+      { type: "address", name: "spender" },
     ],
-    outputs: [],
-  },
-] as const;
-
-const PM_MULTICALL_ABI = [
-  {
-    type: "function",
-    name: "multicall",
-    stateMutability: "payable",
-    inputs: [{ type: "bytes[]", name: "data" }],
-    outputs: [{ type: "bytes[]", name: "results" }],
+    outputs: [
+      { type: "uint160", name: "amount" },
+      { type: "uint48", name: "expiration" },
+      { type: "uint48", name: "nonce" },
+    ],
   },
 ] as const;
 
@@ -78,12 +56,7 @@ interface MintedReceiptLog {
   topics: readonly string[];
 }
 
-/**
- * Find the PositionManager `Transfer(0x0, owner, tokenId)` event in the
- * receipt logs. Mirror of the client-side `extractMintedTokenId` so the
- * agent path produces the same `tokenId` shape recorded by user-side
- * adds. Returns null on a failed mint or different recipient.
- */
+/** Find the PositionManager `Transfer(0x0, owner, tokenId)` mint log. */
 function extractMintedTokenId(
   logs: readonly MintedReceiptLog[],
   owner: string,
@@ -104,35 +77,50 @@ function extractMintedTokenId(
 }
 
 /**
- * Read ERC-20 allowance(agent, PERMIT2) and emit an approve(PERMIT2,
- * MAX) tx if the current allowance is below the
- * `FRESH_APPROVAL_THRESHOLD`. One-time per token, ever — Permit2 is
- * shared infrastructure. No-op for native ETH.
+ * One-time on-chain approvals so the agent's Circle wallet can mint without a
+ * per-tx Permit2 signature (which developer-controlled wallets can't sign
+ * inline): grant ERC20→Permit2 (max) and Permit2→PositionManager (max, far
+ * expiry). Both are idempotent — read the current allowance and skip if it's
+ * already sufficient. No-op for native (zero address).
  */
-async function ensurePermit2Approval(
-  account: Awaited<ReturnType<ReturnType<typeof getCdpClient>["evm"]["getAccount"]>>,
-  tokenAddr: Address,
-): Promise<`0x${string}` | null> {
-  if (tokenAddr === ZERO_ADDRESS) return null;
-  const current = await baseRpcClient.readContract({
-    address: tokenAddr,
+async function ensureMintApprovals(
+  walletId: string,
+  owner: Address,
+  token: Address,
+  positionManager: Address,
+): Promise<void> {
+  if (token === ZERO_ADDRESS) return;
+
+  const erc20Allowance = await baseRpcClient.readContract({
+    address: token,
     abi: ERC20_ABI,
     functionName: "allowance",
-    args: [account.address, PERMIT2],
+    args: [owner, PERMIT2],
   });
-  if (current >= FRESH_APPROVAL_THRESHOLD) return null;
+  if (erc20Allowance < FRESH_APPROVAL_THRESHOLD) {
+    await executeAgentAbiCall({
+      walletId,
+      to: token,
+      abiFunctionSignature: "approve(address,uint256)",
+      abiParameters: [PERMIT2, MAX_UINT256.toString()],
+    });
+  }
 
-  const data = encodeFunctionData({
-    abi: ERC20_ABI,
-    functionName: "approve",
-    args: [PERMIT2, MAX_UINT],
+  const [permit2Amount, permit2Expiration] = await baseRpcClient.readContract({
+    address: PERMIT2,
+    abi: PERMIT2_ALLOWANCE_ABI,
+    functionName: "allowance",
+    args: [owner, token, positionManager],
   });
-  const networked = await account.useNetwork(CDP_NETWORK);
-  const tx = await networked.sendTransaction({
-    transaction: { to: tokenAddr, data, value: 0n },
-  });
-  await networked.waitForTransactionReceipt(tx);
-  return tx.transactionHash;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (permit2Amount < FRESH_APPROVAL_THRESHOLD || permit2Expiration <= nowSeconds + 3600) {
+    await executeAgentAbiCall({
+      walletId,
+      to: PERMIT2,
+      abiFunctionSignature: "approve(address,address,uint160,uint48)",
+      abiParameters: [token, positionManager, MAX_UINT160.toString(), MAX_UINT48.toString()],
+    });
+  }
 }
 
 export interface AgentAddLiquidityArgs {
@@ -140,6 +128,8 @@ export interface AgentAddLiquidityArgs {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Optional hook bound to the pool. Omit / null for a no-hook pool. */
+  hook?: HookName | null;
   amountA: string;
   amountB: string;
   slippageBps: number;
@@ -156,35 +146,26 @@ export interface AgentAddLiquidityResult {
   amountARaw: string;
   amountBRaw: string;
   usdValue: number;
-  approvalTxA: `0x${string}` | null;
-  approvalTxB: `0x${string}` | null;
-  network: typeof CDP_NETWORK;
+  network: typeof AGENT_NETWORK;
 }
 
 /**
- * P6-006 (add) — agent-side equivalent of the user's add-liquidity flow:
+ * Add liquidity from the agent's Circle wallet on Arc (with or without a hook).
  *
- *   1. Lookup agent wallet, parseUnits, USD-value cap check.
- *   2. Ensure agent has approve(PERMIT2, MAX) on each non-native token
- *      (one-time, idempotent via allowance read).
- *   3. Read sqrtPriceX96 from on-chain (fail if pool not initialized —
- *      agent path doesn't initialize pools, that's a pool-create
- *      ticket).
- *   4. Build add-liquidity calldata + Permit2 batch typed data via the
- *      existing Phase 4 server primitives.
- *   5. CDP signTypedData(permit2 batch) → signature.
- *   6. Wrap permit2.permitBatch + modifyLiquidities in
- *      PositionManager.multicall (delegatecall keeps msg.sender = agent
- *      so Permit2 reads the right owner; matches the client's
- *      wrapInMulticall).
- *   7. CDP sendTransaction → receipt → extractMintedTokenId.
- *   8. recordSpending + insert positions row mirroring the user-path
- *      `/api/liquidity/add/record`.
+ *   1. Lookup wallet, parseUnits, USD-value cap check.
+ *   2. Read sqrtPriceX96 (pool must already be initialized).
+ *   3. Build the v4 mint calldata.
+ *   4. One-time Permit2 approvals (ERC20→Permit2, Permit2→PositionManager) for
+ *      each pool token, so the mint needs no per-tx signature.
+ *   5. Execute the modifyLiquidities calldata via the Circle wallet.
+ *   6. Fetch the receipt from Arc, extract the minted tokenId.
+ *   7. recordSpending + persist the position (mirrors the user add-record path).
  */
 export async function addLiquidityFromAgentWallet(
   args: AgentAddLiquidityArgs,
 ): Promise<AgentAddLiquidityResult> {
   const { privyUserId, tokenA, tokenB, fee, amountA, amountB, slippageBps, deadlineSeconds } = args;
+  const hook = args.hook ?? null;
   if (tokenA === tokenB) throw new Error("tokenA and tokenB must differ");
 
   const wallet = await getAgentWallet(privyUserId);
@@ -194,21 +175,16 @@ export async function addLiquidityFromAgentWallet(
   const tB = getToken(tokenB);
   const amountARaw = parseUnits(amountA, tA.decimals);
   const amountBRaw = parseUnits(amountB, tB.decimals);
-  if (amountARaw <= 0n || amountBRaw <= 0n) {
-    throw new Error("Both amounts must be positive");
-  }
+  if (amountARaw <= 0n || amountBRaw <= 0n) throw new Error("Both amounts must be positive");
 
   const usdValue =
     (await tokenAmountUsd(tokenA, amountARaw)) + (await tokenAmountUsd(tokenB, amountBRaw));
   await checkSpendingCap(wallet.address, usdValue);
 
-  const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
-
-  const approvalTxA = await ensurePermit2Approval(account, tA.native ? ZERO_ADDRESS : tA.address);
-  const approvalTxB = await ensurePermit2Approval(account, tB.native ? ZERO_ADDRESS : tB.address);
-
-  const { key } = buildPoolKey(tokenA, tokenB, fee);
+  const hookAddress = hook
+    ? (getHookAddress(hook, DEFAULT_CHAIN_ID) ?? ZERO_ADDRESS)
+    : ZERO_ADDRESS;
+  const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook);
   const slot0 = await readSlot0(key);
   if (!slot0) throw new Error("Pool not initialized — create it first");
 
@@ -216,6 +192,8 @@ export async function addLiquidityFromAgentWallet(
     tokenA,
     tokenB,
     fee,
+    hookAddress,
+    hookName: hook,
     amountARaw,
     amountBRaw,
     sqrtPriceX96: slot0.sqrtPriceX96,
@@ -224,50 +202,31 @@ export async function addLiquidityFromAgentWallet(
     deadlineSeconds,
   });
 
-  const permit2Build = await buildPermit2BatchTypedData({
-    owner: wallet.address as Address,
-    chainId: ACTIVE_CHAIN_ID,
-    // calldata.to is the per-hook PositionManager.
-    positionManager: calldata.to,
-    tokens: [
-      { address: calldata.currency0, amountNeeded: BigInt(calldata.amount0Max) },
-      { address: calldata.currency1, amountNeeded: BigInt(calldata.amount1Max) },
-    ],
-    nowSeconds: Math.floor(Date.now() / 1000),
-  });
-
-  // permit2Build is null when both tokens are native (impossible — pools
-  // always have at least one ERC-20) or already permitted with sufficient
-  // allowance + nonexpired permit. In the rare null case, send the inner
-  // calldata directly without multicall wrapping.
-  const networked = await account.useNetwork(CDP_NETWORK);
-  let to: Address = calldata.to;
-  let data: Hex = calldata.data;
-  if (permit2Build) {
-    const sig = await account.signTypedData({
-      domain: permit2Build.typedData.domain,
-      types: permit2Build.typedData.types,
-      primaryType: permit2Build.typedData.primaryType,
-      message: permit2Build.permitBatch as unknown as Record<string, unknown>,
-    });
-    const permitBatchCalldata = encodeFunctionData({
-      abi: PM_PERMIT_BATCH_ABI,
-      functionName: "permitBatch",
-      args: [wallet.address as Address, permit2Build.permitBatch, sig],
-    });
-    data = encodeFunctionData({
-      abi: PM_MULTICALL_ABI,
-      functionName: "multicall",
-      args: [[permitBatchCalldata, calldata.data]],
-    });
-    to = calldata.to;
+  if (calldata.value !== "0") {
+    throw new Error("Native-value adds are not supported via the agent wallet yet");
   }
 
-  const tx = await networked.sendTransaction({
-    transaction: { to, data, value: BigInt(calldata.value || "0") },
-  });
-  const receipt = await networked.waitForTransactionReceipt(tx);
+  // calldata.to is the per-hook PositionManager — the Permit2 spender.
+  await ensureMintApprovals(
+    wallet.circleWalletId,
+    wallet.address as Address,
+    calldata.currency0,
+    calldata.to,
+  );
+  await ensureMintApprovals(
+    wallet.circleWalletId,
+    wallet.address as Address,
+    calldata.currency1,
+    calldata.to,
+  );
 
+  const { txHash } = await executeAgentCalldata({
+    walletId: wallet.circleWalletId,
+    to: calldata.to,
+    callData: calldata.data,
+  });
+
+  const receipt = await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
   const tokenId = extractMintedTokenId(receipt.logs, wallet.address, calldata.to);
 
   await recordSpending(wallet.address, usdValue);
@@ -279,25 +238,25 @@ export async function addLiquidityFromAgentWallet(
     .limit(1);
   const user = userRows.at(0);
   if (user) {
-    const params = {
-      tokenA,
-      tokenB,
-      fee,
-      amountARaw: amountARaw.toString(),
-      amountBRaw: amountBRaw.toString(),
-      liquidity: calldata.liquidity,
-      tickLower: calldata.tickLower,
-      tickUpper: calldata.tickUpper,
-      poolKeyHash: calldata.poolKeyHash,
-      agent: true,
-    };
     await db.insert(portfolioTransactions).values({
       userId: user.id,
       walletAddress: wallet.address,
       action: "add_liquidity",
-      txHash: tx.transactionHash,
+      txHash,
       chainId: ACTIVE_CHAIN_ID,
-      params,
+      params: {
+        tokenA,
+        tokenB,
+        fee,
+        hook,
+        amountARaw: amountARaw.toString(),
+        amountBRaw: amountBRaw.toString(),
+        liquidity: calldata.liquidity,
+        tickLower: calldata.tickLower,
+        tickUpper: calldata.tickUpper,
+        poolKeyHash: calldata.poolKeyHash,
+        agent: true,
+      },
       outcome: "success",
       usdValue: usdValue > 0 ? usdValue.toFixed(2) : null,
     });
@@ -317,14 +276,14 @@ export async function addLiquidityFromAgentWallet(
         tickUpper: calldata.tickUpper,
         liquidity: calldata.liquidity,
         status: "open",
-        openedTx: tx.transactionHash,
+        openedTx: txHash,
       });
     }
   }
 
   return {
-    txHash: tx.transactionHash,
-    explorerUrl: explorerTxUrl(tx.transactionHash),
+    txHash,
+    explorerUrl: explorerTxUrl(txHash),
     agentAddress: wallet.address,
     tokenId,
     liquidity: calldata.liquidity,
@@ -332,9 +291,7 @@ export async function addLiquidityFromAgentWallet(
     amountARaw: amountARaw.toString(),
     amountBRaw: amountBRaw.toString(),
     usdValue,
-    approvalTxA,
-    approvalTxB,
-    network: CDP_NETWORK,
+    network: AGENT_NETWORK,
   };
 }
 
@@ -355,7 +312,7 @@ export interface AgentRemoveLiquidityResult {
   positionId: string;
   liquidityRemoved: string;
   isFullExit: boolean;
-  network: typeof CDP_NETWORK;
+  network: typeof AGENT_NETWORK;
 }
 
 export async function removeLiquidityFromAgentWallet(
@@ -424,23 +381,20 @@ export async function removeLiquidityFromAgentWallet(
     deadlineSeconds,
   });
 
-  const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
-  const networked = await account.useNetwork(CDP_NETWORK);
-  const tx = await networked.sendTransaction({
-    transaction: {
-      to: calldata.to,
-      data: calldata.data,
-      value: 0n,
-    },
+  // The agent owns the position NFT, so removal needs no Permit2 — just execute
+  // the decrease/burn calldata from the Circle wallet.
+  const { txHash } = await executeAgentCalldata({
+    walletId: wallet.circleWalletId,
+    to: calldata.to,
+    callData: calldata.data,
   });
-  await networked.waitForTransactionReceipt(tx);
+  await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
 
   await db.insert(portfolioTransactions).values({
     userId: user.id,
     walletAddress: wallet.address,
     action: "remove_liquidity",
-    txHash: tx.transactionHash,
+    txHash,
     chainId: ACTIVE_CHAIN_ID,
     params: {
       positionId,
@@ -454,7 +408,7 @@ export async function removeLiquidityFromAgentWallet(
   if (isFullExit) {
     await db
       .update(positions)
-      .set({ status: "closed", closedTx: tx.transactionHash })
+      .set({ status: "closed", closedTx: txHash })
       .where(eq(positions.id, positionId));
   } else {
     const remaining = totalLiquidity - liquidityToRemove;
@@ -465,12 +419,12 @@ export async function removeLiquidityFromAgentWallet(
   }
 
   return {
-    txHash: tx.transactionHash,
-    explorerUrl: explorerTxUrl(tx.transactionHash),
+    txHash,
+    explorerUrl: explorerTxUrl(txHash),
     agentAddress: wallet.address,
     positionId,
     liquidityRemoved: liquidityToRemove.toString(),
     isFullExit,
-    network: CDP_NETWORK,
+    network: AGENT_NETWORK,
   };
 }

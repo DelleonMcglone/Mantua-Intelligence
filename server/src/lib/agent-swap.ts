@@ -1,40 +1,33 @@
 import { eq } from "drizzle-orm";
-import { type Address, type Hex, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { db } from "../db/client.ts";
 import { portfolioTransactions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
-import { getCdpClient } from "./cdp/client.ts";
-import { ACTIVE_CHAIN_ID, IS_MAINNET } from "./constants.ts";
+import { executeAgentAbiCall, executeAgentCalldata } from "./circle/execute.ts";
+import { ACTIVE_CHAIN_ID } from "./constants.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
-import { getToken, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
-import { fetchQuote, fetchSwapTx } from "./uniswap.ts";
+import { getToken, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
+import { buildPoolSwapTestCalldata, quoteExactInputV4 } from "./v4-onchain-swap.ts";
+import type { FeeTier } from "./v4-contracts.ts";
 
 /**
- * P6-005 — execute a Uniswap swap from the agent wallet.
+ * Execute a swap from the agent wallet on Arc Testnet via its Circle
+ * Developer-Controlled Wallet.
  *
- * Reuses the Phase 3 primitives in `uniswap.ts` (`fetchQuote`,
- * `fetchSwapTx`) but does the whole orchestration server-side rather
- * than splitting it across client round-trips like the user path:
- *
- *   1. Look up the agent wallet.
- *   2. Cap-check the input USD value (Phase 1 / P6-011 rail).
- *   3. Quote the trade with `swapper = agentAddress`.
- *   4. If the quote includes a Permit2 permit (`PermitSingle`), have
- *      the CDP server account sign it via `signTypedData` (the same
- *      shape Phase 3's client signs, just routed through CDP).
- *   5. Get the swap calldata.
- *   6. Send the tx via the network-scoped CDP account.
- *   7. Record spending + portfolio_transactions, mirroring what
- *      `/api/swap/record` does for the user path.
- *
- * Single API call from the client perspective; the server walks the
- * Trading API + signing internally because the agent has no human in
- * the loop.
+ * Agent swaps run against the no-hook pool for the pair (the Stable Protection
+ * hook's circuit breaker blocks USDC/EURC, so no-hook is the reliable agent
+ * path). The on-chain v4 quote auto-resolves whichever fee tier the pool was
+ * actually created at. Two gas-sponsored Circle txs: approve the input ERC-20
+ * to the swap router, then execute the swap calldata.
  */
-const CDP_NETWORK: "base" | "base-sepolia" = IS_MAINNET ? "base" : "base-sepolia";
+const AGENT_NETWORK = "arc-testnet" as const;
+
+// No-hook pools: the quoter auto-resolves to the tier the pool was created at,
+// so this is just the starting probe.
+const DEFAULT_PROBE_FEE: FeeTier = 3000;
 
 export interface AgentSwapArgs {
   privyUserId: string;
@@ -42,8 +35,6 @@ export interface AgentSwapArgs {
   tokenOut: TokenSymbol;
   /** Decimal-string amount in the human-readable units of `tokenIn`. */
   amountIn: string;
-  /** Optional fractional-percent slippage (e.g. 0.5 for 0.5%). */
-  slippageTolerance?: number;
 }
 
 export interface AgentSwapResult {
@@ -55,21 +46,48 @@ export interface AgentSwapResult {
   amountInRaw: string;
   amountOutRaw: string;
   usdValue: number;
-  network: typeof CDP_NETWORK;
+  network: typeof AGENT_NETWORK;
+}
+
+export interface AgentSwapQuote {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  amountInRaw: string;
+  amountOutRaw: string;
 }
 
 /**
- * For the Trading API's `tokenIn`/`tokenOut`, native ETH uses the zero
- * address (consistent with Uniswap's convention). All other tokens use
- * their canonical contract address.
+ * Live no-hook quote for the agent UI — what the agent would receive
+ * swapping `amountIn` of `tokenIn` for `tokenOut`. Read-only (no wallet,
+ * no execution); mirrors the quote `swapFromAgentWallet` runs at execution
+ * so the form estimate matches the eventual fill closely.
  */
-function tokenForApi(symbol: TokenSymbol): Address {
-  const t = getToken(symbol);
-  return t.native ? ZERO_ADDRESS : t.address;
+export async function quoteAgentSwap(args: {
+  tokenIn: TokenSymbol;
+  tokenOut: TokenSymbol;
+  amountIn: string;
+}): Promise<AgentSwapQuote> {
+  const { tokenIn, tokenOut, amountIn } = args;
+  if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");
+  const amountAtomic = parseUnits(amountIn, getToken(tokenIn).decimals);
+  if (amountAtomic <= 0n) throw new Error("amountIn must be positive");
+  const quote = await quoteExactInputV4({
+    tokenIn,
+    tokenOut,
+    fee: DEFAULT_PROBE_FEE,
+    hook: null,
+    amountInRaw: amountAtomic,
+  });
+  return {
+    tokenIn,
+    tokenOut,
+    amountInRaw: amountAtomic.toString(),
+    amountOutRaw: quote.amountOut,
+  };
 }
 
 export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwapResult> {
-  const { privyUserId, tokenIn, tokenOut, amountIn, slippageTolerance } = args;
+  const { privyUserId, tokenIn, tokenOut, amountIn } = args;
   if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");
 
   const wallet = await getAgentWallet(privyUserId);
@@ -82,47 +100,39 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
   const usdValue = await tokenAmountUsd(tokenIn, amountAtomic);
   await checkSpendingCap(wallet.address, usdValue);
 
-  const quote = await fetchQuote({
-    chainId: ACTIVE_CHAIN_ID,
-    tokenIn: tokenForApi(tokenIn),
-    tokenOut: tokenForApi(tokenOut),
-    amount: amountAtomic.toString(),
-    type: "EXACT_INPUT",
-    swapper: wallet.address,
-    ...(slippageTolerance !== undefined ? { slippageTolerance } : {}),
+  // Quote on Arc (no hook); the tier is auto-resolved to the live pool.
+  // chainId omitted — both builders default to Arc (the only supported chain).
+  const quote = await quoteExactInputV4({
+    tokenIn,
+    tokenOut,
+    fee: DEFAULT_PROBE_FEE,
+    hook: null,
+    amountInRaw: amountAtomic,
+  });
+  const swap = buildPoolSwapTestCalldata({
+    poolKey: quote.poolKey,
+    zeroForOne: quote.zeroForOne,
+    amountInRaw: amountAtomic,
   });
 
-  const cdp = getCdpClient();
-  const account = await cdp.evm.getAccount({ name: wallet.cdpWalletId });
-
-  let signature: string | undefined;
-  if (quote.permitData) {
-    const pd = quote.permitData;
-    // Same primaryType the client uses (`PermitSingle`); the Trading
-    // API only emits Permit2 single-token permits in this flow.
-    const sig = await account.signTypedData({
-      domain: pd.domain as Parameters<typeof account.signTypedData>[0]["domain"],
-      types: pd.types as Parameters<typeof account.signTypedData>[0]["types"],
-      primaryType: "PermitSingle",
-      message: pd.values as Record<string, unknown>,
+  // Approve the input ERC-20 to the swap router, then execute the swap. Native
+  // input has no approvalTarget (value is carried on the call instead).
+  if (swap.approvalTarget && !inDef.native) {
+    await executeAgentAbiCall({
+      walletId: wallet.circleWalletId,
+      to: inDef.address,
+      abiFunctionSignature: "approve(address,uint256)",
+      abiParameters: [swap.approvalTarget, amountAtomic.toString()],
     });
-    signature = sig;
   }
 
-  const swap = await fetchSwapTx(quote, signature);
-
-  const networked = await account.useNetwork(CDP_NETWORK);
-  const tx = await networked.sendTransaction({
-    transaction: {
-      to: swap.to as Address,
-      data: swap.data as Hex,
-      value: BigInt(swap.value || "0"),
-    },
+  const { txHash } = await executeAgentCalldata({
+    walletId: wallet.circleWalletId,
+    to: swap.to,
+    callData: swap.data,
+    ...(swap.value !== "0" ? { value: swap.value } : {}),
   });
 
-  // Record spending + portfolio transaction. Mirrors POST /api/swap/record
-  // for the user path so dashboards / cap math stay consistent across both
-  // wallet kinds.
   await recordSpending(wallet.address, usdValue);
 
   const userRows = await db
@@ -136,13 +146,13 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
       userId: user.id,
       walletAddress: wallet.address,
       action: "swap",
-      txHash: tx.transactionHash,
+      txHash,
       chainId: ACTIVE_CHAIN_ID,
       params: {
         tokenIn,
         tokenOut,
         amountInRaw: amountAtomic.toString(),
-        amountOutRaw: quote.quote.output.amount,
+        amountOutRaw: quote.amountOut,
         agent: true,
       },
       outcome: "success",
@@ -151,14 +161,14 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
   }
 
   return {
-    txHash: tx.transactionHash,
-    explorerUrl: explorerTxUrl(tx.transactionHash),
+    txHash,
+    explorerUrl: explorerTxUrl(txHash),
     agentAddress: wallet.address,
     tokenIn,
     tokenOut,
     amountInRaw: amountAtomic.toString(),
-    amountOutRaw: quote.quote.output.amount,
+    amountOutRaw: quote.amountOut,
     usdValue,
-    network: CDP_NETWORK,
+    network: AGENT_NETWORK,
   };
 }

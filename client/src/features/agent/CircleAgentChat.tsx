@@ -1,0 +1,346 @@
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Bot, X } from "lucide-react";
+import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { useAgentPortfolio } from "./use-agent-portfolio.ts";
+import { AgentNotReady, AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
+import { CopyButton, PANEL_HEAD, PANEL_TITLE, X_CLOSE } from "./agent-primitives.tsx";
+import { AgentAnalyzeResult } from "./AgentAnalyzeResult.tsx";
+import { WalletFlow } from "./WalletFlow.tsx";
+import { SendFlow } from "./SendFlow.tsx";
+import { SwapFlow } from "./SwapFlow.tsx";
+import { QueryFlow } from "./QueryFlow.tsx";
+
+/**
+ * "Your Circle Agent" — a conversational shell over the agent actions.
+ * Selecting a quick action (or typing a matching command) drops a user
+ * bubble + an agent reply into the transcript; for actions that need input
+ * (send / swap / add liquidity / query) the existing flow form renders
+ * inline (embedded) inside the agent bubble, with real validation +
+ * on-chain execution through the agent's Circle wallet on Arc.
+ */
+
+interface Props {
+  onClose: () => void;
+}
+
+type ActionKey = "wallet" | "fund" | "query" | "swap" | "send";
+
+interface ChatMessage {
+  id: number;
+  role: "user" | "agent";
+  text?: string;
+  node?: ReactNode;
+}
+
+const NOOP = () => {
+  /* embedded flows render no header, so onClose is never called */
+};
+
+const ACTIONS: { key: ActionKey; label: string; keywords: string[]; intro: string }[] = [
+  {
+    key: "wallet",
+    label: "Create & manage wallet",
+    keywords: ["wallet", "create", "manage", "address", "balance"],
+    intro: "Here's your Circle agent wallet on Arc.",
+  },
+  {
+    key: "fund",
+    label: "Fund agent wallet",
+    keywords: ["fund", "deposit", "faucet", "top up", "topup", "add funds"],
+    intro:
+      "To fund your agent wallet, copy the address below and request testnet USDC at faucet.circle.com (choose Arc Testnet). Balances refresh automatically once it lands.",
+  },
+  {
+    key: "query",
+    label: "Query on-chain data",
+    keywords: ["query", "data", "look up", "lookup", "on-chain", "onchain", "browse", "explore"],
+    intro: "What would you like to look up?",
+  },
+  {
+    key: "swap",
+    label: "Swap tokens",
+    keywords: ["swap", "exchange", "trade", "convert"],
+    intro: "Let's swap tokens from your agent wallet — set the amount and review.",
+  },
+  {
+    key: "send",
+    label: "Send tokens",
+    keywords: ["send", "transfer", "pay"],
+    intro: "Sure — who are you sending to, and how much?",
+  },
+];
+
+function renderAction(key: ActionKey): ReactNode {
+  switch (key) {
+    case "wallet":
+      return <WalletFlow embedded onClose={NOOP} />;
+    case "fund":
+      return <FundInline />;
+    case "query":
+      return <QueryFlow embedded onClose={NOOP} />;
+    case "swap":
+      return <SwapFlow embedded onClose={NOOP} />;
+    case "send":
+      return <SendFlow embedded onClose={NOOP} />;
+  }
+}
+
+/** CoinGecko spot-price aliases the analyze `token-price` runner understands. */
+const PRICE_TOKENS: { match: string[]; symbol: string }[] = [
+  { match: ["ethereum", "eth"], symbol: "ETH" },
+  { match: ["bitcoin", "btc"], symbol: "BTC" },
+  { match: ["solana", "sol"], symbol: "SOL" },
+  { match: ["weth"], symbol: "WETH" },
+  { match: ["maker", "mkr"], symbol: "MKR" },
+  { match: ["pendle"], symbol: "PENDLE" },
+  { match: ["ondo"], symbol: "ONDO" },
+];
+
+/**
+ * Map a free-form question to a specific `/api/analyze` topic so typed
+ * questions get a direct answer (not the browse menu). Deterministic
+ * substring matching — tolerant of phrasing ("what is USDC's 24h volume?",
+ * "usdc volume", "is eurc pegged"). Returns null when nothing specific
+ * matches, so the caller falls back to the quick-action menu.
+ */
+function detectAnalyzeTopic(text: string): { topic: string; symbol?: string } | null {
+  const t = text.toLowerCase();
+  const any = (...ws: string[]) => ws.some((w) => t.includes(w));
+
+  if (any("hook", "stable protection", "dynamic fee")) return { topic: "mantua-hooks" };
+  if (t.includes("peg")) return { topic: "eurc-peg" };
+  if (t.includes("cirbtc")) return { topic: "cirbtc-price" };
+  if (t.includes("coinbase")) return { topic: "coinbase-prices" };
+  if (t.includes("volume")) {
+    return { topic: any("cbbtc", "cb btc", "cbbtc") ? "cbbtc-24h-volume" : "usdc-24h-volume" };
+  }
+  if (any("stablecoin", "stable coin")) return { topic: "top-stablecoins" };
+  if (t.includes("pool")) return { topic: "arc-pools" };
+  if (any("market", "summary", "overview")) return { topic: "market-summary" };
+  // Generic "price of X" / "X price" → CoinGecko spot for a known token.
+  if (t.includes("price")) {
+    const hit = PRICE_TOKENS.find((p) => p.match.some((m) => t.includes(m)));
+    if (hit) return { topic: "token-price", symbol: hit.symbol };
+  }
+  return null;
+}
+
+const CHIP_STYLE: CSSProperties = {
+  fontSize: 12,
+  color: "var(--text-dim)",
+  background: "var(--chip)",
+  border: "1px solid var(--border-soft)",
+  borderRadius: 99,
+  padding: "6px 12px",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  flexShrink: 0,
+  whiteSpace: "nowrap",
+};
+
+export function CircleAgentChat({ onClose }: Props) {
+  const agent = useAgentPortfolio();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const idRef = useRef(0);
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  const nextId = () => {
+    idRef.current += 1;
+    return idRef.current;
+  };
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
+
+  const trigger = (key: ActionKey, userText: string) => {
+    const action = ACTIONS.find((a) => a.key === key);
+    if (!action) return;
+    setMessages((m) => [
+      ...m,
+      { id: nextId(), role: "user", text: userText },
+      { id: nextId(), role: "agent", text: action.intro, node: renderAction(key) },
+    ]);
+  };
+
+  // The agent has no input of its own — the global "Ask Mantua" bar
+  // (App.tsx) forwards typed text here via the `mantua:agent-input` event
+  // while the agent panel is open. A specific data question gets a direct
+  // answer; otherwise keyword-match to an action, else reply with the menu.
+  // `idRef` is a ref (no effect dep needed).
+  useEffect(() => {
+    const onInput = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail.trim();
+      if (!text) return;
+      const mkId = () => (idRef.current += 1);
+
+      const detected = detectAnalyzeTopic(text);
+      if (detected) {
+        setMessages((m) => [
+          ...m,
+          { id: mkId(), role: "user", text },
+          {
+            id: mkId(),
+            role: "agent",
+            text: "Here's what I found:",
+            node: (
+              <AgentAnalyzeResult
+                topic={detected.topic}
+                {...(detected.symbol ? { symbol: detected.symbol } : {})}
+              />
+            ),
+          },
+        ]);
+        return;
+      }
+
+      const lower = text.toLowerCase();
+      const match = ACTIONS.find((a) => a.keywords.some((k) => lower.includes(k)));
+      setMessages((m) => [
+        ...m,
+        { id: mkId(), role: "user", text },
+        match
+          ? { id: mkId(), role: "agent", text: match.intro, node: renderAction(match.key) }
+          : {
+              id: mkId(),
+              role: "agent",
+              text: "I can create or fund your agent wallet, look up market & on-chain data, swap, or send. Ask a data question (e.g. “USDC 24h volume”, “is EURC pegged?”) or pick an action below.",
+            },
+      ]);
+    };
+    window.addEventListener("mantua:agent-input", onInput);
+    return () => {
+      window.removeEventListener("mantua:agent-input", onInput);
+    };
+  }, []);
+
+  return (
+    <>
+      <PanelHeader
+        onNewChat={() => {
+          setMessages([]);
+        }}
+      />
+
+      <div style={PANEL_HEAD}>
+        <div style={PANEL_TITLE}>
+          <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
+        </div>
+        <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {agent.agentAddress && (
+        <AgentWalletStrip agent={agent} label={`Agent · ${shortAddr(agent.agentAddress)}`} />
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        {messages.length === 0 && (
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            Hi — I'm your Circle agent on Arc. Pick an action below or type what you'd like to do.
+          </div>
+        )}
+
+        {messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
+              <div
+                style={{
+                  background: "var(--accent)",
+                  color: "#fff",
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                }}
+              >
+                {m.text}
+              </div>
+            </div>
+          ) : (
+            <div
+              key={m.id}
+              style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 8 }}
+            >
+              {m.text && (
+                <div
+                  style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.55, maxWidth: "85%" }}
+                >
+                  {m.text}
+                </div>
+              )}
+              {m.node && (
+                <div
+                  style={{
+                    background: "var(--bg-elev)",
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: 12,
+                    padding: 14,
+                  }}
+                >
+                  {m.node}
+                </div>
+              )}
+            </div>
+          ),
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div style={{ borderTop: "1px solid var(--border-soft)", padding: 12 }}>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+          {ACTIONS.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              style={CHIP_STYLE}
+              onClick={() => {
+                trigger(a.key, a.label);
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Inline funding instructions for the chat — copy the agent address + a
+ *  link to the public Circle faucet (the programmatic faucet needs a
+ *  mainnet-upgraded account). */
+function FundInline() {
+  const agent = useAgentPortfolio();
+  if (!agent.agentAddress) return <AgentNotReady agent={agent} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span
+        className="mono"
+        style={{ fontSize: 12, color: "var(--text-dim)", wordBreak: "break-all" }}
+      >
+        {agent.agentAddress}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <CopyButton value={agent.agentAddress} label="Copy agent address" />
+        <a
+          href="https://faucet.circle.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}
+        >
+          Open faucet.circle.com ↗
+        </a>
+      </div>
+    </div>
+  );
+}
