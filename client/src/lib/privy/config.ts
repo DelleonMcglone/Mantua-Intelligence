@@ -24,10 +24,10 @@ export const privyConfig: PrivyClientConfig = {
   supportedChains: SUPPORTED_CHAINS,
 };
 
-export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID as string;
-
-if (!PRIVY_APP_ID) {
-  throw new Error(
-    "VITE_PRIVY_APP_ID is missing. Add it to client/.env.local — see client/.env.example.",
-  );
-}
+/**
+ * Empty string when unset. We deliberately do NOT throw at module load:
+ * a top-level throw crashes the whole app into a blank white screen, which
+ * is what happens on a deploy missing this env var. Instead the provider
+ * renders a clear "set VITE_PRIVY_APP_ID" screen (see provider.tsx).
+ */
+export const PRIVY_APP_ID = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined) ?? "";
