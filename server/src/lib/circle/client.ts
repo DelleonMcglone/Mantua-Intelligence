@@ -6,8 +6,19 @@ import { logger } from "../logger.ts";
 // The SDK ships a CJS build whose factory doesn't resolve through the
 // tsx/esbuild ESM loader (neither named nor namespace import works at runtime),
 // so load it via require(). The type-only `DCW` import supplies the types.
+//
+// The require is LAZY (inside getCircleClient, not at module load): the esbuild
+// bundle for Vercel keeps this as a runtime `require()` the platform's file
+// tracer can't follow, so the SDK isn't shipped in the function. Requiring it
+// eagerly at import time crashed the whole API on boot — even /api/health.
+// Deferring it lets the server (and every non-Circle route) boot; only an
+// actual agent-wallet call touches the SDK.
 const req = createRequire(import.meta.url);
-const dcw = req("@circle-fin/developer-controlled-wallets") as typeof DCW;
+let dcwModule: typeof DCW | null = null;
+function loadDcw(): typeof DCW {
+  dcwModule ??= req("@circle-fin/developer-controlled-wallets") as typeof DCW;
+  return dcwModule;
+}
 
 type CircleClient = ReturnType<typeof DCW.initiateDeveloperControlledWalletsClient>;
 
@@ -36,7 +47,7 @@ export function getCircleClient(): CircleClient {
   if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET) {
     throw new CircleUnavailableError();
   }
-  cached = dcw.initiateDeveloperControlledWalletsClient({
+  cached = loadDcw().initiateDeveloperControlledWalletsClient({
     apiKey: CIRCLE_API_KEY,
     entitySecret: CIRCLE_ENTITY_SECRET,
   });

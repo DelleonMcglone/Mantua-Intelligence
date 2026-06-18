@@ -73,3 +73,8 @@ docs/security/slither/*
 
 # Local Replit sync notes — never commit
 REPLIT_SYNC.*
+.vercel
+.env*
+
+# esbuild-bundled server for the Vercel function (generated at build)
+api/_server.mjs
