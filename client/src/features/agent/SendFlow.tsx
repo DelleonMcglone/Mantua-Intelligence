@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { api } from "@/lib/api.ts";
+import { ACTIVE_CHAIN_ID, getUserFacingTokenSymbols } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
   AgentActionError,
@@ -58,14 +59,27 @@ const LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
+const SELECT_STYLE: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "var(--text)",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  cursor: "pointer",
+};
+
+const SYMBOLS = getUserFacingTokenSymbols(ACTIVE_CHAIN_ID);
+
 export function SendFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
+  const [sym, setSym] = useState<string>(SYMBOLS[0] ?? "USDC");
   const send = useAgentAction<AgentSendResult>();
 
-  const bal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
-  const sym = bal?.symbol ?? "USDC";
+  const bal = agent.balances.find((b) => b.symbol === sym) ?? null;
   const balDisplay = bal ? fmtUnits(bal.balanceRaw, bal.decimals) : "0";
   const busy = send.status === "loading";
 
@@ -146,7 +160,22 @@ export function SendFlow({ onClose, embedded = false }: Props) {
                     fontWeight: 500,
                   }}
                 >
-                  <TokenChip sym={sym} size={18} /> {sym}
+                  <TokenChip sym={sym} size={18} />
+                  <select
+                    value={sym}
+                    onChange={(e) => {
+                      setSym(e.target.value);
+                      if (send.status !== "idle") send.reset();
+                    }}
+                    style={SELECT_STYLE}
+                    aria-label="Token"
+                  >
+                    {SYMBOLS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>

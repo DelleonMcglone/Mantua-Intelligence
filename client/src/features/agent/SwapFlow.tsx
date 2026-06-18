@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api.ts";
-import { getToken } from "@/lib/tokens.ts";
+import { ACTIVE_CHAIN_ID, getToken, getUserFacingTokenSymbols } from "@/lib/tokens.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import {
   AgentActionError,
@@ -83,17 +83,46 @@ const LABEL_STYLE: CSSProperties = {
   marginBottom: 6,
 };
 
+const SELECT_STYLE: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "var(--text)",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  cursor: "pointer",
+};
+
+const SYMBOLS = getUserFacingTokenSymbols(ACTIVE_CHAIN_ID);
+
 export function SwapFlow({ onClose, embedded = false }: Props) {
   const agent = useAgentPortfolio();
   const [amount, setAmount] = useState("");
+  const [paySym, setPaySym] = useState<string>(SYMBOLS[0] ?? "USDC");
+  const [receiveSym, setReceiveSym] = useState<string>(SYMBOLS[1] ?? "EURC");
   const [quotedOut, setQuotedOut] = useState<string | null>(null);
   const swap = useAgentAction<AgentSwapResult>();
 
-  const payBal = agent.balances.find((b) => b.symbol === "USDC") ?? agent.balances.at(0) ?? null;
-  const paySym = payBal?.symbol ?? "USDC";
+  const payBal = agent.balances.find((b) => b.symbol === paySym) ?? null;
   const payDisplay = payBal ? fmtUnits(payBal.balanceRaw, payBal.decimals) : "0";
-  const receiveSym = paySym === "USDC" ? "EURC" : "USDC";
   const busy = swap.status === "loading";
+
+  const resetQuote = () => {
+    setQuotedOut(null);
+    if (swap.status !== "idle") swap.reset();
+  };
+  // Keep the two sides distinct — picking one equal to the other swaps them.
+  const pickPay = (v: string) => {
+    if (v === receiveSym) setReceiveSym(paySym);
+    setPaySym(v);
+    resetQuote();
+  };
+  const pickReceive = (v: string) => {
+    if (v === paySym) setPaySym(receiveSym);
+    setReceiveSym(v);
+    resetQuote();
+  };
 
   // Live no-hook quote as the user types (debounced) — shows an estimated
   // receive amount before the swap. State is only set in async callbacks.
@@ -154,7 +183,21 @@ export function SwapFlow({ onClose, embedded = false }: Props) {
                   placeholder="0.00"
                 />
                 <div style={TOKEN_PICK_STYLE}>
-                  <TokenChip sym={paySym} size={18} /> {paySym}
+                  <TokenChip sym={paySym} size={18} />
+                  <select
+                    value={paySym}
+                    onChange={(e) => {
+                      pickPay(e.target.value);
+                    }}
+                    style={SELECT_STYLE}
+                    aria-label="Pay token"
+                  >
+                    {SYMBOLS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
@@ -173,7 +216,21 @@ export function SwapFlow({ onClose, embedded = false }: Props) {
                   {isEstimate ? `≈ ${receiveDisplay}` : receiveDisplay}
                 </span>
                 <div style={TOKEN_PICK_STYLE}>
-                  <TokenChip sym={receiveSym} size={18} /> {receiveSym}
+                  <TokenChip sym={receiveSym} size={18} />
+                  <select
+                    value={receiveSym}
+                    onChange={(e) => {
+                      pickReceive(e.target.value);
+                    }}
+                    style={SELECT_STYLE}
+                    aria-label="Receive token"
+                  >
+                    {SYMBOLS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
