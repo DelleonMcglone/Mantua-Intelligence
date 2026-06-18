@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import { AgentNotReady, AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
 import { CopyButton, PANEL_HEAD, PANEL_TITLE, X_CLOSE } from "./agent-primitives.tsx";
+import { AgentAnalyzeResult } from "./AgentAnalyzeResult.tsx";
 import { WalletFlow } from "./WalletFlow.tsx";
 import { SendFlow } from "./SendFlow.tsx";
 import { SwapFlow } from "./SwapFlow.tsx";
 import { QueryFlow } from "./QueryFlow.tsx";
-import { LiquidityFlow } from "./LiquidityFlow.tsx";
 
 /**
  * "Your Circle Agent" — a conversational shell over the agent actions.
@@ -23,7 +23,7 @@ interface Props {
   onClose: () => void;
 }
 
-type ActionKey = "wallet" | "fund" | "query" | "liq" | "swap" | "send";
+type ActionKey = "wallet" | "fund" | "query" | "swap" | "send";
 
 interface ChatMessage {
   id: number;
@@ -53,7 +53,7 @@ const ACTIONS: { key: ActionKey; label: string; keywords: string[]; intro: strin
   {
     key: "query",
     label: "Query on-chain data",
-    keywords: ["query", "data", "price", "pool", "market", "analyze", "research", "peg", "volume"],
+    keywords: ["query", "data", "look up", "lookup", "on-chain", "onchain", "browse", "explore"],
     intro: "What would you like to look up?",
   },
   {
@@ -67,12 +67,6 @@ const ACTIONS: { key: ActionKey; label: string; keywords: string[]; intro: strin
     label: "Send tokens",
     keywords: ["send", "transfer", "pay"],
     intro: "Sure — who are you sending to, and how much?",
-  },
-  {
-    key: "liq",
-    label: "Add liquidity",
-    keywords: ["liquidity", "lp", "add liquidity", "provide"],
-    intro: "Let's add liquidity from your agent wallet — pick the pair, fee tier, and amounts.",
   },
 ];
 
@@ -88,9 +82,47 @@ function renderAction(key: ActionKey): ReactNode {
       return <SwapFlow embedded onClose={NOOP} />;
     case "send":
       return <SendFlow embedded onClose={NOOP} />;
-    case "liq":
-      return <LiquidityFlow embedded onClose={NOOP} />;
   }
+}
+
+/** CoinGecko spot-price aliases the analyze `token-price` runner understands. */
+const PRICE_TOKENS: { match: string[]; symbol: string }[] = [
+  { match: ["ethereum", "eth"], symbol: "ETH" },
+  { match: ["bitcoin", "btc"], symbol: "BTC" },
+  { match: ["solana", "sol"], symbol: "SOL" },
+  { match: ["weth"], symbol: "WETH" },
+  { match: ["maker", "mkr"], symbol: "MKR" },
+  { match: ["pendle"], symbol: "PENDLE" },
+  { match: ["ondo"], symbol: "ONDO" },
+];
+
+/**
+ * Map a free-form question to a specific `/api/analyze` topic so typed
+ * questions get a direct answer (not the browse menu). Deterministic
+ * substring matching — tolerant of phrasing ("what is USDC's 24h volume?",
+ * "usdc volume", "is eurc pegged"). Returns null when nothing specific
+ * matches, so the caller falls back to the quick-action menu.
+ */
+function detectAnalyzeTopic(text: string): { topic: string; symbol?: string } | null {
+  const t = text.toLowerCase();
+  const any = (...ws: string[]) => ws.some((w) => t.includes(w));
+
+  if (any("hook", "stable protection", "dynamic fee")) return { topic: "mantua-hooks" };
+  if (t.includes("peg")) return { topic: "eurc-peg" };
+  if (t.includes("cirbtc")) return { topic: "cirbtc-price" };
+  if (t.includes("coinbase")) return { topic: "coinbase-prices" };
+  if (t.includes("volume")) {
+    return { topic: any("cbbtc", "cb btc", "cbbtc") ? "cbbtc-24h-volume" : "usdc-24h-volume" };
+  }
+  if (any("stablecoin", "stable coin")) return { topic: "top-stablecoins" };
+  if (t.includes("pool")) return { topic: "arc-pools" };
+  if (any("market", "summary", "overview")) return { topic: "market-summary" };
+  // Generic "price of X" / "X price" → CoinGecko spot for a known token.
+  if (t.includes("price")) {
+    const hit = PRICE_TOKENS.find((p) => p.match.some((m) => t.includes(m)));
+    if (hit) return { topic: "token-price", symbol: hit.symbol };
+  }
+  return null;
 }
 
 const CHIP_STYLE: CSSProperties = {
@@ -102,6 +134,8 @@ const CHIP_STYLE: CSSProperties = {
   padding: "6px 12px",
   cursor: "pointer",
   fontFamily: "inherit",
+  flexShrink: 0,
+  whiteSpace: "nowrap",
 };
 
 export function CircleAgentChat({ onClose }: Props) {
@@ -131,13 +165,35 @@ export function CircleAgentChat({ onClose }: Props) {
 
   // The agent has no input of its own — the global "Ask Mantua" bar
   // (App.tsx) forwards typed text here via the `mantua:agent-input` event
-  // while the agent panel is open. Keyword-match it to an action, else
-  // reply with the menu. `idRef` is a ref (no effect dep needed).
+  // while the agent panel is open. A specific data question gets a direct
+  // answer; otherwise keyword-match to an action, else reply with the menu.
+  // `idRef` is a ref (no effect dep needed).
   useEffect(() => {
     const onInput = (e: Event) => {
       const text = (e as CustomEvent<string>).detail.trim();
       if (!text) return;
       const mkId = () => (idRef.current += 1);
+
+      const detected = detectAnalyzeTopic(text);
+      if (detected) {
+        setMessages((m) => [
+          ...m,
+          { id: mkId(), role: "user", text },
+          {
+            id: mkId(),
+            role: "agent",
+            text: "Here's what I found:",
+            node: (
+              <AgentAnalyzeResult
+                topic={detected.topic}
+                {...(detected.symbol ? { symbol: detected.symbol } : {})}
+              />
+            ),
+          },
+        ]);
+        return;
+      }
+
       const lower = text.toLowerCase();
       const match = ACTIONS.find((a) => a.keywords.some((k) => lower.includes(k)));
       setMessages((m) => [
@@ -148,7 +204,7 @@ export function CircleAgentChat({ onClose }: Props) {
           : {
               id: mkId(),
               role: "agent",
-              text: "I can create or fund your agent wallet, query on-chain data, swap, send, or add liquidity. Pick one below or rephrase.",
+              text: "I can create or fund your agent wallet, look up market & on-chain data, swap, or send. Ask a data question (e.g. “USDC 24h volume”, “is EURC pegged?”) or pick an action below.",
             },
       ]);
     };
@@ -168,7 +224,7 @@ export function CircleAgentChat({ onClose }: Props) {
 
       <div style={PANEL_HEAD}>
         <div style={PANEL_TITLE}>
-          <span aria-hidden>🤖</span> Your Circle Agent
+          <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
         </div>
         <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
           <X className="h-3.5 w-3.5" />
@@ -241,7 +297,7 @@ export function CircleAgentChat({ onClose }: Props) {
       </div>
 
       <div style={{ borderTop: "1px solid var(--border-soft)", padding: 12 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
           {ACTIONS.map((a) => (
             <button
               key={a.key}

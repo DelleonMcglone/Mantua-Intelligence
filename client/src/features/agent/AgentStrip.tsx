@@ -12,8 +12,6 @@ interface AgentStripProps {
    *  - red     → "$0 left" / cap-exceeded warning
    *  Omit entirely to render no pill. */
   cap?: { text: string; tone?: "default" | "green" | "red" };
-  /** Override the badge initial. Defaults to "A". */
-  badge?: string;
 }
 
 const STRIP_STYLE: React.CSSProperties = {
@@ -22,22 +20,7 @@ const STRIP_STYLE: React.CSSProperties = {
   gap: 10,
   padding: "10px 14px",
   borderBottom: "1px solid var(--border-soft)",
-  background: "linear-gradient(90deg, var(--agent-dim), transparent 60%)",
-  borderLeft: "2px solid var(--agent)",
-};
-
-const BADGE_STYLE: React.CSSProperties = {
-  width: 26,
-  height: 26,
-  borderRadius: 7,
-  background: "var(--agent-dim)",
-  border: "1px solid var(--agent-bd)",
-  color: "var(--agent)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 12,
-  fontWeight: 600,
+  background: "transparent",
 };
 
 const CAP_BASE: React.CSSProperties = {
@@ -70,14 +53,12 @@ const CAP_TONES: Record<NonNullable<AgentStripProps["cap"]>["tone"] & string, Re
 /**
  * AgentStrip — pixel port of `.agent-strip` from
  * `mantua-ai/project/Mantua Agent Flows.html`. Sits at the top of every
- * agent-scoped panel so the agent's identity (badge + wallet address +
- * remaining daily cap) is visible on every step. Teal gradient fades
- * left → transparent; left edge always carries the 2px teal stripe.
+ * agent-scoped panel so the agent's identity (wallet address + remaining
+ * daily cap) is visible on every step.
  */
-export function AgentStrip({ label, addr, cap, badge = "A" }: AgentStripProps) {
+export function AgentStrip({ label, addr, cap }: AgentStripProps) {
   return (
     <div style={STRIP_STYLE}>
-      <div style={BADGE_STYLE}>{badge}</div>
       <div>
         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}</div>
         <div className="mono" style={{ fontSize: 11, color: "var(--text)" }}>
