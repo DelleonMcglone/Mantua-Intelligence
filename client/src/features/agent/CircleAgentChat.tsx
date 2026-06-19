@@ -63,7 +63,7 @@ const SUGGESTIONS = [
   "Create and manage agent wallet",
   "Fund wallet",
   "Query on-chain data",
-  "Swap tokens (USDC, EURC & cirBTC)",
+  "Swap Tokens",
   "Send Tokens",
 ];
 
@@ -557,7 +557,9 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
         check balances, swap or send tokens, or look up market &amp; on-chain data. I act
         autonomously within your daily spending cap.
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div
+        style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflowX: "auto", paddingBottom: 2 }}
+      >
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
@@ -576,6 +578,8 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
               cursor: disabled ? "default" : "pointer",
               fontFamily: "inherit",
               opacity: disabled ? 0.5 : 1,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
             }}
           >
             {s}
