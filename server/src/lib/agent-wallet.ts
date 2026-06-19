@@ -87,7 +87,9 @@ export async function getOrCreateAgentWallet(
   if (existing) return existing;
 
   const walletSetId = await getAgentWalletSetId();
-  const created = await getCircleClient().createWallets({
+  const created = await (
+    await getCircleClient()
+  ).createWallets({
     blockchains: [ARC_TESTNET],
     count: 1,
     walletSetId,

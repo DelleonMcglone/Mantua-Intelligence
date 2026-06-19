@@ -20,7 +20,9 @@ export async function fundAgentWallet(privyUserId: string): Promise<AgentFundRes
   const wallet = await getAgentWallet(privyUserId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
-  await getCircleClient().requestTestnetTokens({
+  await (
+    await getCircleClient()
+  ).requestTestnetTokens({
     address: wallet.address,
     blockchain: "ARC-TESTNET",
     usdc: true,

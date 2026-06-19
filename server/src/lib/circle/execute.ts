@@ -25,7 +25,7 @@ const FAILED_STATES = new Set(["FAILED", "CANCELLED", "DENIED"]);
  * (SENT), well before COMPLETE — return as soon as it's available.
  */
 async function pollForTxHash(id: string): Promise<`0x${string}`> {
-  const client = getCircleClient();
+  const client = await getCircleClient();
   for (let i = 0; i < 40; i++) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const { data } = await client.getTransaction({ id });
@@ -52,7 +52,9 @@ export async function executeAgentCalldata(args: {
   callData: `0x${string}`;
   value?: string;
 }): Promise<CircleExecResult> {
-  const created = await getCircleClient().createContractExecutionTransaction({
+  const created = await (
+    await getCircleClient()
+  ).createContractExecutionTransaction({
     walletId: args.walletId,
     contractAddress: args.to,
     callData: args.callData,
@@ -75,7 +77,9 @@ export async function executeAgentAbiCall(args: {
   abiFunctionSignature: string;
   abiParameters: (string | number | boolean | string[])[];
 }): Promise<CircleExecResult> {
-  const created = await getCircleClient().createContractExecutionTransaction({
+  const created = await (
+    await getCircleClient()
+  ).createContractExecutionTransaction({
     walletId: args.walletId,
     contractAddress: args.to,
     abiFunctionSignature: args.abiFunctionSignature,

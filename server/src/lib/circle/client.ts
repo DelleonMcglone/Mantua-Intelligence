@@ -1,23 +1,24 @@
-import { createRequire } from "node:module";
 import type * as DCW from "@circle-fin/developer-controlled-wallets";
 import { env } from "../../env.ts";
 import { logger } from "../logger.ts";
 
-// The SDK ships a CJS build whose factory doesn't resolve through the
-// tsx/esbuild ESM loader (neither named nor namespace import works at runtime),
-// so load it via require(). The type-only `DCW` import supplies the types.
-//
-// The require is LAZY (inside getCircleClient, not at module load): the esbuild
-// bundle for Vercel keeps this as a runtime `require()` the platform's file
-// tracer can't follow, so the SDK isn't shipped in the function. Requiring it
-// eagerly at import time crashed the whole API on boot — even /api/health.
-// Deferring it lets the server (and every non-Circle route) boot; only an
-// actual agent-wallet call touches the SDK.
-const req = createRequire(import.meta.url);
-let dcwModule: typeof DCW | null = null;
-function loadDcw(): typeof DCW {
-  dcwModule ??= req("@circle-fin/developer-controlled-wallets") as typeof DCW;
-  return dcwModule;
+// The SDK is loaded via a LAZY dynamic `import()` (not a top-level import, and
+// not the old `createRequire` require) for two reasons:
+//   1. Tracing — the esbuild bundle for Vercel keeps a string-literal
+//      `import("@circle-fin/...")` intact, which the platform's file tracer
+//      (@vercel/nft) follows to ship the SDK *and its transitive deps* into the
+//      function. A `createRequire(url)` require uses a variable specifier the
+//      tracer can't follow, so the package was missing at runtime.
+//   2. Boot safety — deferring the load means the server (and every non-Circle
+//      route) boots even if the SDK or its creds are absent; only an actual
+//      agent-wallet call touches it.
+// The CJS factory is exposed as a named export on the dynamic-import namespace
+// on Node (`m.initiateDeveloperControlledWalletsClient`), so the type-only
+// `DCW` import lines up with the runtime shape.
+let dcwModulePromise: Promise<typeof DCW> | null = null;
+function loadDcw(): Promise<typeof DCW> {
+  dcwModulePromise ??= import("@circle-fin/developer-controlled-wallets");
+  return dcwModulePromise;
 }
 
 type CircleClient = ReturnType<typeof DCW.initiateDeveloperControlledWalletsClient>;
@@ -41,13 +42,14 @@ export class CircleUnavailableError extends Error {
  * call either constructs the client or throws `CircleUnavailableError`, which
  * routes catch and surface as 503 so the rest of the API stays up.
  */
-export function getCircleClient(): CircleClient {
+export async function getCircleClient(): Promise<CircleClient> {
   if (cached) return cached;
   const { CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET } = env;
   if (!CIRCLE_API_KEY || !CIRCLE_ENTITY_SECRET) {
     throw new CircleUnavailableError();
   }
-  cached = loadDcw().initiateDeveloperControlledWalletsClient({
+  const dcw = await loadDcw();
+  cached = dcw.initiateDeveloperControlledWalletsClient({
     apiKey: CIRCLE_API_KEY,
     entitySecret: CIRCLE_ENTITY_SECRET,
   });
@@ -63,7 +65,7 @@ export function getCircleClient(): CircleClient {
 export async function getAgentWalletSetId(): Promise<string> {
   if (env.CIRCLE_WALLET_SET_ID) return env.CIRCLE_WALLET_SET_ID;
   if (cachedWalletSetId) return cachedWalletSetId;
-  const res = await getCircleClient().createWalletSet({ name: "Mantua Agent Wallets" });
+  const res = await (await getCircleClient()).createWalletSet({ name: "Mantua Agent Wallets" });
   const id = res.data?.walletSet.id;
   if (!id) throw new Error("Circle createWalletSet returned no wallet set id");
   cachedWalletSetId = id;

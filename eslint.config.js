@@ -10,7 +10,11 @@ export default tseslint.config(
       "**/dist/**",
       "**/build/**",
       "**/node_modules/**",
+      "**/.vercel/**",
       "**/.vite/**",
+      // esbuild-generated server bundles for the Vercel function (see
+      // scripts/build-server.mjs) — vendored code, not ours to lint.
+      "api/_*.mjs",
       "**/coverage/**",
       "contracts/out/**",
       "contracts/cache/**",
@@ -86,6 +90,9 @@ export default tseslint.config(
       "api/**/*.ts",
       "contracts/script/**/*.ts",
       "eslint.config.js",
+      // Build/vendor scripts (scripts/build-server.mjs, server/dcw-entry.mjs)
+      // live outside any tsconfig project — lint them as plain Node scripts.
+      "**/*.mjs",
       // Config files at the repo root or inside a workspace (e.g.
       // server/drizzle.config.ts) live outside any tsconfig `include`, so
       // type-aware linting can't resolve them — treat them as plain Node

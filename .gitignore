@@ -78,3 +78,4 @@ REPLIT_SYNC.*
 
 # esbuild-bundled server for the Vercel function (generated at build)
 api/_server.mjs
+api/_dcw.mjs
