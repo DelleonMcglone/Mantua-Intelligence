@@ -290,7 +290,7 @@ function AssistantBubble({ msg }: { msg: AssistantMsg }) {
             maxWidth: "92%",
           }}
         >
-          {msg.text}
+          <RichText text={msg.text} />
           {msg.streaming && <Caret />}
         </div>
       )}
@@ -302,6 +302,50 @@ function AssistantBubble({ msg }: { msg: AssistantMsg }) {
       )}
     </div>
   );
+}
+
+/**
+ * Render assistant text as plain prose with clickable links. The model is told
+ * to avoid Markdown, but we defensively unwrap any stray **bold** (showing the
+ * inner text, no asterisks) and turn full URLs into links.
+ */
+function RichText({ text }: { text: string }) {
+  const nodes: ReactNode[] = [];
+  const re = /\*\*(.+?)\*\*|(https?:\/\/[^\s<>()]+)/g;
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const whole = m[0];
+    if (whole.startsWith("**")) {
+      // Stray **bold** — show the inner text, drop the asterisks.
+      nodes.push(<span key={key++}>{whole.slice(2, -2)}</span>);
+    } else {
+      let url = whole;
+      let suffix = "";
+      const trail = /[.,;:!?)]+$/.exec(url);
+      if (trail) {
+        suffix = trail[0];
+        url = url.slice(0, -suffix.length);
+      }
+      nodes.push(
+        <a
+          key={key++}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "var(--accent)", textDecoration: "none" }}
+        >
+          {url}
+        </a>,
+      );
+      if (suffix) nodes.push(suffix);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return <>{nodes}</>;
 }
 
 function Caret() {
