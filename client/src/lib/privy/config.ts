@@ -1,5 +1,6 @@
 import type { PrivyClientConfig } from "@privy-io/react-auth";
 import { arcTestnet } from "../chains.ts";
+import { cleanEnv } from "../env.ts";
 
 /**
  * Privy app configuration.
@@ -19,7 +20,9 @@ export const privyConfig: PrivyClientConfig = {
   embeddedWallets: {
     ethereum: { createOnLogin: "users-without-wallets" },
   },
-  walletConnectCloudProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string,
+  walletConnectCloudProjectId: cleanEnv(
+    import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined,
+  ),
   defaultChain: DEFAULT_CHAIN,
   supportedChains: SUPPORTED_CHAINS,
 };
@@ -30,4 +33,4 @@ export const privyConfig: PrivyClientConfig = {
  * is what happens on a deploy missing this env var. Instead the provider
  * renders a clear "set VITE_PRIVY_APP_ID" screen (see provider.tsx).
  */
-export const PRIVY_APP_ID = (import.meta.env.VITE_PRIVY_APP_ID as string | undefined) ?? "";
+export const PRIVY_APP_ID = cleanEnv(import.meta.env.VITE_PRIVY_APP_ID as string | undefined);

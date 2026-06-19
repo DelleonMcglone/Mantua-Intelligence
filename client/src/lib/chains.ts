@@ -9,6 +9,7 @@
  */
 
 import { arcTestnet, type Chain } from "viem/chains";
+import { cleanEnv } from "./env.ts";
 
 export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
 
@@ -97,10 +98,7 @@ export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: strin
   return `${CHAIN_INFO[chainId].explorerUrl}/tx/${txHash}`;
 }
 
-export function getExplorerAddressUrl(
-  chainId: SupportedTestnetChainId,
-  address: string,
-): string {
+export function getExplorerAddressUrl(chainId: SupportedTestnetChainId, address: string): string {
   return `${CHAIN_INFO[chainId].explorerUrl}/address/${address}`;
 }
 
@@ -110,7 +108,7 @@ export function getExplorerAddressUrl(
  */
 export function getRpcUrl(chainId: SupportedTestnetChainId): string {
   return (
-    (import.meta.env.VITE_ARC_RPC_URL as string | undefined) ??
+    cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined) ||
     CHAIN_INFO[chainId].defaultRpcUrl
   );
 }

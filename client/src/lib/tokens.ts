@@ -12,11 +12,14 @@ import {
   type SupportedTestnetChainId,
   CHAIN_INFO,
 } from "./chains.ts";
+import { cleanEnv } from "./env.ts";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 export const NETWORK: "mainnet" | "testnet" =
-  import.meta.env.VITE_MANTUA_NETWORK === "mainnet" ? "mainnet" : "testnet";
+  cleanEnv(import.meta.env.VITE_MANTUA_NETWORK as string | undefined) === "mainnet"
+    ? "mainnet"
+    : "testnet";
 export const IS_MAINNET = NETWORK === "mainnet";
 
 /** The single active chain id (Arc Testnet). */
