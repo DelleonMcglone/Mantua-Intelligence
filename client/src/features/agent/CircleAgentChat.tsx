@@ -60,10 +60,11 @@ interface AssistantMsg {
 type Msg = UserMsg | AssistantMsg;
 
 const SUGGESTIONS = [
-  "What's my agent wallet balance?",
-  "Swap 5 USDC to EURC",
-  "Is EURC holding its peg?",
-  "Show me the top stablecoins",
+  "Create and manage agent wallet",
+  "Fund wallet",
+  "Query on-chain data",
+  "Swap tokens (USDC, EURC & cirBTC)",
+  "Send Tokens",
 ];
 
 const TOOL_VERB: Record<string, string> = {
