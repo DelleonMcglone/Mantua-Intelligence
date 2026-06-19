@@ -322,7 +322,7 @@ function handleChatCommand(text: string, setRoute: (r: Route) => void) {
  * - `remove-liquidity` → `positions` — per-position deep-linking
  *   needs a pool/position id we don't extract yet; PositionsList lets
  *   the user pick which position to remove.
- * - `send` → `agent` — AgentPanel hosts SendFlow.
+ * - `send` → `agent` — the conversational agent handles sends.
  * - `portfolio` → `home` — HomeMenu already surfaces PortfolioCard
  *   + AssetsCard.
  *
