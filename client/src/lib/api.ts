@@ -8,6 +8,10 @@ import { cleanEnv } from "./env.ts";
  */
 const BASE: string = cleanEnv(import.meta.env.VITE_API_BASE_URL as string | undefined);
 
+/** The resolved API origin (empty in dev → Vite proxy). Exposed for the
+ *  streaming agent client, which can't use the JSON `api` helper. */
+export const API_BASE = BASE;
+
 export class ApiError extends Error {
   public readonly status: number;
   public readonly code: string;

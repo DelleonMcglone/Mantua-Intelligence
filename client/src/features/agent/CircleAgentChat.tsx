@@ -1,212 +1,195 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Bot, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { ArrowLeft, Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerAddressUrl } from "@/lib/chains.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
-import { AgentNotReady, AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
-import { CopyButton, PANEL_HEAD, PANEL_TITLE, X_CLOSE } from "./agent-primitives.tsx";
-import { AgentAnalyzeResult } from "./AgentAnalyzeResult.tsx";
-import { WalletFlow } from "./WalletFlow.tsx";
-import { SendFlow } from "./SendFlow.tsx";
-import { SwapFlow } from "./SwapFlow.tsx";
-import { QueryFlow } from "./QueryFlow.tsx";
+import { AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
+import {
+  Banner,
+  CopyButton,
+  DetailRows,
+  PANEL_HEAD,
+  PANEL_TITLE,
+  Spinner,
+  TxRow,
+  X_CLOSE,
+} from "./agent-primitives.tsx";
+import { streamAgentChat, AgentStreamError, type AgentChatEvent } from "./agent-stream.ts";
 
 /**
- * "Your Circle Agent" — a conversational shell over the agent actions.
- * Selecting a quick action (or typing a matching command) drops a user
- * bubble + an agent reply into the transcript; for actions that need input
- * (send / swap / add liquidity / query) the existing flow form renders
- * inline (embedded) inside the agent bubble, with real validation +
- * on-chain execution through the agent's Circle wallet on Arc.
+ * "Your Circle Agent" — a free-form, autonomous conversational agent.
+ *
+ * The user types in the global "Ask Mantua" bar (App.tsx forwards it via the
+ * `mantua:agent-input` event). Each turn streams from `POST /api/agent/chat`:
+ * assistant text tokens arrive live, and tool steps (swap / send / portfolio /
+ * market data) render as result cards as the server executes them on the
+ * Circle wallet. There are no forms and no confirmation — the agent acts.
  */
 
 interface Props {
   onClose: () => void;
 }
 
-type ActionKey = "wallet" | "fund" | "query" | "swap" | "send";
-
-interface ChatMessage {
-  id: number;
-  role: "user" | "agent";
-  text?: string;
-  node?: ReactNode;
+interface ToolStep {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  status: "running" | "ok" | "error";
+  data?: unknown;
+  error?: string;
 }
 
-const NOOP = () => {
-  /* embedded flows render no header, so onClose is never called */
+interface UserMsg {
+  id: string;
+  role: "user";
+  text: string;
+}
+interface AssistantMsg {
+  id: string;
+  role: "assistant";
+  text: string;
+  steps: ToolStep[];
+  streaming: boolean;
+  failed?: string;
+}
+type Msg = UserMsg | AssistantMsg;
+
+const SUGGESTIONS = [
+  "Create and manage agent wallet",
+  "Fund wallet",
+  "Query on-chain data",
+  "Swap Tokens",
+  "Send Tokens",
+];
+
+const TOOL_VERB: Record<string, string> = {
+  get_portfolio: "Reading portfolio",
+  manage_wallet: "Checking wallet",
+  get_swap_quote: "Fetching a quote",
+  swap: "Executing swap",
+  send: "Sending tokens",
+  get_market_data: "Pulling market data",
 };
 
-const ACTIONS: { key: ActionKey; label: string; keywords: string[]; intro: string }[] = [
-  {
-    key: "wallet",
-    label: "Create & manage wallet",
-    keywords: ["wallet", "create", "manage", "address", "balance"],
-    intro: "Here's your Circle agent wallet on Arc.",
-  },
-  {
-    key: "fund",
-    label: "Fund agent wallet",
-    keywords: ["fund", "deposit", "faucet", "top up", "topup", "add funds"],
-    intro:
-      "To fund your agent wallet, copy the address below and request testnet USDC at faucet.circle.com (choose Arc Testnet). Balances refresh automatically once it lands.",
-  },
-  {
-    key: "query",
-    label: "Query on-chain data",
-    keywords: ["query", "data", "look up", "lookup", "on-chain", "onchain", "browse", "explore"],
-    intro: "What would you like to look up?",
-  },
-  {
-    key: "swap",
-    label: "Swap tokens",
-    keywords: ["swap", "exchange", "trade", "convert"],
-    intro: "Let's swap tokens from your agent wallet — set the amount and review.",
-  },
-  {
-    key: "send",
-    label: "Send tokens",
-    keywords: ["send", "transfer", "pay"],
-    intro: "Sure — who are you sending to, and how much?",
-  },
-];
-
-function renderAction(key: ActionKey): ReactNode {
-  switch (key) {
-    case "wallet":
-      return <WalletFlow embedded onClose={NOOP} />;
-    case "fund":
-      return <FundInline />;
-    case "query":
-      return <QueryFlow embedded onClose={NOOP} />;
-    case "swap":
-      return <SwapFlow embedded onClose={NOOP} />;
-    case "send":
-      return <SendFlow embedded onClose={NOOP} />;
-  }
-}
-
-/** CoinGecko spot-price aliases the analyze `token-price` runner understands. */
-const PRICE_TOKENS: { match: string[]; symbol: string }[] = [
-  { match: ["ethereum", "eth"], symbol: "ETH" },
-  { match: ["bitcoin", "btc"], symbol: "BTC" },
-  { match: ["solana", "sol"], symbol: "SOL" },
-  { match: ["weth"], symbol: "WETH" },
-  { match: ["maker", "mkr"], symbol: "MKR" },
-  { match: ["pendle"], symbol: "PENDLE" },
-  { match: ["ondo"], symbol: "ONDO" },
-];
-
-/**
- * Map a free-form question to a specific `/api/analyze` topic so typed
- * questions get a direct answer (not the browse menu). Deterministic
- * substring matching — tolerant of phrasing ("what is USDC's 24h volume?",
- * "usdc volume", "is eurc pegged"). Returns null when nothing specific
- * matches, so the caller falls back to the quick-action menu.
- */
-function detectAnalyzeTopic(text: string): { topic: string; symbol?: string } | null {
-  const t = text.toLowerCase();
-  const any = (...ws: string[]) => ws.some((w) => t.includes(w));
-
-  if (any("hook", "stable protection", "dynamic fee")) return { topic: "mantua-hooks" };
-  if (t.includes("peg")) return { topic: "eurc-peg" };
-  if (t.includes("cirbtc")) return { topic: "cirbtc-price" };
-  if (t.includes("coinbase")) return { topic: "coinbase-prices" };
-  if (t.includes("volume")) {
-    return { topic: any("cbbtc", "cb btc", "cbbtc") ? "cbbtc-24h-volume" : "usdc-24h-volume" };
-  }
-  if (any("stablecoin", "stable coin")) return { topic: "top-stablecoins" };
-  if (t.includes("pool")) return { topic: "arc-pools" };
-  if (any("market", "summary", "overview")) return { topic: "market-summary" };
-  // Generic "price of X" / "X price" → CoinGecko spot for a known token.
-  if (t.includes("price")) {
-    const hit = PRICE_TOKENS.find((p) => p.match.some((m) => t.includes(m)));
-    if (hit) return { topic: "token-price", symbol: hit.symbol };
-  }
-  return null;
-}
-
-const CHIP_STYLE: CSSProperties = {
-  fontSize: 12,
-  color: "var(--text-dim)",
-  background: "var(--chip)",
-  border: "1px solid var(--border-soft)",
-  borderRadius: 99,
-  padding: "6px 12px",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  flexShrink: 0,
-  whiteSpace: "nowrap",
+let seq = 0;
+const uid = () => {
+  seq += 1;
+  return `m${String(seq)}`;
 };
 
 export function CircleAgentChat({ onClose }: Props) {
   const agent = useAgentPortfolio();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const idRef = useRef(0);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [busy, setBusy] = useState(false);
+  const sessionIdRef = useRef<string | undefined>(undefined);
+  const busyRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
-
-  const nextId = () => {
-    idRef.current += 1;
-    return idRef.current;
-  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
-  const trigger = (key: ActionKey, userText: string) => {
-    const action = ACTIONS.find((a) => a.key === key);
-    if (!action) return;
-    setMessages((m) => [
-      ...m,
-      { id: nextId(), role: "user", text: userText },
-      { id: nextId(), role: "agent", text: action.intro, node: renderAction(key) },
-    ]);
-  };
+  const patchAssistant = useCallback((id: string, fn: (m: AssistantMsg) => AssistantMsg) => {
+    setMessages((prev) => prev.map((m) => (m.id === id && m.role === "assistant" ? fn(m) : m)));
+  }, []);
 
-  // The agent has no input of its own — the global "Ask Mantua" bar
-  // (App.tsx) forwards typed text here via the `mantua:agent-input` event
-  // while the agent panel is open. A specific data question gets a direct
-  // answer; otherwise keyword-match to an action, else reply with the menu.
-  // `idRef` is a ref (no effect dep needed).
+  const send = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text || busyRef.current) return;
+
+      const assistantId = uid();
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "user", text },
+        { id: assistantId, role: "assistant", text: "", steps: [], streaming: true },
+      ]);
+      setBusy(true);
+      busyRef.current = true;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const onEvent = (ev: AgentChatEvent) => {
+        switch (ev.type) {
+          case "session":
+            sessionIdRef.current = ev.sessionId;
+            break;
+          case "text":
+            patchAssistant(assistantId, (m) => ({ ...m, text: m.text + ev.delta }));
+            break;
+          case "tool_start":
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              steps: [...m.steps, { id: ev.id, tool: ev.tool, args: ev.args, status: "running" }],
+            }));
+            break;
+          case "tool_result":
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              steps: m.steps.map((s) =>
+                s.id === ev.id
+                  ? {
+                      ...s,
+                      status: ev.ok ? "ok" : "error",
+                      ...(ev.data !== undefined ? { data: ev.data } : {}),
+                      ...(ev.error !== undefined ? { error: ev.error } : {}),
+                    }
+                  : s,
+              ),
+            }));
+            break;
+          case "error":
+            patchAssistant(assistantId, (m) => ({ ...m, failed: ev.message }));
+            break;
+          case "done":
+            break;
+        }
+      };
+
+      streamAgentChat(
+        { message: text, sessionId: sessionIdRef.current },
+        onEvent,
+        controller.signal,
+      )
+        .catch((err: unknown) => {
+          const msg =
+            err instanceof AgentStreamError
+              ? err.status === 401
+                ? "Please sign in to use the agent."
+                : err.message
+              : err instanceof DOMException && err.name === "AbortError"
+                ? null
+                : "The agent connection dropped.";
+          if (msg) patchAssistant(assistantId, (m) => ({ ...m, failed: msg }));
+        })
+        .finally(() => {
+          patchAssistant(assistantId, (m) => ({ ...m, streaming: false }));
+          setBusy(false);
+          busyRef.current = false;
+          abortRef.current = null;
+        });
+    },
+    [patchAssistant],
+  );
+
+  // Always call the latest `send` from the window listener (no stale closure).
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
   useEffect(() => {
     const onInput = (e: Event) => {
-      const text = (e as CustomEvent<string>).detail.trim();
-      if (!text) return;
-      const mkId = () => (idRef.current += 1);
-
-      const detected = detectAnalyzeTopic(text);
-      if (detected) {
-        setMessages((m) => [
-          ...m,
-          { id: mkId(), role: "user", text },
-          {
-            id: mkId(),
-            role: "agent",
-            text: "Here's what I found:",
-            node: (
-              <AgentAnalyzeResult
-                topic={detected.topic}
-                {...(detected.symbol ? { symbol: detected.symbol } : {})}
-              />
-            ),
-          },
-        ]);
-        return;
-      }
-
-      const lower = text.toLowerCase();
-      const match = ACTIONS.find((a) => a.keywords.some((k) => lower.includes(k)));
-      setMessages((m) => [
-        ...m,
-        { id: mkId(), role: "user", text },
-        match
-          ? { id: mkId(), role: "agent", text: match.intro, node: renderAction(match.key) }
-          : {
-              id: mkId(),
-              role: "agent",
-              text: "I can create or fund your agent wallet, look up market & on-chain data, swap, or send. Ask a data question (e.g. “USDC 24h volume”, “is EURC pegged?”) or pick an action below.",
-            },
-      ]);
+      sendRef.current((e as CustomEvent<string>).detail);
     };
     window.addEventListener("mantua:agent-input", onInput);
     return () => {
@@ -214,17 +197,33 @@ export function CircleAgentChat({ onClose }: Props) {
     };
   }, []);
 
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    sessionIdRef.current = undefined;
+    busyRef.current = false;
+    setBusy(false);
+    setMessages([]);
+  }, []);
+
   return (
     <>
-      <PanelHeader
-        onNewChat={() => {
-          setMessages([]);
-        }}
-      />
+      <PanelHeader onNewChat={newChat} />
 
       <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>
-          <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              style={X_CLOSE}
+              onClick={newChat}
+              aria-label="Back to suggestions"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <div style={PANEL_TITLE}>
+            <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
+          </div>
         </div>
         <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
           <X className="h-3.5 w-3.5" />
@@ -242,104 +241,446 @@ export function CircleAgentChat({ onClose }: Props) {
           padding: 16,
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 14,
         }}
       >
-        {messages.length === 0 && (
-          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
-            Hi — I'm your Circle agent on Arc. Pick an action below or type what you'd like to do.
-          </div>
-        )}
-
-        {messages.map((m) =>
-          m.role === "user" ? (
-            <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
-              <div
-                style={{
-                  background: "var(--accent)",
-                  color: "#fff",
-                  borderRadius: 12,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                }}
-              >
-                {m.text}
-              </div>
-            </div>
-          ) : (
-            <div
-              key={m.id}
-              style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 8 }}
-            >
-              {m.text && (
-                <div
-                  style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.55, maxWidth: "85%" }}
-                >
-                  {m.text}
-                </div>
-              )}
-              {m.node && (
-                <div
-                  style={{
-                    background: "var(--bg-elev)",
-                    border: "1px solid var(--border-soft)",
-                    borderRadius: 12,
-                    padding: 14,
-                  }}
-                >
-                  {m.node}
-                </div>
-              )}
-            </div>
-          ),
+        {messages.length === 0 ? (
+          <EmptyState onPick={send} disabled={busy} />
+        ) : (
+          messages.map((m) =>
+            m.role === "user" ? (
+              <UserBubble key={m.id} text={m.text} />
+            ) : (
+              <AssistantBubble key={m.id} msg={m} />
+            ),
+          )
         )}
         <div ref={endRef} />
-      </div>
-
-      <div style={{ borderTop: "1px solid var(--border-soft)", padding: 12 }}>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-          {ACTIONS.map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              style={CHIP_STYLE}
-              onClick={() => {
-                trigger(a.key, a.label);
-              }}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
       </div>
     </>
   );
 }
 
-/** Inline funding instructions for the chat — copy the agent address + a
- *  link to the public Circle faucet (the programmatic faucet needs a
- *  mainnet-upgraded account). */
-function FundInline() {
-  const agent = useAgentPortfolio();
-  if (!agent.agentAddress) return <AgentNotReady agent={agent} />;
+function UserBubble({ text }: { text: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <span
-        className="mono"
-        style={{ fontSize: 12, color: "var(--text-dim)", wordBreak: "break-all" }}
+    <div style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
+      <div
+        style={{
+          background: "var(--accent)",
+          color: "#fff",
+          borderRadius: 12,
+          padding: "8px 12px",
+          fontSize: 13,
+          whiteSpace: "pre-wrap",
+        }}
       >
-        {agent.agentAddress}
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function AssistantBubble({ msg }: { msg: AssistantMsg }) {
+  const showThinking = msg.streaming && msg.text === "" && msg.steps.length === 0;
+  return (
+    <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 10 }}>
+      {showThinking && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Spinner agent />
+          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Thinking…</span>
+        </div>
+      )}
+
+      {msg.steps.map((step) => (
+        <StepCard key={step.id} step={step} />
+      ))}
+
+      {msg.text && (
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--text)",
+            lineHeight: 1.55,
+            whiteSpace: "pre-wrap",
+            maxWidth: "92%",
+          }}
+        >
+          <RichText text={msg.text} />
+          {msg.streaming && <Caret />}
+        </div>
+      )}
+
+      {msg.failed && (
+        <Banner tone="error" icon="⊘" title="Something went wrong">
+          {msg.failed}
+        </Banner>
+      )}
+    </div>
+  );
+}
+
+/** Inline EVM address — short form, copy button, and an ArcScan link. */
+function AddressInline({ addr }: { addr: string }) {
+  const chainId = useCurrentChainId();
+  const url = getExplorerAddressUrl(chainId, addr);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "1px 7px",
+        borderRadius: 7,
+        background: "var(--bg-elev)",
+        border: "1px solid var(--border-soft)",
+        verticalAlign: "baseline",
+      }}
+    >
+      <span className="mono" style={{ fontSize: 12 }}>
+        {shortAddr(addr)}
       </span>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <CopyButton value={agent.agentAddress} label="Copy agent address" />
+      <CopyButton value={addr} label="Copy address" />
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "var(--text-dim)", textDecoration: "none", fontSize: 11 }}
+        aria-label="View on ArcScan"
+      >
+        ↗
+      </a>
+    </span>
+  );
+}
+
+/**
+ * Render assistant text as plain prose with clickable links and copyable
+ * addresses. The model is told to avoid Markdown, but we defensively unwrap any
+ * stray **bold** (showing the inner text, no asterisks), turn full URLs into
+ * links, and turn 0x addresses into copy + ArcScan chips.
+ */
+function RichText({ text }: { text: string }) {
+  const nodes: ReactNode[] = [];
+  const re = /\*\*(.+?)\*\*|(https?:\/\/[^\s<>()]+)|(0x[a-fA-F0-9]{40})/g;
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const whole = m[0];
+    if (whole.startsWith("**")) {
+      // Stray **bold** — show the inner text, drop the asterisks.
+      nodes.push(<span key={key++}>{whole.slice(2, -2)}</span>);
+    } else if (whole.startsWith("0x")) {
+      nodes.push(<AddressInline key={key++} addr={whole} />);
+    } else {
+      let url = whole;
+      let suffix = "";
+      const trail = /[.,;:!?)]+$/.exec(url);
+      if (trail) {
+        suffix = trail[0];
+        url = url.slice(0, -suffix.length);
+      }
+      nodes.push(
         <a
-          href="https://faucet.circle.com"
+          key={key++}
+          href={url}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}
+          style={{ color: "var(--accent)", textDecoration: "none" }}
         >
-          Open faucet.circle.com ↗
-        </a>
+          {url}
+        </a>,
+      );
+      if (suffix) nodes.push(suffix);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return <>{nodes}</>;
+}
+
+function Caret() {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 7,
+        height: 14,
+        marginLeft: 2,
+        verticalAlign: "text-bottom",
+        background: "var(--text-dim)",
+        animation: "blink 1s steps(2) infinite",
+      }}
+    />
+  );
+}
+
+const CARD: CSSProperties = {
+  background: "var(--bg-elev)",
+  border: "1px solid var(--border-soft)",
+  borderRadius: 12,
+  padding: 14,
+};
+
+function StepCard({ step }: { step: ToolStep }) {
+  if (step.status === "running") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Spinner agent />
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          {TOOL_VERB[step.tool] ?? "Working"}…
+        </span>
+      </div>
+    );
+  }
+  if (step.status === "error") {
+    return (
+      <Banner tone="error" icon="⊘" title={`${TOOL_VERB[step.tool] ?? step.tool} failed`}>
+        {step.error ?? "Unknown error"}
+      </Banner>
+    );
+  }
+  return <div style={CARD}>{renderResult(step)}</div>;
+}
+
+// ── Result renderers (read-only views of the server tool results) ──
+
+interface SwapData {
+  txHash: string;
+  explorerUrl: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+}
+interface SendData {
+  txHash: string;
+  explorerUrl: string;
+  amount: string;
+  symbol: string;
+  to: string;
+}
+interface PortfolioData {
+  address: string;
+  balances: { symbol: string; balance: string; usdValue: number }[];
+}
+interface QuoteData {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+}
+interface WalletData {
+  address: string;
+  dailyCapUsd: string | number;
+  status: string;
+}
+interface AnalyzeData {
+  title: string;
+  summary: string;
+  metrics?: { label: string; value: string }[];
+  bullets?: string[];
+  sources?: { name: string; url?: string }[];
+}
+
+function fmtNum(s: string): string {
+  const n = Number(s);
+  return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 6 }) : s;
+}
+
+function renderResult(step: ToolStep): ReactNode {
+  switch (step.tool) {
+    case "swap": {
+      const d = step.data as SwapData;
+      return (
+        <Success
+          title={`Swapped ${fmtNum(d.amountIn)} ${d.tokenIn} → ${fmtNum(d.amountOut)} ${d.tokenOut}`}
+          txHash={d.txHash}
+          explorerUrl={d.explorerUrl}
+        />
+      );
+    }
+    case "send": {
+      const d = step.data as SendData;
+      return (
+        <Success
+          title={`Sent ${fmtNum(d.amount)} ${d.symbol}`}
+          detail={`To ${shortAddr(d.to)}`}
+          txHash={d.txHash}
+          explorerUrl={d.explorerUrl}
+        />
+      );
+    }
+    case "get_portfolio": {
+      const d = step.data as PortfolioData;
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Agent wallet balances</Heading>
+          <DetailRows
+            rows={d.balances.map((b) => ({
+              label: b.symbol,
+              value: `${fmtNum(b.balance)}${b.usdValue ? ` · $${b.usdValue.toFixed(2)}` : ""}`,
+            }))}
+          />
+        </div>
+      );
+    }
+    case "get_swap_quote": {
+      const d = step.data as QuoteData;
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Quote</Heading>
+          <DetailRows
+            rows={[
+              { label: "Pay", value: `${fmtNum(d.amountIn)} ${d.tokenIn}` },
+              { label: "Receive", value: `${fmtNum(d.amountOut)} ${d.tokenOut}` },
+            ]}
+          />
+        </div>
+      );
+    }
+    case "manage_wallet": {
+      const d = step.data as WalletData;
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Agent wallet</Heading>
+          <DetailRows
+            rows={[
+              { label: "Address", value: shortAddr(d.address) },
+              { label: "Daily cap", value: `$${String(d.dailyCapUsd)}` },
+              { label: "Status", value: d.status },
+            ]}
+          />
+        </div>
+      );
+    }
+    case "get_market_data": {
+      const d = step.data as AnalyzeData;
+      return <AnalyzeView data={d} />;
+    }
+    default:
+      return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>;
+  }
+}
+
+function Heading({ children }: { children: ReactNode }) {
+  return <div style={{ fontSize: 13, fontWeight: 600 }}>{children}</div>;
+}
+
+function Success({
+  title,
+  detail,
+  txHash,
+  explorerUrl,
+}: {
+  title: string;
+  detail?: string;
+  txHash: string;
+  explorerUrl: string;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <Banner tone="success" icon="✓" title={title}>
+        {detail ?? "Executed through your agent wallet on Arc."}
+      </Banner>
+      <TxRow hash={txHash} explorerUrl={explorerUrl} />
+    </div>
+  );
+}
+
+function AnalyzeView({ data }: { data: AnalyzeData }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{data.title}</div>
+        <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55, marginTop: 6 }}>
+          {data.summary}
+        </p>
+      </div>
+      {data.metrics && data.metrics.length > 0 && (
+        <DetailRows rows={data.metrics.map((m) => ({ label: m.label, value: m.value }))} />
+      )}
+      {data.bullets && data.bullets.length > 0 && (
+        <ul
+          style={{
+            margin: 0,
+            paddingLeft: 18,
+            fontSize: 13,
+            color: "var(--text)",
+            lineHeight: 1.6,
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          {data.bullets.map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
+      )}
+      {data.sources && data.sources.length > 0 && (
+        <div style={{ fontSize: 11, color: "var(--text-mute)" }}>
+          Sources:{" "}
+          {data.sources.map((s, i, arr) => (
+            <span key={`${s.name}-${String(i)}`}>
+              {s.url ? (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  {s.name} ↗
+                </a>
+              ) : (
+                s.name
+              )}
+              {i < arr.length - 1 ? ", " : ""}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disabled: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
+        Hi — I'm your Circle agent on Arc. Tell me what to do in plain language and I'll handle it:
+        check balances, swap or send tokens, or look up market &amp; on-chain data. I act
+        autonomously within your daily spending cap.
+      </div>
+      <div
+        style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflowX: "auto", paddingBottom: 2 }}
+      >
+        {SUGGESTIONS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onPick(s);
+            }}
+            style={{
+              fontSize: 12,
+              color: "var(--text-dim)",
+              background: "var(--chip)",
+              border: "1px solid var(--border-soft)",
+              borderRadius: 99,
+              padding: "6px 12px",
+              cursor: disabled ? "default" : "pointer",
+              fontFamily: "inherit",
+              opacity: disabled ? 0.5 : 1,
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {s}
+          </button>
+        ))}
       </div>
     </div>
   );

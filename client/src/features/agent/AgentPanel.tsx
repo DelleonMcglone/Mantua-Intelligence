@@ -5,11 +5,10 @@ interface AgentPanelProps {
 }
 
 /**
- * Agent panel entry point — "Your Circle Agent", a single conversational
- * surface. Selecting a quick action (or typing a command) runs the
- * corresponding flow inline in the chat (wallet, fund, query, swap, send,
- * add liquidity) against the agent's Circle wallet on Arc. The old
- * mode-picker + Autonomous mode were removed.
+ * Agent panel entry point — "Your Circle Agent", a free-form autonomous
+ * conversational surface. The user types in the global bar; each turn streams
+ * from `/api/agent/chat`, with the agent executing tools (swap / send / data /
+ * portfolio) on its Circle wallet on Arc. No forms, no confirmation.
  */
 export function AgentPanel({ onClose }: AgentPanelProps) {
   return <CircleAgentChat onClose={onClose} />;
