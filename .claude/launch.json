@@ -18,6 +18,15 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-lc", "source ~/.nvm/nvm.sh && nvm use --silent && npm run dev:server"],
       "port": 3001
+    },
+    {
+      "name": "client-preview",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "source ~/.nvm/nvm.sh && nvm use --silent && npm run preview -w @mantua/client"
+      ],
+      "port": 4173
     }
   ]
 }
