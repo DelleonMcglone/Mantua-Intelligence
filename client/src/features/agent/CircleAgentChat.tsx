@@ -6,12 +6,15 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Bot, X } from "lucide-react";
+import { ArrowLeft, Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerAddressUrl } from "@/lib/chains.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import { AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
 import {
   Banner,
+  CopyButton,
   DetailRows,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -207,8 +210,20 @@ export function CircleAgentChat({ onClose }: Props) {
       <PanelHeader onNewChat={newChat} />
 
       <div style={PANEL_HEAD}>
-        <div style={PANEL_TITLE}>
-          <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              style={X_CLOSE}
+              onClick={newChat}
+              aria-label="Back to suggestions"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <div style={PANEL_TITLE}>
+            <Bot className="h-4 w-4" aria-hidden /> Your Circle Agent
+          </div>
         </div>
         <button type="button" style={X_CLOSE} onClick={onClose} aria-label="Close">
           <X className="h-3.5 w-3.5" />
@@ -304,14 +319,49 @@ function AssistantBubble({ msg }: { msg: AssistantMsg }) {
   );
 }
 
+/** Inline EVM address — short form, copy button, and an ArcScan link. */
+function AddressInline({ addr }: { addr: string }) {
+  const chainId = useCurrentChainId();
+  const url = getExplorerAddressUrl(chainId, addr);
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "1px 7px",
+        borderRadius: 7,
+        background: "var(--bg-elev)",
+        border: "1px solid var(--border-soft)",
+        verticalAlign: "baseline",
+      }}
+    >
+      <span className="mono" style={{ fontSize: 12 }}>
+        {shortAddr(addr)}
+      </span>
+      <CopyButton value={addr} label="Copy address" />
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "var(--text-dim)", textDecoration: "none", fontSize: 11 }}
+        aria-label="View on ArcScan"
+      >
+        ↗
+      </a>
+    </span>
+  );
+}
+
 /**
- * Render assistant text as plain prose with clickable links. The model is told
- * to avoid Markdown, but we defensively unwrap any stray **bold** (showing the
- * inner text, no asterisks) and turn full URLs into links.
+ * Render assistant text as plain prose with clickable links and copyable
+ * addresses. The model is told to avoid Markdown, but we defensively unwrap any
+ * stray **bold** (showing the inner text, no asterisks), turn full URLs into
+ * links, and turn 0x addresses into copy + ArcScan chips.
  */
 function RichText({ text }: { text: string }) {
   const nodes: ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*|(https?:\/\/[^\s<>()]+)/g;
+  const re = /\*\*(.+?)\*\*|(https?:\/\/[^\s<>()]+)|(0x[a-fA-F0-9]{40})/g;
   let last = 0;
   let key = 0;
   let m: RegExpExecArray | null;
@@ -321,6 +371,8 @@ function RichText({ text }: { text: string }) {
     if (whole.startsWith("**")) {
       // Stray **bold** — show the inner text, drop the asterisks.
       nodes.push(<span key={key++}>{whole.slice(2, -2)}</span>);
+    } else if (whole.startsWith("0x")) {
+      nodes.push(<AddressInline key={key++} addr={whole} />);
     } else {
       let url = whole;
       let suffix = "";
