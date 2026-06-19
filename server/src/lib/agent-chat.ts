@@ -11,6 +11,7 @@ import { getOrCreateAgentWallet, getAgentWallet, updateAgentWalletCap } from "./
 import { sendFromAgentWallet } from "./agent-send.ts";
 import { swapFromAgentWallet, quoteAgentSwap } from "./agent-swap.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
+import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
 
 /**
@@ -79,6 +80,12 @@ Behaviour:
 
 Capabilities: manage the agent wallet (view info, set the daily cap), swap tokens, send tokens, fetch market/on-chain data, and read the wallet's portfolio. You CANNOT manage liquidity positions — if asked, say liquidity isn't available through you yet.
 
+Decision logic — ground every action in real signals, never assumptions:
+- Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
+- Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
+- Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
+- For data questions, answer from get_market_data / get_signals — cite the figures, don't guess.
+
 Funding: you can't pull funds in yourself. When the user wants to fund the wallet, give them its address (from get_portfolio or manage_wallet) and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet); balances refresh automatically once it lands.
 
 Supported tokens (case-sensitive symbols): ${TOKEN_SYMBOLS.join(", ")}.
@@ -128,15 +135,33 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "get_signals",
+    description:
+      "Read the real-time decision signals for a potential trade: peg deviations (USDC/EURC), spot prices, and the live quote-implied price impact. Pass tokenIn/tokenOut/amountIn for a trade-specific read, or no args for a general peg/price snapshot. Read-only. Call this before swapping.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tokenIn: { type: "string", description: "Symbol to swap from (optional)." },
+        tokenOut: { type: "string", description: "Symbol to swap into (optional)." },
+        amountIn: { type: "string", description: "Decimal amount of tokenIn (optional)." },
+      },
+    },
+  },
+  {
     name: "swap",
     description:
-      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately.",
+      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately, but is BLOCKED if the live signals breach the safety thresholds (peg / price impact) unless force=true.",
     input_schema: {
       type: "object",
       properties: {
         tokenIn: { type: "string", description: "Symbol to swap from." },
         tokenOut: { type: "string", description: "Symbol to swap into." },
         amountIn: { type: "string", description: "Decimal amount of tokenIn." },
+        force: {
+          type: "boolean",
+          description:
+            "Override the safety guard. Only set true after the user has been told the risk and explicitly insists.",
+        },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
@@ -221,10 +246,36 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
         amountOut: formatUnits(BigInt(q.amountOutRaw), getToken(q.tokenOut).decimals),
       };
     }
-    case "swap": {
+    case "get_signals": {
       const { tokenIn, tokenOut, amountIn } = input;
+      return await getTradeSignals({
+        ...(isTokenSymbol(tokenIn) ? { tokenIn } : {}),
+        ...(isTokenSymbol(tokenOut) ? { tokenOut } : {}),
+        ...(typeof amountIn === "string" ? { amountIn } : {}),
+      });
+    }
+    case "swap": {
+      const { tokenIn, tokenOut, amountIn, force } = input;
       if (!isTokenSymbol(tokenIn) || !isTokenSymbol(tokenOut)) {
         throw new Error(`tokens must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
+      }
+      // Decision guardrail: hold the swap if live signals breach the safety
+      // thresholds, unless the caller explicitly forces it. Signal-feed
+      // failures don't block (verdict stays ok when data is missing).
+      if (force !== true) {
+        let verdict: { ok: boolean; reasons: string[] } | null = null;
+        try {
+          ({ verdict } = await getTradeSignals({
+            tokenIn,
+            tokenOut,
+            amountIn: String(amountIn),
+          }));
+        } catch (err) {
+          logger.warn({ err, tokenIn, tokenOut }, "agent swap signal check failed; proceeding");
+        }
+        if (verdict && !verdict.ok) {
+          throw new Error(`Swap held by the safety guard — ${verdict.reasons.join("; ")}.`);
+        }
       }
       const r = await swapFromAgentWallet({
         privyUserId,
