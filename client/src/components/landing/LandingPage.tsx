@@ -1,15 +1,5 @@
 import { useState, type ReactNode } from "react";
-import {
-  Sun,
-  Moon,
-  ChevronDown,
-  Play,
-  ShieldCheck,
-  Bot,
-  Wallet,
-  BarChart3,
-  Trophy,
-} from "lucide-react";
+import { Sun, Moon, ChevronDown, ShieldCheck, Bot, Wallet, BarChart3, Trophy } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme.tsx";
 import { Logo } from "@/components/shell/Logo.tsx";
 import { NetworkLogo } from "@/components/shell/network-icons.tsx";
@@ -121,17 +111,16 @@ function DemoVideo() {
           background: "radial-gradient(circle at 50% 50%, rgba(139,108,240,0.08), rgba(0,0,0,0))",
         }}
       >
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <button
-            type="button"
-            aria-label="Play demo (coming soon)"
-            disabled
-            className="h-16 w-16 rounded-full bg-accent text-white flex items-center justify-center shadow-lg cursor-not-allowed opacity-90"
-          >
-            <Play className="h-7 w-7 ml-0.5" fill="currentColor" />
-          </button>
-          <p className="text-[12px] text-text-mute">Demo video coming soon</p>
-        </div>
+        <video
+          className="absolute inset-0 h-full w-full object-cover"
+          controls
+          playsInline
+          preload="metadata"
+          aria-label="Mantua demo video"
+        >
+          <source src="/assets/demo.mp4" type="video/mp4" />
+          Your browser doesn&apos;t support embedded video.
+        </video>
       </div>
     </section>
   );
