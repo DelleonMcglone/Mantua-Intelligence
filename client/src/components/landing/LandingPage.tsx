@@ -105,14 +105,13 @@ function DemoVideo() {
   return (
     <section className="w-full max-w-4xl mt-6">
       <div
-        className="relative rounded-xl border border-border-soft overflow-hidden"
+        className="rounded-xl border border-border-soft overflow-hidden"
         style={{
-          aspectRatio: "16 / 8.5",
           background: "radial-gradient(circle at 50% 50%, rgba(139,108,240,0.08), rgba(0,0,0,0))",
         }}
       >
         <video
-          className="absolute inset-0 h-full w-full object-cover"
+          className="block w-full h-auto"
           controls
           playsInline
           preload="metadata"
