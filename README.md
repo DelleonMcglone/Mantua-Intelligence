@@ -122,6 +122,11 @@ deploy/   Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
 - **Per-hook routing.** `getV4StackForHook(poolKey.hooks)` resolves the PoolManager + periphery
   for a pool from its hook address, so each pool's operations target its own stack. No-hook pools
   fall back to the Stable Protection ("hero") stack.
+- **Signals.** `GET /api/signals` exposes the same real-signal layer the autonomous agent reads
+  via its internal `get_signals` tool — peg deviations, spot prices, the live quote-implied price
+  impact, and a threshold-based `verdict`. With no params it returns the USDC/EURC peg snapshot;
+  with `?tokenIn=USDC&tokenOut=EURC&amountIn=100` it adds the trade signal + verdict for that swap.
+  Public read-only, rate-limited per wallet/IP (like `/api/analyze`).
 - **Wallets.** Users connect via Privy (embedded + external). Agents use Circle CDP AgentKit
   server-managed wallets — the user's signing key is never touched by the agent path.
 - **Hook source repos.** [stableprotection-hook](https://github.com/DelleonMcglone/stableprotection-hook) ·

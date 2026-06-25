@@ -1,5 +1,5 @@
 import { formatUnits } from "viem";
-import { getToken, type TokenSymbol } from "./tokens.ts";
+import { getToken, isTokenSymbol, type TokenSymbol } from "./tokens.ts";
 import { getUsdPrice } from "./usd-pricing.ts";
 import { getTokenPrices } from "./defillama.ts";
 import { quoteAgentSwap } from "./agent-swap.ts";
@@ -162,4 +162,54 @@ export async function getTradeSignals(args: {
     trade,
     verdict: { ok: reasons.length === 0, reasons },
   };
+}
+
+/** Validated arguments for `getTradeSignals`, as parsed from a request query. */
+export interface SignalsQuery {
+  tokenIn?: TokenSymbol;
+  tokenOut?: TokenSymbol;
+  amountIn?: string;
+}
+
+export type ParseSignalsResult =
+  | { ok: true; value: SignalsQuery }
+  | { ok: false; error: string };
+
+/**
+ * Pure validator for the `GET /api/signals` query string. Mirrors what
+ * `getTradeSignals` actually consumes: all params are optional (no params →
+ * peg-only snapshot), but anything supplied must be well-formed so the route
+ * fails fast instead of silently dropping a typo'd symbol or a junk amount.
+ *
+ * Kept network-free and side-effect-free so it can be unit tested directly.
+ */
+export function parseSignalsQuery(query: Record<string, unknown>): ParseSignalsResult {
+  const asString = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
+
+  const out: SignalsQuery = {};
+
+  for (const key of ["tokenIn", "tokenOut"] as const) {
+    const raw = asString(query[key]);
+    if (raw === undefined) continue;
+    if (!isTokenSymbol(raw)) {
+      return { ok: false, error: `Unknown token symbol for ${key}: ${raw}` };
+    }
+    out[key] = raw;
+  }
+
+  const amountRaw = asString(query.amountIn);
+  if (amountRaw !== undefined) {
+    const n = Number(amountRaw);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { ok: false, error: `amountIn must be a positive number: ${amountRaw}` };
+    }
+    out.amountIn = amountRaw;
+  }
+
+  if (out.tokenIn && out.tokenOut && out.tokenIn === out.tokenOut) {
+    return { ok: false, error: "tokenIn and tokenOut must differ" };
+  }
+
+  return { ok: true, value: out };
 }
