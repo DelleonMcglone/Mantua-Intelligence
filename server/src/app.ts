@@ -28,6 +28,7 @@ import { positionsRouter } from "./routes/positions.ts";
 import { quoteRouter } from "./routes/quote.ts";
 import { swapRouter } from "./routes/swap.ts";
 import { tokenPricesRouter } from "./routes/token-prices.ts";
+import { pairPriceChartRouter } from "./routes/pair-price-chart.ts";
 import { v4SwapRouter } from "./routes/v4-swap.ts";
 
 /**
@@ -56,6 +57,7 @@ app.use(portfolioRouter);
 app.use(quoteRouter);
 app.use(swapRouter);
 app.use(tokenPricesRouter);
+app.use(pairPriceChartRouter);
 app.use(v4SwapRouter);
 app.use(agentWalletsRouter);
 app.use(agentFundRouter);

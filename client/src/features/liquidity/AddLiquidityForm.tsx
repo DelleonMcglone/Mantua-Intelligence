@@ -22,6 +22,8 @@ import {
   recommendedHookForPair,
 } from "./hook-recommendations.ts";
 import { useTokenPrices } from "./use-token-prices.ts";
+import { usePairPriceChart } from "./use-pair-price-chart.ts";
+import { PairRateChart } from "./PairRateChart.tsx";
 
 export interface PoolKeyContext {
   tokenA: TokenSymbol;
@@ -77,7 +79,7 @@ type ChartRange = (typeof CHART_RANGES)[number];
  *
  *   inline pair header (back + token pair + hook badge) ·
  *   "Fee · TVL · APY" stats row ·
- *   chart tabs (Volume / TVL) + range toggle (1D/7D/30D) + sparkline ·
+ *   pair-price label + range toggle (1D/7D/30D) + price chart ·
  *   two TokenInput cards with flip button ·
  *   LIQUIDITY HOOK dropdown + PRICE RANGE toggle ·
  *   Fee Tier · Hook Benefit · Review & Sign Position
@@ -117,7 +119,6 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const [amountA, setAmountA] = useState(ctx?.amountA ?? "0.0");
   const [amountB, setAmountB] = useState(ctx?.amountB ?? "0.0");
   const [chartRange, setChartRange] = useState<ChartRange>("7D");
-  const [chartTab, setChartTab] = useState<"volume" | "tvl">("volume");
   const [range, setRange] = useState<RangeOption>("Full");
   const confirm = useConfirmedAction();
   const add = useAddLiquidity();
@@ -137,6 +138,11 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
     if (isStable(tokenA) && isStable(tokenB)) return 1;
     return null;
   }, [tokenPrices.prices, tokenA, tokenB, hook]);
+
+  // Real pair exchange-rate history (tokenB priced in tokenA) for the price
+  // chart, driven by the range toggle. Reference prices from DefiLlama since
+  // testnet pools have no index of their own.
+  const pairChart = usePairPriceChart(tokenA, tokenB, chartRange);
 
   function onAmountAChange(value: string) {
     setAmountA(value);
@@ -226,26 +232,11 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           <span>APY — —</span>
         </div>
 
-        {/* Chart tabs + range toggle */}
+        {/* Pair price label + range toggle */}
         <div className="flex items-center gap-4 text-[12px] border-b border-border-soft pb-2">
-          <button
-            type="button"
-            onClick={() => {
-              setChartTab("volume");
-            }}
-            className={`pb-1.5 -mb-2 ${chartTab === "volume" ? "text-text font-medium border-b-2 border-amber" : "text-text-dim"}`}
-          >
-            Volume
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setChartTab("tvl");
-            }}
-            className={`pb-1.5 -mb-2 ${chartTab === "tvl" ? "text-text font-medium border-b-2 border-amber" : "text-text-dim"}`}
-          >
-            TVL
-          </button>
+          <span className="text-[11px] text-text-mute">
+            {tokenA}/{tokenB} Price
+          </span>
           <div className="flex-1" />
           <div className="flex gap-0.5 bg-bg-elev p-0.5 rounded-md border border-border-soft">
             {CHART_RANGES.map((r) => (
@@ -265,12 +256,19 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
           </div>
         </div>
 
-        {/* Chart */}
+        {/* Chart — real pair exchange rate over the selected range. */}
         <div className="mt-2.5">
-          <div className="text-[11px] text-text-mute mb-1">
-            {tokenA}/{tokenB} Price
-          </div>
-          <Sparkline />
+          {pairChart.error ? (
+            <p className="h-32 flex items-center justify-center text-[11px] text-text-mute">
+              Price history unavailable right now.
+            </p>
+          ) : pairChart.points.length === 0 ? (
+            <p className="h-32 flex items-center justify-center text-[11px] text-text-dim">
+              {pairChart.loading ? "Loading price history…" : "No price history for this pair."}
+            </p>
+          ) : (
+            <PairRateChart points={pairChart.points} height="h-32" />
+          )}
         </div>
 
         {/* Token inputs + flip button */}
@@ -517,39 +515,5 @@ function TokenInputCard({
         <span className="font-mono">$—</span>
       </div>
     </div>
-  );
-}
-
-const SPARK_POINTS = Array.from(
-  { length: 28 },
-  (_, i) => 55 + Math.sin(i * 0.9) * 6 + Math.cos(i * 1.4) * 3,
-);
-
-function Sparkline() {
-  const path = useMemo(() => {
-    const w = 480;
-    const h = 130;
-    const pad = 14;
-    const mn = Math.min(...SPARK_POINTS);
-    const mx = Math.max(...SPARK_POINTS);
-    const sx = (i: number) => pad + (i / (SPARK_POINTS.length - 1)) * (w - pad * 2);
-    const sy = (v: number) => pad + (1 - (v - mn) / (mx - mn + 0.001)) * (h - pad * 2);
-    const line = SPARK_POINTS.map(
-      (v, i) => `${i === 0 ? "M" : "L"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`,
-    ).join(" ");
-    const area = `${line} L${String(sx(SPARK_POINTS.length - 1))},${String(h - pad)} L${String(sx(0))},${String(h - pad)} Z`;
-    return { line, area };
-  }, []);
-  return (
-    <svg viewBox="0 0 480 130" width="100%" style={{ display: "block" }}>
-      <defs>
-        <linearGradient id="alFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="var(--amber)" stopOpacity=".25" />
-          <stop offset="1" stopColor="var(--amber)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={path.area} fill="url(#alFill)" />
-      <path d={path.line} fill="none" stroke="var(--amber)" strokeWidth="1.5" />
-    </svg>
   );
 }
