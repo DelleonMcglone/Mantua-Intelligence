@@ -4,6 +4,8 @@ import type { PairRatePoint } from "./use-pair-price-chart.ts";
 
 interface Props {
   points: PairRatePoint[];
+  /** Tailwind height class for the chart container. Defaults to h-64. */
+  height?: string;
 }
 
 /**
@@ -12,7 +14,7 @@ interface Props {
  * the price formatter adapts its precision to the rate magnitude so both
  * near-1 stable/stable rates and large cirBTC rates read cleanly.
  */
-export function PairRateChart({ points }: Props) {
+export function PairRateChart({ points, height = "h-64" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -52,7 +54,7 @@ export function PairRateChart({ points }: Props) {
     };
   }, [points]);
 
-  return <div ref={containerRef} className="w-full h-64" />;
+  return <div ref={containerRef} className={`w-full ${height}`} />;
 }
 
 /** Adaptive precision: more decimals for near-1 rates, fewer for large ones. */

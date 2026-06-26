@@ -56,7 +56,12 @@ pairPriceChartRouter.get("/api/pair-price-chart", async (req: Request, res: Resp
     const baseId = `coingecko:${getToken(base, DEFAULT_CHAIN_ID).coingeckoId}`;
     const quoteId = `coingecko:${getToken(quote, DEFAULT_CHAIN_ID).coingeckoId}`;
     const days = rangeToDays(range);
-    const series = await getTokenHistoricalPrices([baseId, quoteId], days, 120);
+    // Aim for a ~6h sample cadence — finer periods (sub-hourly) come back
+    // sparse/empty from DefiLlama for stablecoin feeds, so short ranges like
+    // 7D would otherwise yield no points. Clamp so 1D still has a few samples
+    // and long ranges stay bounded.
+    const samples = Math.min(160, Math.max(8, Math.round((days * 24) / 6)));
+    const series = await getTokenHistoricalPrices([baseId, quoteId], days, samples);
 
     const baseSeries = series[baseId] ?? [];
     const quoteSeries = series[quoteId] ?? [];
