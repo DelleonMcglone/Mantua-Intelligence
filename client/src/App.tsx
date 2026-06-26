@@ -151,6 +151,12 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
             window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
             return;
           }
+          // While the analyze thread is open, forward input to it so the
+          // conversation appends a turn instead of remounting the panel.
+          if (route.kind === "analyze") {
+            window.dispatchEvent(new CustomEvent("mantua:analyze-input", { detail: text }));
+            return;
+          }
           handleChatCommand(text, setRoute);
         }}
       />
@@ -250,12 +256,11 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
     case "analyze":
-      // Key on topic+question+symbol so submitting a fresh query while
-      // already on the analyze panel remounts with the new initial
-      // state — otherwise the seeded useState wouldn't update.
+      // No remount key: the panel is a persistent conversation thread. The
+      // first query seeds turn 1 from these props; later input arrives via the
+      // `mantua:analyze-input` event (see InputBar above) and appends.
       return (
         <AnalyzePanel
-          key={`${route.topic ?? "none"}|${route.question ?? ""}|${route.symbol ?? ""}`}
           {...(route.topic ? { initialTopic: route.topic } : {})}
           {...(route.question ? { initialQuestion: route.question } : {})}
           {...(route.symbol ? { initialSymbol: route.symbol } : {})}

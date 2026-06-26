@@ -1,8 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { ApiError, api } from "@/lib/api.ts";
+import { Banner, Spinner } from "@/features/agent/agent-primitives.tsx";
+import { UserBubble, RichText, Caret } from "@/features/agent/chat-text.tsx";
+import {
+  streamAnalyzeChat,
+  AnalyzeStreamError,
+  type AnalyzeHistoryTurn,
+} from "./analyze-stream.ts";
+import { resolveAnalyzeQuestion } from "./question-router.ts";
 
 interface AnalyzeMetric {
   label: string;
@@ -48,27 +56,57 @@ const SUGGESTIONS: { topic: Topic; question: string }[] = [
   { topic: "coinbase-prices", question: "Coinbase spot prices for USDC, EURC, cirBTC" },
 ];
 
+// --- Conversation turn model -------------------------------------------------
+
+interface UserTurn {
+  id: string;
+  role: "user";
+  text: string;
+}
+/** A deterministic, cited answer from a known analyze topic. */
+interface TopicTurn {
+  id: string;
+  role: "topic";
+  topic: string;
+  symbol?: string;
+  data: AnalyzeResponse | null;
+  loading: boolean;
+  error: string | null;
+}
+/** An AI-streamed free-form research answer. */
+interface ChatTurn {
+  id: string;
+  role: "chat";
+  text: string;
+  streaming: boolean;
+  failed?: string;
+}
+type Turn = UserTurn | TopicTurn | ChatTurn;
+
+let seq = 0;
+const nextId = () => `t${String(++seq)}`;
+
 interface AnalyzePanelProps {
   onClose: () => void;
-  /** Skip the suggestions screen and run this topic immediately —
-   *  used when the chat input matched a known topic. */
+  /** Skip the suggestions and run this topic immediately (chat input matched a
+   *  known topic). */
   initialTopic?: Topic;
-  /** Original free-form question to label the result panel with. */
+  /** Original free-form question — seeds the first turn. */
   initialQuestion?: string;
-  /** Token symbol to pass to the `token-price` runner — only
-   *  meaningful when initialTopic === "token-price". */
+  /** Token symbol for the `token-price` runner. */
   initialSymbol?: string;
 }
 
 /**
- * Analyze & Research panel — backs each suggestion button with a real
- * /api/analyze fetch (CoinGecko prices, DefiLlama Base pools,
- * curated educational copy for hooks). The previous "Phase 7"
- * stub is gone; failures fall back to a plain-error inline message.
+ * Analyze & Research — a conversational, inline research thread. Each
+ * suggestion-card click or typed question appends a turn:
+ *   - questions that map to a known topic are answered by the fast, cited
+ *     deterministic `/api/analyze` runner (rendered as a structured card)
+ *   - anything else streams from the read-only AI analyst (`/api/analyze/chat`)
  *
- * No standalone chat input lives here — the bottom-right `<InputBar />`
- * (rendered by `App.tsx`) is the only natural-language surface in the
- * prototype.
+ * Input comes from the global `<InputBar />`: while this panel is open, App.tsx
+ * forwards submissions here via the `mantua:analyze-input` event (so the thread
+ * persists instead of remounting per query).
  */
 export function AnalyzePanel({
   onClose,
@@ -76,135 +114,275 @@ export function AnalyzePanel({
   initialQuestion,
   initialSymbol,
 }: AnalyzePanelProps) {
-  const [phase, setPhase] = useState<"suggest" | "result">(initialTopic ? "result" : "suggest");
-  const [active, setActive] = useState<{
-    topic: Topic;
-    question: string;
-    symbol?: string;
-  } | null>(
-    initialTopic
-      ? {
-          topic: initialTopic,
-          question:
-            initialQuestion ?? SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? "",
-          ...(initialSymbol ? { symbol: initialSymbol } : {}),
-        }
-      : null,
-  );
-  const [data, setData] = useState<AnalyzeResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [messages, setMessages] = useState<Turn[]>([]);
+  const busyRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<Turn[]>([]);
 
   useEffect(() => {
-    if (phase !== "result" || !active) return;
-    let cancelled = false;
-    // Reset to the loading state before kicking off the fetch below.
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setLoading(true);
-    setError(null);
-    setData(null);
-    /* eslint-enable react-hooks/set-state-in-effect */
-    const params = new URLSearchParams({ topic: active.topic });
-    if (active.symbol) params.set("symbol", active.symbol);
-    api
-      .get<AnalyzeResponse>(`/api/analyze?${params.toString()}`)
-      .then((res) => {
-        if (cancelled) return;
-        setData(res);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const msg =
-          err instanceof ApiError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : "Unknown error";
-        setError(msg);
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [phase, active, reloadKey]);
+    messagesRef.current = messages;
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
 
-  function runQuery(topic: Topic, question: string) {
-    setActive({ topic, question });
-    setPhase("result");
-    setReloadKey((k) => k + 1);
-  }
-  function retry() {
-    setReloadKey((k) => k + 1);
-  }
+  const patch = useCallback((id: string, fn: (t: Turn) => Turn) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? fn(m) : m)));
+  }, []);
+
+  // Deterministic topic fetch for a given turn id.
+  const fetchTopic = useCallback(
+    (id: string, topic: string, symbol?: string) => {
+      patch(id, (m) => (m.role === "topic" ? { ...m, loading: true, error: null, data: null } : m));
+      const params = new URLSearchParams({ topic });
+      if (symbol) params.set("symbol", symbol);
+      api
+        .get<AnalyzeResponse>(`/api/analyze?${params.toString()}`)
+        .then((res) => {
+          patch(id, (m) => (m.role === "topic" ? { ...m, data: res, loading: false } : m));
+        })
+        .catch((err: unknown) => {
+          const msg =
+            err instanceof ApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : "Unknown error";
+          patch(id, (m) => (m.role === "topic" ? { ...m, error: msg, loading: false } : m));
+        });
+    },
+    [patch],
+  );
+
+  // Append a user turn + a deterministic topic turn, then fetch it.
+  const seedTopic = useCallback(
+    (topic: string, question: string, symbol?: string) => {
+      const userTurn: UserTurn = { id: nextId(), role: "user", text: question };
+      const turnId = nextId();
+      const topicTurn: TopicTurn = {
+        id: turnId,
+        role: "topic",
+        topic,
+        ...(symbol ? { symbol } : {}),
+        data: null,
+        loading: true,
+        error: null,
+      };
+      setMessages((prev) => [...prev, userTurn, topicTurn]);
+      fetchTopic(turnId, topic, symbol);
+    },
+    [fetchTopic],
+  );
+
+  // AI research stream for a free-form question.
+  const streamChat = useCallback(
+    async (id: string, question: string, history: AnalyzeHistoryTurn[]) => {
+      const ac = new AbortController();
+      abortRef.current = ac;
+      try {
+        await streamAnalyzeChat(
+          { message: question, history },
+          (ev) => {
+            if (ev.type === "text") {
+              patch(id, (m) => (m.role === "chat" ? { ...m, text: m.text + ev.delta } : m));
+            } else if (ev.type === "error") {
+              patch(id, (m) => (m.role === "chat" ? { ...m, failed: ev.message } : m));
+            }
+          },
+          ac.signal,
+        );
+        patch(id, (m) => (m.role === "chat" ? { ...m, streaming: false } : m));
+      } catch (err) {
+        if (ac.signal.aborted) return;
+        const msg =
+          err instanceof AnalyzeStreamError
+            ? err.status === 503
+              ? "Research is unavailable right now."
+              : err.message
+            : "The analyst hit an unexpected error.";
+        patch(id, (m) => (m.role === "chat" ? { ...m, streaming: false, failed: msg } : m));
+      }
+    },
+    [patch],
+  );
+
+  // Plain-text history of prior turns, for AI context.
+  const buildHistory = useCallback((): AnalyzeHistoryTurn[] => {
+    const out: AnalyzeHistoryTurn[] = [];
+    for (const m of messagesRef.current) {
+      if (m.role === "user") out.push({ role: "user", text: m.text });
+      else if (m.role === "topic" && m.data)
+        out.push({ role: "assistant", text: `${m.data.title}: ${m.data.summary}` });
+      else if (m.role === "chat" && m.text) out.push({ role: "assistant", text: m.text });
+    }
+    return out;
+  }, []);
+
+  const ask = useCallback(
+    (raw: string) => {
+      const text = raw.trim();
+      if (!text || busyRef.current) return;
+      busyRef.current = true;
+
+      const resolved = resolveAnalyzeQuestion(text);
+      if (resolved) {
+        seedTopic(resolved.topic, text, resolved.symbol);
+        busyRef.current = false; // deterministic fetch manages its own turn
+        return;
+      }
+
+      const history = buildHistory();
+      const userTurn: UserTurn = { id: nextId(), role: "user", text };
+      const turnId = nextId();
+      const chatTurn: ChatTurn = { id: turnId, role: "chat", text: "", streaming: true };
+      setMessages((prev) => [...prev, userTurn, chatTurn]);
+      void streamChat(turnId, text, history).finally(() => {
+        busyRef.current = false;
+      });
+    },
+    [buildHistory, seedTopic, streamChat],
+  );
+
+  // Suggestion card → user turn + deterministic topic turn.
+  const runSuggestion = useCallback(
+    (s: { topic: Topic; question: string }) => {
+      if (busyRef.current) return;
+      seedTopic(s.topic, s.question);
+    },
+    [seedTopic],
+  );
+
+  // Listen for input forwarded from the global InputBar (App.tsx).
+  const askRef = useRef(ask);
+  useEffect(() => {
+    askRef.current = ask;
+  }, [ask]);
+  useEffect(() => {
+    const onInput = (e: Event) => {
+      askRef.current((e as CustomEvent<string>).detail);
+    };
+    window.addEventListener("mantua:analyze-input", onInput);
+    return () => {
+      window.removeEventListener("mantua:analyze-input", onInput);
+    };
+  }, []);
+
+  // Seed the first turn once from the route props. `seedTopic`/`ask` own their
+  // own setState (not called lexically here), so the thread stays lint-clean.
+  const seededRef = useRef(false);
+  const seedTopicRef = useRef(seedTopic);
+  useEffect(() => {
+    seedTopicRef.current = seedTopic;
+  }, [seedTopic]);
+  useEffect(() => {
+    if (seededRef.current) return;
+    seededRef.current = true;
+    if (initialTopic) {
+      const question =
+        initialQuestion ?? SUGGESTIONS.find((s) => s.topic === initialTopic)?.question ?? "Analyze";
+      seedTopicRef.current(initialTopic, question, initialSymbol);
+    } else if (initialQuestion) {
+      askRef.current(initialQuestion);
+    }
+  }, [initialTopic, initialQuestion, initialSymbol]);
+
+  const newChat = useCallback(() => {
+    abortRef.current?.abort();
+    busyRef.current = false;
+    setMessages([]);
+  }, []);
 
   return (
     <>
-      <PanelHeader />
-
+      <PanelHeader onNewChat={newChat} />
       <PanelSubHeader
-        {...(phase !== "suggest"
-          ? {
-              onBack: () => {
-                setPhase("suggest");
-              },
-            }
-          : {})}
-        title={
-          phase === "suggest" ? (
-            "Analyze & Research"
-          ) : (
-            <>
-              Research — <span className="text-accent">{active?.question}</span>
-            </>
-          )
-        }
-        subtitle={
-          phase === "suggest"
-            ? "Pick a suggestion or type what you want to analyze."
-            : "Agentic token & protocol analysis."
-        }
+        title="Analyze & Research"
+        subtitle="Ask about prices, pegs, pools, or anything markets — pick a suggestion or type."
         onClose={onClose}
       />
 
-      <div className="px-5 py-3.5 flex-1 overflow-auto">
-        {phase === "suggest" && (
-          <>
-            {initialQuestion && (
-              <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3 mb-4 text-[13px] text-text-dim">
-                Got your question: <span className="text-text">"{initialQuestion}"</span>
-                <div className="text-[11px] text-text-mute mt-1">
-                  I don't have a dedicated runner for this yet — pick a related suggestion below or
-                  rephrase.
-                </div>
-              </div>
-            )}
-            <div className="text-[11px] text-text-mute tracking-[0.08em] mb-2.5 font-semibold">
-              SUGGESTED QUESTIONS
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s.topic}
-                  type="button"
-                  onClick={() => {
-                    runQuery(s.topic, s.question);
-                  }}
-                  className="flex items-center px-3.5 py-3.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left text-[13px] leading-snug font-medium min-h-[56px] hover:border-accent transition-colors"
-                >
-                  {s.question}
-                </button>
-              ))}
-            </div>
-          </>
+      <div className="px-5 py-3.5 flex-1 overflow-auto flex flex-col gap-3.5">
+        {messages.length === 0 ? (
+          <EmptyState onPick={runSuggestion} />
+        ) : (
+          messages.map((m) => <TurnView key={m.id} turn={m} onRetry={fetchTopic} />)
         )}
-
-        {phase === "result" && (
-          <ResultBody data={data} loading={loading} error={error} onRetry={retry} />
-        )}
+        <div ref={endRef} />
       </div>
     </>
+  );
+}
+
+function EmptyState({ onPick }: { onPick: (s: { topic: Topic; question: string }) => void }) {
+  return (
+    <>
+      <div className="text-[11px] text-text-mute tracking-[0.08em] mb-1 font-semibold">
+        SUGGESTED QUESTIONS
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {SUGGESTIONS.map((s) => (
+          <button
+            key={s.topic}
+            type="button"
+            onClick={() => {
+              onPick(s);
+            }}
+            className="flex items-center px-3.5 py-3.5 bg-bg-elev border border-border-soft rounded-md cursor-pointer text-left text-[13px] leading-snug font-medium min-h-[56px] hover:border-accent transition-colors"
+          >
+            {s.question}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function TurnView({
+  turn,
+  onRetry,
+}: {
+  turn: Turn;
+  onRetry: (id: string, topic: string, symbol?: string) => void;
+}) {
+  if (turn.role === "user") return <UserBubble text={turn.text} />;
+  if (turn.role === "chat") {
+    const thinking = turn.streaming && turn.text === "";
+    return (
+      <div className="self-stretch flex flex-col gap-2.5">
+        {thinking && (
+          <div className="flex items-center gap-2">
+            <Spinner agent />
+            <span className="text-[13px] text-text-dim">Researching…</span>
+          </div>
+        )}
+        {turn.text && (
+          <div
+            className="text-[13px] text-text leading-relaxed"
+            style={{ whiteSpace: "pre-wrap", maxWidth: "92%" }}
+          >
+            <RichText text={turn.text} />
+            {turn.streaming && <Caret />}
+          </div>
+        )}
+        {turn.failed && (
+          <Banner tone="error" icon="⊘" title="Something went wrong">
+            {turn.failed}
+          </Banner>
+        )}
+      </div>
+    );
+  }
+  // topic turn
+  return (
+    <div className="self-stretch">
+      <ResultBody
+        data={turn.data}
+        loading={turn.loading}
+        error={turn.error}
+        onRetry={() => {
+          onRetry(turn.id, turn.topic, turn.symbol);
+        }}
+      />
+    </div>
   );
 }
 

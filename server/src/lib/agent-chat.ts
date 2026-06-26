@@ -42,7 +42,7 @@ export class AnthropicUnavailableError extends Error {
 }
 
 let cachedClient: Anthropic | null = null;
-function getAnthropic(): Anthropic {
+export function getAnthropic(): Anthropic {
   if (cachedClient) return cachedClient;
   if (!env.ANTHROPIC_API_KEY) throw new AnthropicUnavailableError();
   cachedClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
