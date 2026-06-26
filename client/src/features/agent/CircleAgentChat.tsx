@@ -8,13 +8,10 @@ import {
 } from "react";
 import { ArrowLeft, Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
-import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { getExplorerAddressUrl } from "@/lib/chains.ts";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import { AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
 import {
   Banner,
-  CopyButton,
   DetailRows,
   PANEL_HEAD,
   PANEL_TITLE,
@@ -23,6 +20,7 @@ import {
   X_CLOSE,
 } from "./agent-primitives.tsx";
 import { streamAgentChat, AgentStreamError, type AgentChatEvent } from "./agent-stream.ts";
+import { UserBubble, RichText, Caret } from "./chat-text.tsx";
 
 /**
  * "Your Circle Agent" — a free-form, autonomous conversational agent.
@@ -261,25 +259,6 @@ export function CircleAgentChat({ onClose }: Props) {
   );
 }
 
-function UserBubble({ text }: { text: string }) {
-  return (
-    <div style={{ alignSelf: "flex-end", maxWidth: "85%" }}>
-      <div
-        style={{
-          background: "var(--accent)",
-          color: "#fff",
-          borderRadius: 12,
-          padding: "8px 12px",
-          fontSize: 13,
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {text}
-      </div>
-    </div>
-  );
-}
-
 function AssistantBubble({ msg }: { msg: AssistantMsg }) {
   const showThinking = msg.streaming && msg.text === "" && msg.steps.length === 0;
   return (
@@ -316,103 +295,6 @@ function AssistantBubble({ msg }: { msg: AssistantMsg }) {
         </Banner>
       )}
     </div>
-  );
-}
-
-/** Inline EVM address — short form, copy button, and an ArcScan link. */
-function AddressInline({ addr }: { addr: string }) {
-  const chainId = useCurrentChainId();
-  const url = getExplorerAddressUrl(chainId, addr);
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "1px 7px",
-        borderRadius: 7,
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-soft)",
-        verticalAlign: "baseline",
-      }}
-    >
-      <span className="mono" style={{ fontSize: 12 }}>
-        {shortAddr(addr)}
-      </span>
-      <CopyButton value={addr} label="Copy address" />
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ color: "var(--text-dim)", textDecoration: "none", fontSize: 11 }}
-        aria-label="View on ArcScan"
-      >
-        ↗
-      </a>
-    </span>
-  );
-}
-
-/**
- * Render assistant text as plain prose with clickable links and copyable
- * addresses. The model is told to avoid Markdown, but we defensively unwrap any
- * stray **bold** (showing the inner text, no asterisks), turn full URLs into
- * links, and turn 0x addresses into copy + ArcScan chips.
- */
-function RichText({ text }: { text: string }) {
-  const nodes: ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*|(https?:\/\/[^\s<>()]+)|(0x[a-fA-F0-9]{40})/g;
-  let last = 0;
-  let key = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) nodes.push(text.slice(last, m.index));
-    const whole = m[0];
-    if (whole.startsWith("**")) {
-      // Stray **bold** — show the inner text, drop the asterisks.
-      nodes.push(<span key={key++}>{whole.slice(2, -2)}</span>);
-    } else if (whole.startsWith("0x")) {
-      nodes.push(<AddressInline key={key++} addr={whole} />);
-    } else {
-      let url = whole;
-      let suffix = "";
-      const trail = /[.,;:!?)]+$/.exec(url);
-      if (trail) {
-        suffix = trail[0];
-        url = url.slice(0, -suffix.length);
-      }
-      nodes.push(
-        <a
-          key={key++}
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--accent)", textDecoration: "none" }}
-        >
-          {url}
-        </a>,
-      );
-      if (suffix) nodes.push(suffix);
-    }
-    last = re.lastIndex;
-  }
-  if (last < text.length) nodes.push(text.slice(last));
-  return <>{nodes}</>;
-}
-
-function Caret() {
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        width: 7,
-        height: 14,
-        marginLeft: 2,
-        verticalAlign: "text-bottom",
-        background: "var(--text-dim)",
-        animation: "blink 1s steps(2) infinite",
-      }}
-    />
   );
 }
 
