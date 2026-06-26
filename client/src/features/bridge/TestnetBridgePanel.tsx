@@ -20,12 +20,23 @@ function fmtBalance(raw: bigint): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
-export function TestnetBridgePanel({ onClose }: { onClose?: () => void }) {
+export function TestnetBridgePanel({
+  onClose,
+  initialAmount,
+  initialDestination,
+}: {
+  onClose?: () => void;
+  initialAmount?: string;
+  initialDestination?: string;
+}) {
   const portfolio = usePortfolio();
   const confirm = useConfirmedAction();
   const bridge = useBridge();
-  const [amount, setAmount] = useState("");
-  const [destination, setDestination] = useState<BridgeDestination>(BRIDGE_DESTINATIONS[0]);
+  const [amount, setAmount] = useState(initialAmount ?? "");
+  const [destination, setDestination] = useState<BridgeDestination>(
+    () =>
+      BRIDGE_DESTINATIONS.find((d) => d.sdkName === initialDestination) ?? BRIDGE_DESTINATIONS[0],
+  );
 
   const walletAddress = portfolio.walletAddress;
   const balanceRaw = useMemo(() => {

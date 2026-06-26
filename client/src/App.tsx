@@ -57,7 +57,7 @@ type Route =
       /** Free-form symbol to pass to the `token-price` runner. */
       symbol?: string;
     }
-  | { kind: "bridge" }
+  | { kind: "bridge"; amount?: string; destination?: string; nonce?: number }
   | { kind: "agent" };
 
 export default function App() {
@@ -274,6 +274,9 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "bridge":
       return (
         <BridgePanel
+          key={`bridge-${String(route.nonce ?? 0)}`}
+          {...(route.amount ? { initialAmount: route.amount } : {})}
+          {...(route.destination ? { initialDestination: route.destination } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -355,6 +358,14 @@ function nextSwapNonce(): number {
   return swapNonce;
 }
 
+// Same trick for bridge: a fresh nonce per command remounts the panel so a
+// repeated "bridge … to …" re-applies the parsed amount/destination.
+let bridgeNonce = 0;
+function nextBridgeNonce(): number {
+  bridgeNonce += 1;
+  return bridgeNonce;
+}
+
 function intentToRoute(intent: Intent): Route {
   switch (intent.kind) {
     case "home":
@@ -391,6 +402,11 @@ function intentToRoute(intent: Intent): Route {
         ...(intent.symbol ? { symbol: intent.symbol } : {}),
       };
     case "bridge":
-      return { kind: "bridge" };
+      return {
+        kind: "bridge",
+        ...(intent.amount ? { amount: intent.amount } : {}),
+        ...(intent.destination ? { destination: intent.destination } : {}),
+        nonce: nextBridgeNonce(),
+      };
   }
 }

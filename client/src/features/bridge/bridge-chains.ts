@@ -26,6 +26,27 @@ export interface BridgeDestination {
 /** Source is fixed: the app lives on Arc Testnet. */
 export const SOURCE_CHAIN = "Arc_Testnet" as const;
 
+/** Word/alias → destination, for parsing typed bridge commands. Order matters:
+ *  more specific aliases first so "arbitrum" doesn't swallow "arb" etc. */
+const DESTINATION_ALIASES: { sdkName: BridgeChainName; aliases: RegExp }[] = [
+  { sdkName: "Base_Sepolia", aliases: /\bbase\b/ },
+  { sdkName: "Arbitrum_Sepolia", aliases: /\b(arbitrum|arb)\b/ },
+  { sdkName: "Unichain_Sepolia", aliases: /\b(unichain|uni)\b/ },
+  { sdkName: "Avalanche_Fuji", aliases: /\b(avalanche|avax|fuji)\b/ },
+  // Ethereum last: plain "sepolia"/"eth"/"ethereum" → Ethereum Sepolia only if
+  // none of the more specific chains matched above.
+  { sdkName: "Ethereum_Sepolia", aliases: /\b(ethereum|eth|sepolia|mainnet)\b/ },
+];
+
+/** Match a destination chain from free text ("bridge 10 USDC to base"). */
+export function matchBridgeDestination(text: string): BridgeDestination | undefined {
+  const t = text.toLowerCase();
+  for (const { sdkName, aliases } of DESTINATION_ALIASES) {
+    if (aliases.test(t)) return BRIDGE_DESTINATIONS.find((d) => d.sdkName === sdkName);
+  }
+  return undefined;
+}
+
 export const BRIDGE_DESTINATIONS: BridgeDestination[] = [
   {
     sdkName: "Base_Sepolia",

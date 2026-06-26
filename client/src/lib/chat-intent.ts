@@ -15,6 +15,7 @@
 import type { TokenSymbol } from "./tokens.ts";
 import type { FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
+import { matchBridgeDestination } from "@/features/bridge/bridge-chains.ts";
 
 export type AnalyzeTopic =
   | "eth-price"
@@ -51,7 +52,7 @@ export type Intent =
   | { kind: "create-pool"; ctx?: PoolKeyCtx }
   | { kind: "remove-liquidity" }
   | { kind: "positions" }
-  | { kind: "bridge" }
+  | { kind: "bridge"; amount?: string; destination?: string }
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
   | {
@@ -171,11 +172,19 @@ const ACTION_VERB_RE =
 export function detectIntent(text: string): Intent | null {
   const t = text.toLowerCase();
 
-  // Bridge first — "bridge USDC to Base" / "cross-chain transfer" opens the
-  // bridge panel. Checked before swap so the "to <chain>" phrasing isn't read
-  // as a swap pair.
+  // Bridge first — "bridge 10 USDC to Base" / "cross-chain transfer" opens the
+  // bridge panel, pre-filling the amount + destination when present. Checked
+  // before swap so the "to <chain>" phrasing isn't read as a swap pair.
   if (/\bbridge\b/.test(t) || /\bcross[- ]?chain\b/.test(t)) {
-    return { kind: "bridge" };
+    const dest = matchBridgeDestination(text);
+    // First decimal number in the command (e.g. "bridge 10.5 USDC …").
+    const amountMatch = /(\d[\d,]*\.?\d*)/.exec(t);
+    const amount = amountMatch ? amountMatch[1].replace(/,/g, "") : undefined;
+    return {
+      kind: "bridge",
+      ...(amount ? { amount } : {}),
+      ...(dest ? { destination: dest.sdkName } : {}),
+    };
   }
 
   // Pre-flight: when an action verb is paired with two recognized tokens,
