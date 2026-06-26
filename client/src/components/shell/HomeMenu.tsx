@@ -1,8 +1,8 @@
-import { ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
+import { ArrowLeftRight, ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
 import { Logo } from "./Logo.tsx";
 import { PanelHeader } from "./PanelHeader.tsx";
 
-export type HomePromptId = "pool" | "swap" | "analyze" | "agent";
+export type HomePromptId = "pool" | "swap" | "analyze" | "bridge" | "agent";
 
 interface Props {
   onPromptSelect: (id: HomePromptId) => void;
@@ -13,6 +13,7 @@ const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
   { id: "analyze", title: "Analyze and research your favorite token or protocol", icon: BarChart3 },
   { id: "pool", title: "Create / Add Liquidity with Stable protection", icon: Droplet },
   { id: "swap", title: "Swap Stablecoins", icon: ArrowUpDown },
+  { id: "bridge", title: "Bridge USDC to another network", icon: ArrowLeftRight },
   { id: "agent", title: "Create / Manage Agent", icon: Bot },
 ];
 
