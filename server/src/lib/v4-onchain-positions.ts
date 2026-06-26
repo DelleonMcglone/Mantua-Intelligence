@@ -70,6 +70,11 @@ export interface OnchainPosition {
    *  tokenB), read from live v4 feeGrowthInside state. "0" when none. */
   fees0: string;
   fees1: string;
+  /** The pool's CURRENT swap fee from slot0 (v4 pips, 1_000_000 = 100%).
+   *  For dynamic-fee hook pools this is the live rate the hook last set;
+   *  null when slot0 couldn't be read. Used to estimate the LP-vs-hook
+   *  fee split in the earnings route. */
+  currentLpFeePips: number | null;
 }
 
 interface PoolKeyView {
@@ -257,6 +262,7 @@ async function readOnePosition(
           : poolKey.hooks,
       fees0: fees.amount0.toString(),
       fees1: fees.amount1.toString(),
+      currentLpFeePips: slot0 ? slot0.lpFee : null,
     };
   } catch (err) {
     logger.warn(

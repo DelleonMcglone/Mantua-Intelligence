@@ -10,6 +10,8 @@ export type EarningsNetwork = "arc";
 export interface EarningPosition {
   tokenId: string;
   hookAddress: string | null;
+  /** Hook powering the pool ("stable-protection" | "dynamic-fee") or null. */
+  hookName: string | null;
   sym0: string;
   sym1: string;
   /** Raw token units (stringified bigint). */
@@ -20,11 +22,31 @@ export interface EarningPosition {
   accrued1Human: number;
   /** Best-effort USD value of the accrued fees. */
   accruedUsd: number;
+  /** ESTIMATED split of the accrued fees: LP-base portion vs. hook-driven
+   *  portion. `estimated` is true for hooked pools (the dynamic fee varies
+   *  per swap, so this is an approximation, not exact accounting). */
+  lpFeesUsd: number;
+  hookFeesUsd: number;
+  hookShareBps: number;
+  estimated: boolean;
+}
+
+/** Grouped-by-hook earnings summary row (mirrors the server payload). */
+export interface HookGroup {
+  hookName: string | null;
+  label: string;
+  lpFeesUsd: number;
+  hookFeesUsd: number;
+  totalUsd: number;
+  positionCount: number;
 }
 
 export interface EarningsData {
   totalAccruedUsd: number;
+  totalLpFeesUsd: number;
+  totalHookFeesUsd: number;
   positions: EarningPosition[];
+  byHook: HookGroup[];
 }
 
 /** Positions currently holding a non-zero accrued fee balance. */

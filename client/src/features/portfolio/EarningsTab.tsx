@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button.tsx";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { getExplorerTxUrl } from "@/lib/chains.ts";
-import { fmtToken, fmtUsd, shortenHash, type EarningPosition } from "./earnings.ts";
+import { fmtToken, fmtUsd, shortenHash, type EarningPosition, type HookGroup } from "./earnings.ts";
 import type { UseEarnings } from "./use-earnings.ts";
 import { useSweep } from "./use-sweep.ts";
 
@@ -52,10 +52,14 @@ export function EarningsTabBody({
   }
 
   const total = data?.totalAccruedUsd ?? 0;
+  const lpTotal = data?.totalLpFeesUsd ?? 0;
+  const hookTotal = data?.totalHookFeesUsd ?? 0;
   const positions = data?.positions ?? [];
+  const byHook = data?.byHook ?? [];
   const withFees = positions.filter(
     (p) => p.accrued0Human > 0 || p.accrued1Human > 0 || p.accruedUsd > 0,
   );
+  const hasHookFees = positions.some((p) => p.estimated);
 
   return (
     <>
@@ -72,6 +76,15 @@ export function EarningsTabBody({
               : `across ${String(positions.length)} position${positions.length > 1 ? "s" : ""} · Arc Testnet`}
           </div>
         </div>
+
+        {/* LP-vs-hook split of the total (estimated for hooked pools). */}
+        {positions.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <SplitCell label="From liquidity" value={fmtUsd(lpTotal)} />
+            <SplitCell label="From hook" value={fmtUsd(hookTotal)} estimated={hasHookFees} />
+          </div>
+        )}
+
         <div className="flex justify-center mt-3">
           <Button
             variant="primary"
@@ -84,6 +97,18 @@ export function EarningsTabBody({
           </Button>
         </div>
       </div>
+
+      {/* Grouped-by-hook breakdown. */}
+      {byHook.length > 0 && (
+        <div className="px-4 py-3 border-b border-border-soft space-y-1.5">
+          <div className="text-[11px] font-semibold tracking-[0.12em] text-text-mute uppercase">
+            Fees by source
+          </div>
+          {byHook.map((g) => (
+            <HookGroupRow key={g.hookName ?? "none"} g={g} />
+          ))}
+        </div>
+      )}
 
       {positions.length === 0 ? (
         <div className="px-4 py-8 text-center text-[12px] text-text-dim">
@@ -103,6 +128,12 @@ export function EarningsTabBody({
             // hook + tokenId to keep duplicate ids distinct.
             <PositionRow key={`${p.hookAddress ?? "none"}-${p.tokenId}`} p={p} />
           ))}
+          {hasHookFees && (
+            <p className="px-2 pt-2 text-[10px] text-text-mute">
+              LP vs hook split is estimated from each pool&apos;s current fee rate; the dynamic fee
+              varies per swap, so it&apos;s an approximation.
+            </p>
+          )}
         </div>
       )}
 
@@ -129,8 +160,56 @@ function PositionRow({ p }: { p: EarningPosition }) {
         <div className="text-[11px] text-text-mute font-mono mt-0.5">
           {fmtToken(p.accrued0Human)} {p.sym0} · {fmtToken(p.accrued1Human)} {p.sym1}
         </div>
+        {/* Per-position LP-vs-hook split (estimated on hooked pools). */}
+        {p.estimated && (
+          <div className="text-[11px] text-text-mute mt-0.5">
+            LP {fmtUsd(p.lpFeesUsd)} · hook {fmtUsd(p.hookFeesUsd)}
+          </div>
+        )}
       </div>
       <div className="text-[13px] font-mono text-green">{fmtUsd(p.accruedUsd)}</div>
+    </div>
+  );
+}
+
+/** A labelled USD cell in the hero split (From liquidity / From hook). */
+function SplitCell({
+  label,
+  value,
+  estimated,
+}: {
+  label: string;
+  value: string;
+  estimated?: boolean;
+}) {
+  return (
+    <div className="bg-bg-elev rounded-sm px-3 py-2 text-center">
+      <div className="text-[10px] uppercase tracking-wider text-text-mute">
+        {label}
+        {estimated ? " ·est" : ""}
+      </div>
+      <div className="text-[15px] font-mono mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+/** One row of the grouped-by-hook breakdown. */
+function HookGroupRow({ g }: { g: HookGroup }) {
+  return (
+    <div className="flex items-center justify-between text-[12px]">
+      <div className="text-text-dim">
+        {g.label}
+        <span className="text-text-mute"> · {g.positionCount} pos</span>
+      </div>
+      <div className="font-mono">
+        <span className="text-green">{fmtUsd(g.totalUsd)}</span>
+        {g.hookName && (
+          <span className="text-text-mute">
+            {" "}
+            (LP {fmtUsd(g.lpFeesUsd)} · hook {fmtUsd(g.hookFeesUsd)})
+          </span>
+        )}
+      </div>
     </div>
   );
 }

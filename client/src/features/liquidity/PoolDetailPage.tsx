@@ -17,6 +17,8 @@ import { localPositionToPosition } from "./position-adapters.ts";
 import type { HookName } from "./use-create-pool.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { TvlChart } from "./TvlChart.tsx";
+import { PairRateChart } from "./PairRateChart.tsx";
+import { usePairPriceChart } from "./use-pair-price-chart.ts";
 import { MetricToggle, RangeToggle, type Metric } from "./Toggles.tsx";
 import { formatPct, formatUsd, normalizePairSymbol } from "./format.ts";
 import type { ChartRange } from "./types.ts";
@@ -41,6 +43,10 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
   const onchainPositions = useOnchainPositions(walletAddress);
 
   const derived = data ? tryDeriveAddCtx(data.pool) : null;
+
+  // Pair exchange-rate chart (quote = tokenB priced in base = tokenA) — real
+  // reference prices from DefiLlama since the testnet pool has no index.
+  const pairChart = usePairPriceChart(derived?.tokenA ?? null, derived?.tokenB ?? null, range);
 
   // Authoritative hook for `local:<key>` pools — read straight from the
   // stored pool record rather than inferred from the fee tier, so a
@@ -168,6 +174,32 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
           </div>
 
           <TvlChart points={data.chart} metric={metric} />
+
+          {/* Pair performance — exchange rate of the pair over the selected
+              range (tokenB priced in tokenA), from reference price history. */}
+          {derived && (
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[11px] font-semibold tracking-[0.12em] text-text-mute uppercase">
+                  Pair price
+                </div>
+                <div className="text-[11px] text-text-dim">
+                  {derived.tokenB}/{derived.tokenA}
+                </div>
+              </div>
+              {pairChart.error ? (
+                <p className="py-8 text-xs text-text-mute text-center">
+                  Price history unavailable right now.
+                </p>
+              ) : pairChart.points.length === 0 ? (
+                <p className="py-8 text-xs text-text-dim text-center">
+                  {pairChart.loading ? "Loading price history…" : "No price history for this pair."}
+                </p>
+              ) : (
+                <PairRateChart points={pairChart.points} />
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Button

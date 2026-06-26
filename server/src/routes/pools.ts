@@ -98,7 +98,7 @@ poolsRouter.get("/api/pools/:id", async (req: Request, res: Response) => {
   }
 });
 
-function rangeToDays(range: "1D" | "7D" | "30D" | "90D" | "1Y" | "ALL"): number {
+export function rangeToDays(range: "1D" | "7D" | "30D" | "90D" | "1Y" | "ALL"): number {
   switch (range) {
     case "1D":
       return 1;
