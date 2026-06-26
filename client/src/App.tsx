@@ -14,6 +14,7 @@ import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
+import { BridgePanel } from "./features/bridge/BridgePanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { HookName } from "./features/liquidity/use-create-pool.ts";
@@ -56,6 +57,7 @@ type Route =
       /** Free-form symbol to pass to the `token-price` runner. */
       symbol?: string;
     }
+  | { kind: "bridge" }
   | { kind: "agent" };
 
 export default function App() {
@@ -269,6 +271,14 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
+    case "bridge":
+      return (
+        <BridgePanel
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "agent":
       return (
         <AgentPanel
@@ -288,6 +298,8 @@ function promptToRoute(id: HomePromptId): Route {
       return { kind: "swap" };
     case "analyze":
       return { kind: "analyze" };
+    case "bridge":
+      return { kind: "bridge" };
     case "agent":
       return { kind: "agent" };
   }
@@ -378,5 +390,7 @@ function intentToRoute(intent: Intent): Route {
         ...(intent.question ? { question: intent.question } : {}),
         ...(intent.symbol ? { symbol: intent.symbol } : {}),
       };
+    case "bridge":
+      return { kind: "bridge" };
   }
 }

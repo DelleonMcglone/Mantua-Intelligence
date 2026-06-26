@@ -51,6 +51,7 @@ export type Intent =
   | { kind: "create-pool"; ctx?: PoolKeyCtx }
   | { kind: "remove-liquidity" }
   | { kind: "positions" }
+  | { kind: "bridge" }
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
   | {
@@ -169,6 +170,13 @@ const ACTION_VERB_RE =
 
 export function detectIntent(text: string): Intent | null {
   const t = text.toLowerCase();
+
+  // Bridge first — "bridge USDC to Base" / "cross-chain transfer" opens the
+  // bridge panel. Checked before swap so the "to <chain>" phrasing isn't read
+  // as a swap pair.
+  if (/\bbridge\b/.test(t) || /\bcross[- ]?chain\b/.test(t)) {
+    return { kind: "bridge" };
+  }
 
   // Pre-flight: when an action verb is paired with two recognized tokens,
   // short-circuit to the action intent *before* the analytic-topic rules
