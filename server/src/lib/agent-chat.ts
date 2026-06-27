@@ -19,6 +19,7 @@ import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
+import { isX402Available, searchServices, callPaidService } from "./x402-cli.ts";
 
 /**
  * Conversational, autonomous agent loop.
@@ -94,6 +95,7 @@ Decision logic — ground every action in real signals, never assumptions:
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
+- Paid data (x402): prefer the free tools above. If they're insufficient, rate-limited, or gated — or you lack a capability entirely — you may search_paid_services for a paid API and then call_paid_service to pay a small (pre-capped) USDC fee per call. State the cost you paid in your reply. If a tool reports paid services are unavailable, just fall back to the free data and say what you used.
 
 Funding: you can't pull funds in yourself. When the user wants to fund the wallet, give them its address (from get_portfolio or manage_wallet) and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet); balances refresh automatically once it lands.
 
@@ -243,6 +245,38 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["positionId", "percentage"],
+    },
+  },
+  {
+    name: "search_paid_services",
+    description:
+      "Search Circle's x402 paid-API marketplace by keyword (e.g. 'crypto', 'twitter', 'prediction markets', 'papers'). Returns candidate paid endpoints with their per-call USDC price and accepted chains. Use this when free data (get_market_data) is insufficient, gated, or rate-limited, or when you lack a capability. Read-only; no payment. May be unavailable in this environment.",
+    input_schema: {
+      type: "object",
+      properties: {
+        keyword: { type: "string", description: "What to search for (1–100 chars)." },
+      },
+      required: ["keyword"],
+    },
+  },
+  {
+    name: "call_paid_service",
+    description:
+      "Pay a small USDC fee (pre-capped) to call a paid x402 service URL from search_paid_services and return its data. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then fall back to free data).",
+    input_schema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The service URL from search_paid_services." },
+        data: {
+          type: "object",
+          description: "Optional request payload (object) matching the service's schema.",
+        },
+        chain: {
+          type: "string",
+          description: "Optional CLI chain code to pay from (e.g. BASE, MATIC). Defaults sensibly.",
+        },
+      },
+      required: ["url"],
     },
   },
 ];
@@ -423,6 +457,27 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
         slippageBps: 50,
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
       });
+    }
+    case "search_paid_services": {
+      if (!(await isX402Available())) {
+        return {
+          available: false,
+          note: "Paid services are unavailable in this environment. Use free data (get_market_data).",
+        };
+      }
+      const services = await searchServices(input["keyword"]);
+      return { available: true, services };
+    }
+    case "call_paid_service": {
+      if (!(await isX402Available())) {
+        return {
+          available: false,
+          note: "Paid services are unavailable in this environment. Use free data (get_market_data).",
+        };
+      }
+      const data = input["data"] && typeof input["data"] === "object" ? input["data"] : undefined;
+      const result = await callPaidService({ url: input["url"], data, chain: input["chain"] });
+      return { available: true, ...result };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

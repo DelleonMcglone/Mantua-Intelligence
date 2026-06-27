@@ -99,5 +99,6 @@ export type AuditAction =
   | "agent_add_liquidity"
   | "agent_remove_liquidity"
   | "agent_instruction_parse"
+  | "agent_x402"
   | "command_parse"
   | "fee_admin_update";
