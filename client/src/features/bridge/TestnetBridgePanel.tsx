@@ -11,6 +11,7 @@ import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import { useConfirmedAction } from "@/hooks/use-confirmed-action.tsx";
 import { BRIDGE_DESTINATIONS, type BridgeDestination } from "./bridge-chains.ts";
 import { useBridge } from "./use-bridge.ts";
+import { UnifiedBalanceCard } from "./UnifiedBalanceCard.tsx";
 
 const USDC_DECIMALS = TOKENS.USDC.decimals; // 6
 
@@ -246,6 +247,11 @@ export function TestnetBridgePanel({
             Bridge again
           </Button>
         )}
+
+        {/* Treasury: agent-wallet unified balance (Circle Gateway). */}
+        <div className="border-t border-border-soft pt-4">
+          <UnifiedBalanceCard />
+        </div>
       </div>
     </>
   );
