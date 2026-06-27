@@ -22,6 +22,13 @@
       "when": 1781280000000,
       "tag": "0002_agent_circle_wallet",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0003_agent_rebalance_enabled",
+      "breakpoints": true
     }
   ]
 }

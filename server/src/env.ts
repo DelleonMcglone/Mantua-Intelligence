@@ -52,6 +52,11 @@ const schema = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .optional(),
   MANTUA_FEE_ADMIN_KEY: z.string().min(1).optional(),
+
+  /** Shared secret guarding the auto-rebalance cron endpoint. Vercel Cron sends
+   *  it as `Authorization: Bearer <CRON_SECRET>`; an external scheduler can use
+   *  the same header. Absent → the endpoint is disabled (503). */
+  CRON_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof schema>;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, uuid, varchar, numeric, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, numeric, timestamp, index, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.ts";
 
 export const agentWallets = pgTable(
@@ -20,6 +20,8 @@ export const agentWallets = pgTable(
     label: varchar("label", { length: 64 }),
     dailyCapUsd: numeric("daily_cap_usd", { precision: 20, scale: 2 }).notNull().default("100"),
     status: varchar("status", { length: 16 }).notNull().default("active"),
+    // Opt-in to autonomous peg de-peg-exit rebalancing (Phase 2). Default off.
+    rebalanceEnabled: boolean("rebalance_enabled").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

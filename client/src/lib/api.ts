@@ -58,4 +58,7 @@ export const api = {
   post<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, { method: "POST", body: JSON.stringify(body) });
   },
+  patch<T>(path: string, body: unknown): Promise<T> {
+    return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+  },
 };
