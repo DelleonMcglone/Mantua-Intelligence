@@ -18,21 +18,21 @@ From a single natural-language prompt you can:
 Mantua.AI runs on **Arc Testnet** — Circle's stablecoin-native L1, where **USDC is the gas
 token**.
 
-| Network     | Chain ID  | RPC                              | Explorer                       |
-| ----------- | --------- | -------------------------------- | ------------------------------ |
-| Arc Testnet | `5042002` | `https://rpc.testnet.arc.network`| https://testnet.arcscan.app    |
+| Network     | Chain ID  | RPC                               | Explorer                    |
+| ----------- | --------- | --------------------------------- | --------------------------- |
+| Arc Testnet | `5042002` | `https://rpc.testnet.arc.network` | https://testnet.arcscan.app |
 
 Get testnet tokens from the **[Circle Faucet](https://faucet.circle.com/)** (USDC + EURC; Arc
 USDC also pays for gas).
 
 ### Tokens
 
-| Token  | Address                                      | Decimals | Notes                         |
-| ------ | -------------------------------------------- | -------- | ----------------------------- |
-| USDC   | `0x3600000000000000000000000000000000000000` | 6        | Native gas token (ERC-20 i/f) |
-| EURC   | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6        | Circle EURC                   |
-| cirBTC | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | 8        | BTC-pegged demo asset         |
-| Permit2| `0x000000000022D473030F116dDEE9F6B43aC78BA3` | —        | Canonical (all chains)        |
+| Token   | Address                                      | Decimals | Notes                         |
+| ------- | -------------------------------------------- | -------- | ----------------------------- |
+| USDC    | `0x3600000000000000000000000000000000000000` | 6        | Native gas token (ERC-20 i/f) |
+| EURC    | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6        | Circle EURC                   |
+| cirBTC  | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | 8        | BTC-pegged demo asset         |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | —        | Canonical (all chains)        |
 
 ---
 
@@ -43,12 +43,12 @@ distinct contract deployed at a mined CREATE2 address, and each lives on its **o
 stack (PoolManager + PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every
 pool's create / liquidity / swap / read to the stack of that pool's hook.
 
-| Hook                  | Pairs                          | Purpose                                                        |
-| --------------------- | ------------------------------ | ------------------------------------------------------------- |
-| **Stable Protection** | USDC/EURC                      | Peg-zone-aware fees + circuit breaker to defend LPs on depegs |
-| **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC       | Per-swap fee scales with TWAP-derived volatility              |
-| **RWA Gate**          | USDC/EURC, USDC/cirBTC         | Permissioned pool — only allowlisted addresses may trade      |
-| **Async Limit Order** | USDC/cirBTC, EURC/cirBTC       | Queue limit orders that fill at a target price                |
+| Hook                  | Pairs                    | Purpose                                                       |
+| --------------------- | ------------------------ | ------------------------------------------------------------- |
+| **Stable Protection** | USDC/EURC                | Peg-zone-aware fees + circuit breaker to defend LPs on depegs |
+| **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC | Per-swap fee scales with TWAP-derived volatility              |
+| **RWA Gate**          | USDC/EURC, USDC/cirBTC   | Permissioned pool — only allowlisted addresses may trade      |
+| **Async Limit Order** | USDC/cirBTC, EURC/cirBTC | Queue limit orders that fill at a target price                |
 
 ---
 
@@ -146,6 +146,9 @@ npm run typecheck            # both workspaces
 npm test -w @mantua/server   # 63 tests
 npm test -w @mantua/client   # 58 tests
 ```
+
+Optional: the agent can pay per-call for premium data via Circle's x402
+marketplace (local-only, off by default) — see [`docs/x402-setup.md`](docs/x402-setup.md).
 
 ## Deploying the on-chain stacks
 
