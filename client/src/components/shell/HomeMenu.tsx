@@ -50,7 +50,7 @@ export function HomeMenu({ onPromptSelect, onNewChat }: Props) {
                 onClick={() => {
                   onPromptSelect(p.id);
                 }}
-                className="bg-bg-elev border border-border-soft rounded-md p-4 min-h-[105px] cursor-pointer flex flex-col justify-between transition-all text-left hover:border-accent hover:bg-row-hover"
+                className="bg-bg-elev border border-border-soft rounded-md p-4 min-h-[105px] cursor-pointer flex flex-col justify-between transition-all text-left hover:border-accent hover:bg-row-hover [&:nth-child(odd):last-child]:col-span-2 [&:nth-child(odd):last-child]:w-[calc(50%-0.375rem)] [&:nth-child(odd):last-child]:justify-self-center"
               >
                 <div className="text-[13px] leading-snug text-text">{p.title}</div>
                 <div className="text-text-dim mt-6">

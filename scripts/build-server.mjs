@@ -28,6 +28,7 @@ const banner = {
 };
 
 const dcwOut = join(root, "api/_dcw.mjs");
+const ubkOut = join(root, "api/_ubk.mjs");
 
 await build({
   entryPoints: [join(root, "server/dcw-entry.mjs")],
@@ -38,14 +39,31 @@ await build({
   banner,
 });
 
+// Unified Balance Kit + Circle Wallets adapter, bundled self-contained. Same
+// rationale as _dcw.mjs (the tracer won't follow the bare import) plus bundling
+// resolves the adapter's CJS `Blockchain` named import from
+// developer-controlled-wallets, which Node's ESM loader can't see at runtime.
+await build({
+  entryPoints: [join(root, "server/ubk-entry.mjs")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  outfile: ubkOut,
+  banner,
+});
+
 await build({
   entryPoints: [join(root, "server/src/app.ts")],
   bundle: true,
   platform: "node",
   format: "esm",
   packages: "external",
-  alias: { "@circle-fin/developer-controlled-wallets": dcwOut },
+  alias: {
+    "@circle-fin/developer-controlled-wallets": dcwOut,
+    "@circle-fin/unified-balance-kit": ubkOut,
+    "@circle-fin/adapter-circle-wallets": ubkOut,
+  },
   outfile: join(root, "api/_server.mjs"),
 });
 
-console.log("built api/_dcw.mjs + api/_server.mjs");
+console.log("built api/_dcw.mjs + api/_ubk.mjs + api/_server.mjs");
