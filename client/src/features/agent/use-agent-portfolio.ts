@@ -20,9 +20,23 @@ interface AgentTransaction {
   createdAt: string;
 }
 
+/** One of the agent wallet's open LP positions (read live on-chain). */
+export interface AgentPosition {
+  tokenId: string;
+  tokenA: TokenSymbol;
+  tokenB: TokenSymbol;
+  fee: number;
+  hook: string | null;
+  amountA: string;
+  amountB: string;
+  fees0: string;
+  fees1: string;
+}
+
 interface AgentPortfolioResponse {
   address: string;
   balances: AgentBalance[];
+  positions: AgentPosition[];
   transactions: AgentTransaction[];
 }
 
@@ -30,6 +44,7 @@ export interface AgentPortfolioState {
   /** Agent wallet address (Circle on Arc), or null until provisioned. */
   agentAddress: string | null;
   balances: AgentBalance[];
+  positions: AgentPosition[];
   loading: boolean;
   /** True when the user has no agent wallet yet — distinct from a hard
    *  error so the UI can offer "Create agent wallet" instead of red text. */
@@ -49,6 +64,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
   const [state, setState] = useState<AgentPortfolioState>({
     agentAddress: null,
     balances: [],
+    positions: [],
     loading: false,
     notProvisioned: false,
     error: null,
@@ -78,6 +94,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
         setState({
           agentAddress: data.address,
           balances: data.balances,
+          positions: data.positions,
           loading: false,
           notProvisioned: false,
           error: null,
@@ -88,6 +105,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
           setState({
             agentAddress: null,
             balances: [],
+            positions: [],
             loading: false,
             notProvisioned: true,
             error: null,
@@ -118,6 +136,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
     return {
       agentAddress: null,
       balances: [],
+      positions: [],
       loading: false,
       notProvisioned: false,
       error: null,

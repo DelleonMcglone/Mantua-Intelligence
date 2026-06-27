@@ -10,7 +10,13 @@ import { TOKEN_SYMBOLS, getToken, type TokenSymbol } from "./tokens.ts";
 import { getOrCreateAgentWallet, getAgentWallet, updateAgentWalletCap } from "./agent-wallet.ts";
 import { sendFromAgentWallet } from "./agent-send.ts";
 import { swapFromAgentWallet, quoteAgentSwap } from "./agent-swap.ts";
+import {
+  addLiquidityFromAgentWallet,
+  removeLiquidityFromAgentWallet,
+  listAgentPositions,
+} from "./agent-liquidity.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
+import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
 
@@ -79,13 +85,15 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), swap tokens, send tokens, fetch market/on-chain data, and read the wallet's portfolio. You CANNOT manage liquidity positions — if asked, say liquidity isn't available through you yet.
+Capabilities: manage the agent wallet (view info, set the daily cap), swap tokens, send tokens, add/remove liquidity, fetch market/on-chain data, do research, and read the wallet's portfolio (balances + LP positions).
+
+Liquidity: you can add and remove liquidity, but ONLY in no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified); it acts on the no-hook pool at that tier and fails clearly if none exists. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
 
 Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
-- For data questions, answer from get_market_data / get_signals — cite the figures, don't guess.
+- For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
 
 Funding: you can't pull funds in yourself. When the user wants to fund the wallet, give them its address (from get_portfolio or manage_wallet) and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet); balances refresh automatically once it lands.
 
@@ -194,6 +202,47 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["topic"],
+    },
+  },
+  {
+    name: "get_positions",
+    description:
+      "List the agent wallet's open liquidity positions (id, token pair, fee tier, liquidity). Call this before remove_liquidity to get the position id. Read-only.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "add_liquidity",
+    description:
+      "Add liquidity to a NO-HOOK pool from the agent wallet, using only Arc tokens (USDC/EURC/cirBTC). Executes immediately (gas-sponsored). Fails if no no-hook pool exists at the fee tier.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tokenA: { type: "string", description: "First token symbol (USDC/EURC/cirBTC)." },
+        tokenB: { type: "string", description: "Second token symbol (must differ from tokenA)." },
+        amountA: { type: "string", description: "Decimal amount of tokenA (human units)." },
+        amountB: { type: "string", description: "Decimal amount of tokenB (human units)." },
+        fee: {
+          type: "number",
+          description: "Fee tier in pips: 100, 500, 3000, or 10000. Defaults to 3000 (0.30%).",
+        },
+      },
+      required: ["tokenA", "tokenB", "amountA", "amountB"],
+    },
+  },
+  {
+    name: "remove_liquidity",
+    description:
+      "Remove a percentage of liquidity from one of the agent's positions. Get the positionId from get_positions first. Executes immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        positionId: { type: "string", description: "Position id from get_positions." },
+        percentage: {
+          type: "number",
+          description: "Percent of the position to remove, 1–100 (100 = full exit).",
+        },
+      },
+      required: ["positionId", "percentage"],
     },
   },
 ];
@@ -324,6 +373,56 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
       }
       const symbol = typeof input["symbol"] === "string" ? input["symbol"] : undefined;
       return await runAnalyze(parsed.data, symbol);
+    }
+    case "get_positions": {
+      const list = await listAgentPositions(privyUserId);
+      return {
+        positions: list.map((p) => ({
+          id: p.id,
+          pair: `${p.tokenA}/${p.tokenB}`,
+          fee: p.fee,
+          hasHook: p.hasHook,
+          liquidity: p.liquidity,
+        })),
+      };
+    }
+    case "add_liquidity": {
+      const { tokenA, tokenB, amountA, amountB } = input;
+      if (!isTokenSymbol(tokenA) || !isTokenSymbol(tokenB)) {
+        throw new Error(`Both tokens must be Arc symbols: ${TOKEN_SYMBOLS.join(", ")}.`);
+      }
+      if (typeof amountA !== "string" || typeof amountB !== "string") {
+        throw new Error("amountA and amountB are required decimal strings.");
+      }
+      const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
+      if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
+      const fee: FeeTier = feeRaw;
+      return await addLiquidityFromAgentWallet({
+        privyUserId,
+        tokenA,
+        tokenB,
+        fee,
+        hook: null, // no hooks — agent only manages no-hook pools
+        amountA,
+        amountB,
+        slippageBps: 50,
+        deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
+      });
+    }
+    case "remove_liquidity": {
+      const positionId = input["positionId"];
+      const percentage = input["percentage"];
+      if (typeof positionId !== "string") throw new Error("positionId (string) is required.");
+      if (typeof percentage !== "number" || percentage < 1 || percentage > 100) {
+        throw new Error("percentage must be a number from 1 to 100.");
+      }
+      return await removeLiquidityFromAgentWallet({
+        privyUserId,
+        positionId,
+        percentage,
+        slippageBps: 50,
+        deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
+      });
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

@@ -1,15 +1,11 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { CHAIN_INFO } from "@/lib/chains.ts";
+import { CHAIN_INFO, ARC_TESTNET_CHAIN_ID } from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
-import { FEE_TIER_LABELS } from "@/features/liquidity/fee-tiers.ts";
+import { FEE_TIER_LABELS, type FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import { formatFeesEarned } from "@/features/liquidity/position-adapters.ts";
-import {
-  getAgentLocalPositions,
-  getUserLocalPositions,
-  type LocalPosition,
-} from "@/features/liquidity/local-positions.ts";
+import { getUserLocalPositions, type LocalPosition } from "@/features/liquidity/local-positions.ts";
 import { localPoolKey } from "@/features/liquidity/local-pools.ts";
 import { useAgentPortfolio } from "@/features/agent/use-agent-portfolio.ts";
 import { AssetIcon, type AssetSymbol } from "./asset-icons.tsx";
@@ -104,12 +100,6 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tab],
   );
-  const agentPositions = useMemo<LocalPosition[]>(
-    () => (IS_MAINNET ? [] : getAgentLocalPositions()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab],
-  );
-
   const portfolio = usePortfolio();
   const agent = useAgentPortfolio();
   const earnings = useEarnings(portfolio.walletAddress);
@@ -124,9 +114,27 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
     if (!agent.agentAddress) return [];
     return toDisplayAssets(agent.balances, chainId);
   }, [agent.agentAddress, agent.balances, chainId]);
+  // Agent LP positions, read live on-chain (from /api/agent/portfolio). Shape
+  // each into a LocalPosition so the existing row mapper renders it.
   const agentPositionRows = useMemo<PortfolioPosition[]>(
-    () => (IS_MAINNET ? [] : agentPositions.map(localPositionToRow)),
-    [agentPositions],
+    () =>
+      agent.positions.map((p) =>
+        localPositionToRow({
+          chainId: ARC_TESTNET_CHAIN_ID,
+          tokenId: p.tokenId,
+          tokenA: p.tokenA,
+          tokenB: p.tokenB,
+          fee: p.fee as FeeTier,
+          hook: p.hook as LocalPosition["hook"],
+          amountA: p.amountA,
+          amountB: p.amountB,
+          fees0: p.fees0,
+          fees1: p.fees1,
+          txHash: "",
+          createdAt: 0,
+        }),
+      ),
+    [agent.positions],
   );
 
   const numVal = (s: string) => Number(s.replace(/[^\d.-]/g, "")) || 0;
@@ -548,8 +556,47 @@ function AgentTabBody({
           );
         })
       )}
+
+      {agentPositionRows.length > 0 && (
+        <>
+          <div className="px-3.5 pt-4 pb-1.5 text-[11px] text-text-mute uppercase tracking-wide">
+            Pools
+          </div>
+          {dedupePools(agentPositionRows).map((pool) => (
+            <div
+              key={`${pool.a}-${pool.b}-${pool.fee}`}
+              className="flex items-center gap-3 px-4 py-2.5 border-b border-border-soft"
+            >
+              <div className="flex flex-shrink-0">
+                <AssetIcon symbol={pool.a} size={22} />
+                <div className="-ml-2">
+                  <AssetIcon symbol={pool.b} size={22} />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0 text-[13px]">
+                {pool.a} / {pool.b}
+                <span className="text-text-mute"> · {pool.fee}</span>
+              </div>
+              <div className="text-[12px] text-text-dim">{pool.hook}</div>
+            </div>
+          ))}
+        </>
+      )}
     </>
   );
+}
+
+/** Distinct pools (pair + fee + hook) the agent is an LP in. */
+function dedupePools(rows: PortfolioPosition[]): PortfolioPosition[] {
+  const seen = new Set<string>();
+  const out: PortfolioPosition[] = [];
+  for (const r of rows) {
+    const key = `${r.a}-${r.b}-${r.fee}-${r.hook}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 function shortenAddress(addr: string): string {

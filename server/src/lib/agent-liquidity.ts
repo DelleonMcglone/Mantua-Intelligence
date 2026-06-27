@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type Address, parseAbi, parseUnits } from "viem";
 import { db } from "../db/client.ts";
 import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
@@ -11,7 +11,7 @@ import { ACTIVE_CHAIN_ID } from "./constants.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
-import { getToken, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
+import { getToken, getTokens, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
 import { buildAddLiquidityCalldata } from "./v4-add-liquidity.ts";
 import { getHookAddress, PERMIT2, type FeeTier, type HookName } from "./v4-contracts.ts";
@@ -427,4 +427,59 @@ export async function removeLiquidityFromAgentWallet(
     isFullExit,
     network: AGENT_NETWORK,
   };
+}
+
+export interface AgentPositionSummary {
+  /** Internal DB id — pass this as `positionId` to remove. */
+  id: string;
+  tokenId: string | null;
+  tokenA: string;
+  tokenB: string;
+  fee: number;
+  /** Agent only opens no-hook pools; true for legacy hooked positions. */
+  hasHook: boolean;
+  liquidity: string;
+}
+
+/**
+ * The agent's open LP positions (from the DB `positions` table), for the
+ * `get_positions` chat tool and the remove-by-id flow. Token addresses are
+ * mapped back to Arc symbols where known.
+ */
+export async function listAgentPositions(privyUserId: string): Promise<AgentPositionSummary[]> {
+  const userRows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.privyUserId, privyUserId))
+    .limit(1);
+  const user = userRows.at(0);
+  if (!user) return [];
+
+  const rows = await db
+    .select({
+      id: positions.id,
+      tokenId: positions.tokenId,
+      liquidity: positions.liquidity,
+      token0: pools.token0,
+      token1: pools.token1,
+      fee: pools.fee,
+      hookAddress: pools.hookAddress,
+    })
+    .from(positions)
+    .innerJoin(pools, eq(positions.poolId, pools.id))
+    .where(and(eq(positions.userId, user.id), eq(positions.status, "open")));
+
+  const tokens = getTokens(DEFAULT_CHAIN_ID);
+  const byAddr = new Map<string, string>();
+  for (const sym of Object.keys(tokens)) byAddr.set(tokens[sym].address.toLowerCase(), sym);
+
+  return rows.map((r) => ({
+    id: r.id,
+    tokenId: r.tokenId,
+    tokenA: byAddr.get(r.token0.toLowerCase()) ?? r.token0,
+    tokenB: byAddr.get(r.token1.toLowerCase()) ?? r.token1,
+    fee: r.fee,
+    hasHook: !!r.hookAddress && r.hookAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase(),
+    liquidity: r.liquidity,
+  }));
 }
