@@ -6,6 +6,8 @@ import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { TOKENS, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
+import { readOnchainPositions } from "./v4-onchain-positions.ts";
+import { logger } from "./logger.ts";
 
 const ERC20_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
 
@@ -17,9 +19,25 @@ export interface AgentBalance {
   usdValue: number;
 }
 
+/** One of the agent wallet's open LP positions (read live on-chain). */
+export interface AgentPositionRow {
+  tokenId: string;
+  tokenA: TokenSymbol;
+  tokenB: TokenSymbol;
+  fee: number;
+  /** Hook name powering the pool, or null for a no-hook pool. */
+  hook: string | null;
+  amountA: string;
+  amountB: string;
+  /** Uncollected swap fees (raw base units). */
+  fees0: string;
+  fees1: string;
+}
+
 export interface AgentPortfolio {
   address: string;
   balances: AgentBalance[];
+  positions: AgentPositionRow[];
   transactions: PortfolioTransaction[];
 }
 
@@ -67,6 +85,26 @@ export async function getAgentPortfolio(
     }),
   );
 
+  // Open LP positions, read live on-chain for the agent address. Degrade to an
+  // empty list on a read error rather than failing the whole portfolio.
+  let positions: AgentPositionRow[] = [];
+  try {
+    const onchain = await readOnchainPositions(agentAddress);
+    positions = onchain.map((p) => ({
+      tokenId: p.tokenId,
+      tokenA: p.tokenA,
+      tokenB: p.tokenB,
+      fee: p.fee,
+      hook: p.hook,
+      amountA: p.amountA,
+      amountB: p.amountB,
+      fees0: p.fees0,
+      fees1: p.fees1,
+    }));
+  } catch (err) {
+    logger.warn({ err, agentAddress }, "agent-portfolio: on-chain positions read failed");
+  }
+
   const transactions = await db
     .select()
     .from(portfolioTransactions)
@@ -77,6 +115,7 @@ export async function getAgentPortfolio(
   return {
     address: wallet.address,
     balances,
+    positions,
     transactions,
   };
 }
