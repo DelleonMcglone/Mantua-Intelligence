@@ -1,6 +1,7 @@
-import { UnifiedBalanceKit } from "@circle-fin/unified-balance-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
+import type * as UBK from "@circle-fin/unified-balance-kit";
+import type * as CWA from "@circle-fin/adapter-circle-wallets";
 import { env } from "../env.ts";
+import { logger } from "./logger.ts";
 import { CircleUnavailableError } from "./circle/client.ts";
 import { getAgentWallet, getOrCreateAgentWallet } from "./agent-wallet.ts";
 
@@ -18,10 +19,31 @@ import { getAgentWallet, getOrCreateAgentWallet } from "./agent-wallet.ts";
 
 const ARC_CHAIN = "Arc_Testnet";
 
-// Static imports (not lazy): Vercel's file tracer (@vercel/nft) follows static
-// imports but NOT bare dynamic ones, so static is what ships these SDKs in the
-// serverless bundle. They're cheap to load and need no creds at import time —
-// creds are checked per-call in requireCreds().
+// Lazy-load the SDKs INSIDE the call paths (not at module top level). The
+// Circle Wallets adapter currently fails to resolve a named export from the
+// app's developer-controlled-wallets version, and a top-level static import of
+// it crashes the WHOLE server at boot. Loading lazily + behind try/catch keeps
+// the rest of the API up and contains any load failure to these endpoints,
+// surfaced as a clean 503. (NOTE: until the adapter/DCW version mismatch is
+// resolved, deposit will report unavailable.)
+let ubkModule: Promise<typeof UBK> | null = null;
+function loadUbk(): Promise<typeof UBK> {
+  ubkModule ??= import("@circle-fin/unified-balance-kit");
+  return ubkModule;
+}
+let cwaModule: Promise<typeof CWA> | null = null;
+function loadCwa(): Promise<typeof CWA> {
+  cwaModule ??= import("@circle-fin/adapter-circle-wallets");
+  return cwaModule;
+}
+
+/** Unified balance is unavailable when creds are missing OR an SDK fails to load. */
+export class UnifiedBalanceUnavailableError extends Error {
+  constructor(message = "Unified balance is unavailable.") {
+    super(message);
+    this.name = "UnifiedBalanceUnavailableError";
+  }
+}
 
 function requireCreds(): { apiKey: string; entitySecret: string } {
   const { CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET } = env;
@@ -65,6 +87,13 @@ export async function getUnifiedBalances(privyUserId: string): Promise<UnifiedBa
   const wallet = await getAgentWallet(privyUserId);
   if (!wallet) return { provisioned: false };
   requireCreds(); // 503 if Circle creds are missing
+  let UnifiedBalanceKit: typeof UBK.UnifiedBalanceKit;
+  try {
+    ({ UnifiedBalanceKit } = await loadUbk());
+  } catch (err) {
+    logger.error({ err }, "unified-balance SDK failed to load");
+    throw new UnifiedBalanceUnavailableError();
+  }
   const kit = new UnifiedBalanceKit();
   const res = await kit.getBalances({
     token: "USDC",
@@ -99,6 +128,15 @@ export async function depositToUnifiedBalance(
 ): Promise<UnifiedDepositResult> {
   const wallet = await getOrCreateAgentWallet(privyUserId, walletAddress);
   const { apiKey, entitySecret } = requireCreds();
+  let UnifiedBalanceKit: typeof UBK.UnifiedBalanceKit;
+  let createCircleWalletsAdapter: typeof CWA.createCircleWalletsAdapter;
+  try {
+    ({ UnifiedBalanceKit } = await loadUbk());
+    ({ createCircleWalletsAdapter } = await loadCwa());
+  } catch (err) {
+    logger.error({ err }, "unified-balance SDK failed to load");
+    throw new UnifiedBalanceUnavailableError();
+  }
   const adapter = createCircleWalletsAdapter({ apiKey, entitySecret });
   const kit = new UnifiedBalanceKit();
   const res = (await kit.deposit({

@@ -2,7 +2,11 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { logger } from "../lib/logger.ts";
 import { CircleUnavailableError } from "../lib/circle/client.ts";
-import { getUnifiedBalances, depositToUnifiedBalance } from "../lib/unified-balance.ts";
+import {
+  getUnifiedBalances,
+  depositToUnifiedBalance,
+  UnifiedBalanceUnavailableError,
+} from "../lib/unified-balance.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 
@@ -25,8 +29,8 @@ agentUnifiedBalanceRouter.get(
     try {
       res.json(await getUnifiedBalances(privyUserId));
     } catch (err) {
-      if (err instanceof CircleUnavailableError) {
-        res.status(503).json({ error: err.message, code: "CIRCLE_UNAVAILABLE" });
+      if (err instanceof CircleUnavailableError || err instanceof UnifiedBalanceUnavailableError) {
+        res.status(503).json({ error: err.message, code: "UNIFIED_BALANCE_UNAVAILABLE" });
         return;
       }
       logger.error({ err }, "unified-balance read failed");
@@ -74,8 +78,8 @@ agentUnifiedBalanceRouter.post(
       );
       res.json(result);
     } catch (err) {
-      if (err instanceof CircleUnavailableError) {
-        res.status(503).json({ error: err.message, code: "CIRCLE_UNAVAILABLE" });
+      if (err instanceof CircleUnavailableError || err instanceof UnifiedBalanceUnavailableError) {
+        res.status(503).json({ error: err.message, code: "UNIFIED_BALANCE_UNAVAILABLE" });
         return;
       }
       logger.error({ err }, "unified-balance deposit failed");
