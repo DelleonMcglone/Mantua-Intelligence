@@ -1,15 +1,102 @@
 # Mantua.AI
 
-**Mantua.AI** is an agent-driven liquidity protocol for stablecoins. It combines a custom suite of **Uniswap v4 hooks**,
-autonomous **AI agents** (Circle CDP AgentKit), and real-time blockchain access into a single
-programmable liquidity layer.
+**Mantua.AI is an agent-driven liquidity protocol for stablecoins** — it lets users and
+institutions manage stablecoin positions, deploy liquidity, and run automated rebalancing
+strategies through natural language. It combines a custom suite of **Uniswap v4 hooks**,
+autonomous **AI agents** running **Circle Developer-Controlled Wallets**, and real-time on-chain
+execution to turn user intent into automated liquidity actions — a programmable liquidity layer
+optimized for stablecoins, RWAs, and yield-bearing dollar assets.
 
 From a single natural-language prompt you can:
 
-- **Analyze & Research** — pool health, peg status, token prices, hook explanations.
-- **Add Liquidity** — to any hook-protected pool, via the Uniswap v4 PositionManager + Permit2.
+- **Analyze & research** — pool health, peg status, token prices, and hook explanations (free
+  data, with optional pay-per-call x402 premium sources).
 - **Swap** — USDC, EURC, and cirBTC across the hook pools.
-- **Create an Agent** — an autonomous Circle CDP wallet that executes strategies on your behalf.
+- **Add / remove liquidity** — to hook-protected and no-hook pools via the Uniswap v4
+  PositionManager + Permit2.
+- **Run an autonomous agent** — a Circle-managed wallet that swaps, manages liquidity, and
+  auto-rebalances out of de-pegging stablecoins on a daily schedule.
+- **Bridge & manage treasury** — move USDC cross-chain (Circle CCTP) and hold a unified,
+  multi-chain USDC balance (Circle Gateway).
+
+## The problem — and who it's for
+
+Managing stablecoin liquidity today is operationally manual, interface-fragmented,
+strategy-dependent, and exposed to peg risk across pools, venues, and market conditions.
+Mantua.AI lets **liquidity providers, stablecoin issuers, fintech platforms, and RWA protocols**
+deploy peg-aware liquidity, automated rebalancing, and yield-seeking routing directly from
+natural-language instructions, executed on-chain via agent-managed Uniswap v4 hook strategies.
+
+## Why it's better
+
+Stablecoin pools today are passive. Mantua makes them **state-aware, fee-adaptive,
+oracle-enforced, and agent-managed** by embedding these behaviors directly into AMM execution
+logic through Uniswap v4 hooks. By letting AI agents coordinate liquidity in response to
+real-time market conditions, Mantua transforms stablecoin liquidity from static capital into an
+automated financial control system for compliant routing, treasury management, and RWA
+settlement.
+
+---
+
+## Core features
+
+- **Conversational autonomous agent.** A tool-using loop (Anthropic Claude) drives a
+  server-custodied Circle wallet: it swaps, sends, adds/removes liquidity, reads the portfolio,
+  and answers research questions — grounded in live signals (peg deviation, price impact) with
+  in-code safety guardrails and a daily USD spending cap.
+- **Peg-aware Uniswap v4 hooks.** Four custom hooks (Stable Protection, Dynamic Fee, RWA Gate,
+  Async Limit Order) embed fee logic, circuit breakers, compliance gating, and limit orders
+  directly into pool execution (see [Liquidity Hooks](#liquidity-hooks)).
+- **Autonomous de-peg rebalancing.** Opt-in agents auto-exit a stablecoin that drifts off peg
+  into the on-peg reference — gated by live signals + per-run caps — on a daily cron.
+- **Cross-chain USDC bridging.** Outbound USDC transfers from Arc to Base, Ethereum, Arbitrum,
+  Unichain (Sepolia) and Avalanche Fuji via Circle CCTP (Bridge Kit).
+- **Unified balance / treasury.** A single multi-chain USDC balance (view + deposit) via Circle
+  Gateway (Unified Balance Kit).
+- **Pay-per-call research (x402).** The agent can pay tiny USDC fees to call premium data APIs
+  from Circle's x402 services marketplace when free data isn't enough — local, opt-in
+  ([setup](docs/x402-setup.md)).
+
+---
+
+## Built with
+
+### Uniswap v4
+
+- **Custom hooks** — four hooks, each deployed at a mined CREATE2 address (Stable Protection,
+  Dynamic Fee, RWA Gate, Async Limit Order). Source repos linked under [Architecture](#architecture).
+- **v4 periphery, per hook** — PoolManager, PositionManager, StateView, V4Quoter, and
+  PoolSwapTest. The app routes each pool's create / liquidity / swap / read to its hook's own
+  stack (no-hook pools fall back to the Stable Protection stack).
+- **Permit2** (`0x000000000022D473030F116dDEE9F6B43aC78BA3`) for gas-efficient LP approvals.
+- Quotes via **V4Quoter**; all addresses live in
+  [`server/src/lib/v4-contracts.ts`](server/src/lib/v4-contracts.ts).
+
+### Circle
+
+- **Developer-Controlled Wallets** (`@circle-fin/developer-controlled-wallets`) — server-managed
+  agent wallets (smart-contract accounts) that sign and execute on Arc with **sponsored gas**;
+  the user's signing key is never touched by the agent path.
+- **CCTP via Bridge Kit** (`@circle-fin/bridge-kit`) — native cross-chain USDC burn-and-mint.
+- **Gateway via Unified Balance Kit** (`@circle-fin/unified-balance-kit` +
+  `@circle-fin/adapter-circle-wallets`) — unified multi-chain USDC balance and deposits.
+- **x402 services marketplace** (Circle CLI) — pay-per-call paid APIs for agent research.
+- **USDC + EURC** stablecoins, funded for testing via the
+  **[Circle Faucet](https://faucet.circle.com)**.
+
+### Arc
+
+- **Arc Testnet** (chain id `5042002`) — Circle's stablecoin-native L1 where **USDC is the gas
+  token**. RPC `https://rpc.testnet.arc.network`; explorer [ArcScan](https://testnet.arcscan.app).
+- All hook stacks, tokens, and agent wallets are deployed on Arc (addresses
+  [below](#deployed-contracts-arc-testnet-5042002)).
+
+### Application
+
+- **Client** — Vite + React + TypeScript SPA; Privy auth (embedded + external wallets), viem,
+  lightweight-charts.
+- **Server** — Express + TypeScript API; Anthropic **Claude** (`claude-opus-4-8`) agent loop,
+  Drizzle ORM + Postgres (Neon). Deployed on **Vercel** (serverless) with a daily rebalance cron.
 
 ---
 
@@ -122,8 +209,9 @@ deploy/   Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
 - **Per-hook routing.** `getV4StackForHook(poolKey.hooks)` resolves the PoolManager + periphery
   for a pool from its hook address, so each pool's operations target its own stack. No-hook pools
   fall back to the Stable Protection ("hero") stack.
-- **Wallets.** Users connect via Privy (embedded + external). Agents use Circle CDP AgentKit
-  server-managed wallets — the user's signing key is never touched by the agent path.
+- **Wallets.** Users connect via Privy (embedded + external). Agents use **Circle
+  Developer-Controlled Wallets** (server-managed smart-contract accounts on Arc) — the user's
+  signing key is never touched by the agent path.
 - **Hook source repos.** [stableprotection-hook](https://github.com/DelleonMcglone/stableprotection-hook) ·
   [dynamic-fee](https://github.com/DelleonMcglone/dynamic-fee) ·
   [RWAgate](https://github.com/DelleonMcglone/RWAgate) ·
