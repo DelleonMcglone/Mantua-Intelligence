@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import type { EIP1193Provider } from "viem";
 import { BridgeKit } from "@circle-fin/bridge-kit";
 import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 import { ARC_TESTNET_CHAIN_ID } from "@/lib/chains.ts";
@@ -65,10 +64,15 @@ export function useBridge() {
       if (wallet.chainId !== `eip155:${String(ARC_TESTNET_CHAIN_ID)}`) {
         await wallet.switchChain(ARC_TESTNET_CHAIN_ID);
       }
-      // Privy's provider is EIP-1193 at runtime; its `.on` typings differ from
-      // viem's, so cast to viem's EIP1193Provider for the adapter factory.
-      const provider = (await wallet.getEthereumProvider()) as unknown as EIP1193Provider;
-      const adapter = await createViemAdapterFromProvider({ provider });
+      // Privy's provider is EIP-1193 at runtime. Cast to the adapter's OWN
+      // expected provider type (not a viem import) so the build doesn't break
+      // when Vercel installs a second copy of viem with a distinct nominal
+      // EIP1193Provider type.
+      const provider = await wallet.getEthereumProvider();
+      type ProviderArg = Parameters<typeof createViemAdapterFromProvider>[0]["provider"];
+      const adapter = await createViemAdapterFromProvider({
+        provider: provider as unknown as ProviderArg,
+      });
 
       // Fresh kit per run so step handlers don't accumulate across bridges.
       const kit = new BridgeKit();
