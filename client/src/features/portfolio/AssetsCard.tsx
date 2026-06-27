@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { api } from "@/lib/api.ts";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { CHAIN_INFO, ARC_TESTNET_CHAIN_ID } from "@/lib/chains.ts";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
@@ -479,6 +480,8 @@ function AgentTabBody({
         <div className="font-mono text-[12px] mt-0.5">{shortenAddress(agent.agentAddress)}</div>
       </div>
 
+      <AutoRebalanceToggle />
+
       <div className="px-3.5 pt-3 pb-1.5 text-[11px] text-text-mute uppercase tracking-wide">
         Balances
       </div>
@@ -583,6 +586,75 @@ function AgentTabBody({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Opt-in toggle for autonomous peg de-peg-exit rebalancing. Reads the current
+ * setting from the agent-wallet DTO and PATCHes /api/agent/rebalance on change.
+ */
+function AutoRebalanceToggle() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ rebalanceEnabled: boolean }>("/api/agent/wallet")
+      .then((w) => {
+        if (!cancelled) setEnabled(w.rebalanceEnabled);
+      })
+      .catch(() => {
+        if (!cancelled) setEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onToggle = () => {
+    if (enabled === null || busy) return;
+    const next = !enabled;
+    setBusy(true);
+    setEnabled(next); // optimistic
+    api
+      .patch<{ rebalanceEnabled: boolean }>("/api/agent/rebalance", { enabled: next })
+      .then((w) => {
+        setEnabled(w.rebalanceEnabled);
+      })
+      .catch(() => {
+        setEnabled(!next); // revert
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  return (
+    <div className="px-4 py-3 border-b border-border-soft flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[12px] font-medium">Auto-rebalance · de-peg protection</div>
+        <div className="text-[11px] text-text-mute mt-0.5">
+          If USDC/EURC drifts off peg, the agent swaps it to the on-peg stable (checked daily).
+        </div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled === true}
+        disabled={enabled === null || busy}
+        onClick={onToggle}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+          enabled ? "bg-accent" : "bg-border-soft"
+        } ${enabled === null || busy ? "opacity-50" : "cursor-pointer"}`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+            enabled ? "translate-x-4" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
