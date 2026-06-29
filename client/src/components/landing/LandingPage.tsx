@@ -46,16 +46,13 @@ function Header({ onLaunch }: { onLaunch: () => void }) {
         <Logo size={28} />
         <span className="text-[15px] font-semibold tracking-tight">Mantua.AI</span>
       </div>
-      <div className="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border-soft bg-bg-elev text-text-dim text-[11px] font-medium">
-          <span>Built on Arc</span>
-          <NetworkLogo network="arc" size={14} />
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border-soft bg-bg-elev text-text-dim text-[11px] font-medium">
-          <span>Powered by Circle</span>
-          <CircleLogo size={14} />
-        </span>
-      </div>
+      <span className="absolute left-1/2 -translate-x-1/2 hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-border-soft bg-bg-elev text-text-dim text-[11px] font-medium">
+        <span>Built on Arc</span>
+        <NetworkLogo network="arc" size={14} />
+        <span className="mx-0.5 h-3 w-px bg-border-soft" aria-hidden="true" />
+        <span>Powered by Circle</span>
+        <CircleLogo size={14} />
+      </span>
       <div className="flex items-center gap-2">
         <button
           type="button"
