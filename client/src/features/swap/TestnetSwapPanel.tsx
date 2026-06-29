@@ -213,10 +213,13 @@ export function TestnetSwapPanel({
   });
 
   const expectedOut = quote.data ? formatTokenAmount(tokenOut, quote.data.amountOut) : "";
-  // A successful quote that returns 0 out means the pool has no usable
-  // liquidity at this size — show a clear message and block the swap
-  // instead of a silent "0" the user can't act on.
-  const noLiquidity = quote.data !== null && BigInt(quote.data.amountOut) === 0n;
+  // A quote that returns 0 — OR a dust amount that rounds to "0.000000" at
+  // display precision — means the pool has no usable liquidity / is mispriced
+  // at this size (e.g. the Dynamic Fee USDC/cirBTC pool returns a few wei).
+  // Flag it so the user gets a clear message + a blocked swap, instead of a
+  // silent "0.000000" with the swap button still enabled.
+  const noLiquidity =
+    quote.data !== null && (BigInt(quote.data.amountOut) === 0n || parseFloat(expectedOut) === 0);
 
   function selectTokenIn(sym: TokenSymbol) {
     if (sym === tokenOut) setTokenOut(tokenIn);
@@ -421,8 +424,8 @@ export function TestnetSwapPanel({
         )}
         {!hookIncompatible && !quote.error && noLiquidity && (
           <p className="text-xs text-amber text-center mt-3">
-            Insufficient liquidity — this pool can&apos;t fill that amount. Try a smaller amount, a
-            different fee tier, or another pair.
+            Insufficient liquidity — this pool returned almost nothing for that amount. Try the No
+            Hook option, a different fee tier, or another pair.
           </p>
         )}
 
