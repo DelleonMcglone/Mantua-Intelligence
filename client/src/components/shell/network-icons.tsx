@@ -49,47 +49,48 @@ export function ArcLogo({ size = 16 }: LogoProps) {
   );
 }
 
-/** Circle brand mark — a green circle with a white ring. Used in the landing
- *  header's "Powered by Circle" badge. */
-export function CircleLogo({ size = 16 }: LogoProps) {
+/** Circle brand mark — two concentric broken rings + a center dot forming the
+ *  spiral "C", with a green→blue→purple gradient. Used in the landing header's
+ *  "Powered by Circle" badge. */
+export function CircleLogo({ size = 18 }: LogoProps) {
   const uid = useId();
   const gId = `circle-g-${uid}`;
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={gId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#5FD3A3" />
-          <stop offset="50%" stopColor="#5FA0E8" />
-          <stop offset="100%" stopColor="#9B7FE3" />
+          <stop offset="0%" stopColor="#54D6A6" />
+          <stop offset="50%" stopColor="#5AA0EC" />
+          <stop offset="100%" stopColor="#9A7CE6" />
         </linearGradient>
       </defs>
-      {/* Concentric broken arcs forming Circle's "C" mark, gaps offset for the
-          pinwheel look; green→blue→purple gradient. */}
+      {/* Outer broken ring (gap upper-right). */}
       <circle
-        cx="16"
-        cy="16"
-        r="11"
+        cx="24"
+        cy="24"
+        r="18"
         fill="none"
         stroke={`url(#${gId})`}
-        strokeWidth="3.4"
+        strokeWidth="6"
         strokeLinecap="round"
         pathLength={100}
-        strokeDasharray="68 32"
-        transform="rotate(-40 16 16)"
+        strokeDasharray="74 26"
+        transform="rotate(-28 24 24)"
       />
+      {/* Inner broken ring (gap lower-left). */}
       <circle
-        cx="16"
-        cy="16"
-        r="6.4"
+        cx="24"
+        cy="24"
+        r="9.5"
         fill="none"
         stroke={`url(#${gId})`}
-        strokeWidth="3.4"
+        strokeWidth="6"
         strokeLinecap="round"
         pathLength={100}
-        strokeDasharray="60 40"
-        transform="rotate(150 16 16)"
+        strokeDasharray="62 38"
+        transform="rotate(158 24 24)"
       />
-      <circle cx="16" cy="16" r="2.3" fill={`url(#${gId})`} />
+      <circle cx="24" cy="24" r="3.4" fill={`url(#${gId})`} />
     </svg>
   );
 }

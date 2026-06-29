@@ -51,7 +51,7 @@ function Header({ onLaunch }: { onLaunch: () => void }) {
         <NetworkLogo network="arc" size={14} />
         <span className="mx-0.5 h-3 w-px bg-border-soft" aria-hidden="true" />
         <span>Powered by Circle</span>
-        <CircleLogo size={14} />
+        <CircleLogo size={16} />
       </span>
       <div className="flex items-center gap-2">
         <button
