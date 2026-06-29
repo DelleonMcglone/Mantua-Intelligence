@@ -49,6 +49,17 @@ export function ArcLogo({ size = 16 }: LogoProps) {
   );
 }
 
+/** Circle brand mark — a green circle with a white ring. Used in the landing
+ *  header's "Powered by Circle" badge. */
+export function CircleLogo({ size = 16 }: LogoProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <circle cx="16" cy="16" r="14" fill="#2EBD85" />
+      <circle cx="16" cy="16" r="7.5" fill="none" stroke="#ffffff" strokeWidth="3" />
+    </svg>
+  );
+}
+
 export function NetworkLogo({ network, size = 16 }: { network: NetworkKey; size?: number }) {
   switch (network) {
     // `network` is a single-value union today; the switch is kept so adding

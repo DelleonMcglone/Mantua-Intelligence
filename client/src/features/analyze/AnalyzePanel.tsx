@@ -297,6 +297,7 @@ export function AnalyzePanel({
       <PanelSubHeader
         title="Analyze & Research"
         subtitle="Ask about prices, pegs, pools, or anything markets — pick a suggestion or type."
+        {...(messages.length > 0 ? { onBack: newChat } : {})}
         onClose={onClose}
       />
 
