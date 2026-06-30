@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
-import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
+import { detectIntent as detectIntentImpl, mentionsHook, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
@@ -58,7 +58,22 @@ type Route =
       symbol?: string;
     }
   | { kind: "bridge"; amount?: string; destination?: string; nonce?: number }
-  | { kind: "agent" };
+  | { kind: "agent"; message?: string };
+
+// Intents that the manual Uniswap-v4 panels own when a hook is named.
+const HOOK_ACTION_KINDS = new Set<Intent["kind"]>([
+  "swap",
+  "add-liquidity",
+  "remove-liquidity",
+  "create-pool",
+]);
+// Intents the Circle agent (Arc, no-hook) can execute itself when no hook is named.
+const AGENT_ACTION_KINDS = new Set<Intent["kind"]>([
+  "swap",
+  "add-liquidity",
+  "remove-liquidity",
+  "send",
+]);
 
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
@@ -146,20 +161,44 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
       </div>
       <InputBar
         onSubmit={(text) => {
-          // While the agent panel is open, the global bar drives the agent
-          // conversation instead of route-navigating. CircleAgentChat listens
-          // for this event (it has no input of its own).
+          // The input bar is a universal command router — a card only *starts*
+          // a mode, it never locks it. Every submission re-detects intent and
+          // routes to the right surface.
+          const intent = detectIntent(text);
+          const hookNamed = mentionsHook(text);
+
+          // Naming a hook (Stable Protection / Dynamic Fee / No Hook) always
+          // means the manual Uniswap-v4 flow — open that panel from anywhere,
+          // even mid-agent-conversation.
+          if (intent && HOOK_ACTION_KINDS.has(intent.kind) && hookNamed) {
+            setRoute(intentToRoute(intent));
+            return;
+          }
+          // The agent panel is the universal Circle/Arc handler — forward
+          // everything else to it while it's open (it swaps / LPs / sends /
+          // researches / manages the wallet itself).
           if (route.kind === "agent") {
             window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
             return;
           }
-          // While the analyze thread is open, forward input to it so the
-          // conversation appends a turn instead of remounting the panel.
-          if (route.kind === "analyze") {
+          // No hook named: an action the agent can do (Arc, no-hook pools) or an
+          // explicit agent command routes to the agent and auto-runs.
+          if (intent && (AGENT_ACTION_KINDS.has(intent.kind) || intent.kind === "agent")) {
+            setRoute({ kind: "agent", message: text });
+            return;
+          }
+          // Research question / unrecognized text while Analyze is open → keep
+          // the thread going instead of remounting the panel.
+          if (route.kind === "analyze" && (!intent || intent.kind === "analyze")) {
             window.dispatchEvent(new CustomEvent("mantua:analyze-input", { detail: text }));
             return;
           }
-          handleChatCommand(text, setRoute);
+          // Any other recognized intent → its panel; otherwise drop into Analyze.
+          if (intent) {
+            setRoute(intentToRoute(intent));
+            return;
+          }
+          setRoute({ kind: "analyze", question: text });
         }}
       />
     </Card>
@@ -285,6 +324,7 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
     case "agent":
       return (
         <AgentPanel
+          {...(route.message ? { initialMessage: route.message } : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -317,17 +357,6 @@ function promptToRoute(id: HomePromptId): Route {
  */
 function detectIntent(text: string): Intent | null {
   return detectIntentImpl(text);
-}
-
-function handleChatCommand(text: string, setRoute: (r: Route) => void) {
-  const next = detectIntent(text);
-  if (next) {
-    setRoute(intentToRoute(next));
-    return;
-  }
-  // Fallback: drop the user into the analyze panel so they at least
-  // see the suggestion buttons rather than nothing happening.
-  setRoute({ kind: "analyze", question: text });
 }
 
 /**
@@ -392,6 +421,8 @@ function intentToRoute(intent: Intent): Route {
       return { kind: "positions" };
     case "send":
       return { kind: "agent" };
+    case "agent":
+      return { kind: "agent", ...(intent.message ? { message: intent.message } : {}) };
     case "portfolio":
       return { kind: "home" };
     case "analyze":

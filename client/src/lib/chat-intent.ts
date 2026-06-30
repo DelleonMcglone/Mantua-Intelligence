@@ -55,6 +55,7 @@ export type Intent =
   | { kind: "bridge"; amount?: string; destination?: string }
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
+  | { kind: "agent"; message?: string }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
@@ -146,6 +147,18 @@ function detectHookKeyword(t: string): HookName | null {
 }
 
 /**
+ * Did the user name a liquidity hook (Stable Protection / Dynamic Fee) or
+ * explicitly ask for no hook? This is the manual-vs-agent switch: naming a hook
+ * means the manual Uniswap-v4 flow; otherwise an action routes to the Circle
+ * agent (Arc, no-hook pools).
+ */
+export function mentionsHook(text: string): boolean {
+  const t = text.toLowerCase();
+  if (detectHookKeyword(t) !== null) return true;
+  return /\bno[\s-]?hook\b|\bwithout (a |an )?hook\b|\bhookless\b/.test(t);
+}
+
+/**
  * Extract a 0x EVM address from free-form text. Returns the first hit
  * (canonical-cased, not lowered) or `null`. Used by the `send` intent
  * matcher; rejects shorter hex strings since they're never valid EVM
@@ -185,6 +198,20 @@ export function detectIntent(text: string): Intent | null {
       ...(amount ? { amount } : {}),
       ...(dest ? { destination: dest.sdkName } : {}),
     };
+  }
+
+  // Circle Agent (Circle/Arc) — wallet + autonomous management. Matched early,
+  // before the preflight action block and the "show me …" analyze opener, so
+  // "show me my agent wallet" / "have my agent swap …" route to the agent
+  // instead of the swap/research paths. Requires an explicit "agent" reference
+  // plus a management/possessive cue (or an "agent <wallet|balance|…>" noun) so
+  // research mentions like "AI agents in DeFi" fall through.
+  const agentRef = /\bagent\b/.test(t);
+  const agentCue = /\b(my|create|manage|set[\s-]?up|provision|fund|open|show|view|check)\b/.test(t);
+  const agentNoun =
+    /\bagent'?s?\s+(wallet|balance|cap|caps|positions?|portfolio|status|address|funds?)\b/.test(t);
+  if ((agentRef && agentCue) || agentNoun) {
+    return { kind: "agent", message: text };
   }
 
   // Pre-flight: when an action verb is paired with two recognized tokens,

@@ -34,6 +34,8 @@ import { UserBubble, RichText, Caret } from "./chat-text.tsx";
 
 interface Props {
   onClose: () => void;
+  /** Command forwarded from another panel — auto-sent once on mount. */
+  initialMessage?: string;
 }
 
 interface ToolStep {
@@ -83,7 +85,7 @@ const uid = () => {
   return `m${String(seq)}`;
 };
 
-export function CircleAgentChat({ onClose }: Props) {
+export function CircleAgentChat({ onClose, initialMessage }: Props) {
   const agent = useAgentPortfolio();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
@@ -194,6 +196,16 @@ export function CircleAgentChat({ onClose }: Props) {
       window.removeEventListener("mantua:agent-input", onInput);
     };
   }, []);
+
+  // Seed the first turn from a command typed in another panel (App.tsx routes
+  // hookless / agent commands here). Fires once on mount; `send` owns its own
+  // setState so this stays lint-clean.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !initialMessage) return;
+    seededRef.current = true;
+    sendRef.current(initialMessage);
+  }, [initialMessage]);
 
   const newChat = useCallback(() => {
     abortRef.current?.abort();
