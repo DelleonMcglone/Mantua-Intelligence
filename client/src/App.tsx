@@ -57,13 +57,7 @@ type Route =
       /** Free-form symbol to pass to the `token-price` runner. */
       symbol?: string;
     }
-  | {
-      kind: "bridge";
-      amount?: string;
-      destination?: string;
-      unsupportedDestination?: string;
-      nonce?: number;
-    }
+  | { kind: "bridge"; amount?: string; destination?: string; nonce?: number }
   | { kind: "agent"; message?: string };
 
 // Intents that the manual Uniswap-v4 panels own when a hook is named.
@@ -322,9 +316,6 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           key={`bridge-${String(route.nonce ?? 0)}`}
           {...(route.amount ? { initialAmount: route.amount } : {})}
           {...(route.destination ? { initialDestination: route.destination } : {})}
-          {...(route.unsupportedDestination
-            ? { unsupportedDestination: route.unsupportedDestination }
-            : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -446,9 +437,6 @@ function intentToRoute(intent: Intent): Route {
         kind: "bridge",
         ...(intent.amount ? { amount: intent.amount } : {}),
         ...(intent.destination ? { destination: intent.destination } : {}),
-        ...(intent.unsupportedDestination
-          ? { unsupportedDestination: intent.unsupportedDestination }
-          : {}),
         nonce: nextBridgeNonce(),
       };
   }
