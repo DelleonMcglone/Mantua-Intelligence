@@ -2,6 +2,7 @@ import { formatUnits } from "viem";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import { getUsdPrice } from "./usd-pricing.ts";
 import { getTokenPrices } from "./defillama.ts";
+import { getPythPrice, PYTH_EUR_USD_FEED_ID } from "./pyth-prices.ts";
 import { quoteAgentSwap } from "./agent-swap.ts";
 
 /**
@@ -71,8 +72,19 @@ async function pegFor(symbol: TokenSymbol): Promise<PegInfo | null> {
     return { symbol, priceUsd: p, targetUsd: 1, deviationPct: (p - 1) * 100 };
   }
   if (symbol === "EURC") {
-    // EURC pegs to EUR, not USD. Cross EURC's USD price against agEUR (another
-    // EUR stablecoin) to get an FX-free implied EURC/EUR peg ratio.
+    // EURC pegs to EUR, not USD. Measure it FX-neutrally: EURC/USD ÷ EUR/USD.
+    // Primary is Pyth (EURC/USD via getUsdPrice, EUR/USD via the FX feed); if
+    // either is unavailable, fall back to DefiLlama's euro-coin / agEUR ratio.
+    const eurcUsd = await getUsdPrice("EURC");
+    const eurUsd = await getPythPrice(PYTH_EUR_USD_FEED_ID);
+    if (eurcUsd && eurUsd) {
+      return {
+        symbol,
+        priceUsd: eurcUsd,
+        targetUsd: eurUsd,
+        deviationPct: (eurcUsd / eurUsd - 1) * 100,
+      };
+    }
     const m = await getTokenPrices(["coingecko:euro-coin", "coingecko:ageur"]);
     const eurc = m["coingecko:euro-coin"]?.price;
     const ref = m["coingecko:ageur"]?.price;

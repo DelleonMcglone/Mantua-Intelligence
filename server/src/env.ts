@@ -77,6 +77,11 @@ const schema = z.object({
   X402_DAILY_CAP_USD: z.coerce.number().positive().default(1),
   /** Path/name of the Circle CLI binary. */
   CIRCLE_CLI_PATH: z.string().min(1).default("circle"),
+
+  /** Pyth Hermes base URL — primary off-chain price source (DefiLlama is the
+   *  fallback). Override to point at a self-hosted Hermes; feature is always-on
+   *  with graceful fallback, so no separate enable flag. */
+  PYTH_HERMES_URL: z.url().default("https://hermes.pyth.network"),
 });
 
 export type Env = z.infer<typeof schema>;

@@ -1,4 +1,5 @@
 import { getTokenPrices } from "./defillama.ts";
+import { getPythPrice } from "./pyth-prices.ts";
 import { TOKENS, type TokenSymbol, type Token } from "./tokens.ts";
 
 const TTL_MS = 60_000; // 60s — enough to dampen quote-flow chatter, fresh enough for cap math.
@@ -14,10 +15,10 @@ const cache = new Map<string, CacheEntry>();
  * Resolve a USD price per unit token. Returns 0 if pricing unavailable
  * (caller should treat that as "skip USD-denominated checks", NOT "free").
  *
- * Routed through DefiLlama Coins (`coins.llama.fi`) — its free tier is
- * open and doesn't rate-limit anonymous callers the way CoinGecko's
- * does. DefiLlama exposes prices keyed by `coingecko:<id>`, so the
- * existing `token.coingeckoId` field drives both sources unchanged.
+ * Primary source is Pyth Hermes (first-party, signed prices), keyed by the
+ * token's `pythFeedId`. Falls back to DefiLlama Coins (`coins.llama.fi`, keyed by
+ * `coingecko:<id>`) when Pyth is unavailable, then to the last cached value, then
+ * 0. An outage on either source degrades gracefully.
  */
 export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
   const token = TOKENS[symbol];
@@ -25,16 +26,27 @@ export async function getUsdPrice(symbol: TokenSymbol): Promise<number> {
 }
 
 async function getUsdPriceForToken(token: Token | undefined): Promise<number> {
-  // Tokens without a CoinGecko id, or an unknown symbol, simply have no
-  // price — return 0 rather than throwing. (All current Arc tokens are
-  // priced: USDC→usd-coin, EURC→euro-coin, cirBTC→bitcoin.)
-  if (!token || !token.coingeckoId) return 0;
-  const cached = cache.get(token.coingeckoId);
+  // Tokens with no price source at all simply have no price — return 0 rather
+  // than throwing. (All current Arc tokens are priced via both Pyth + DefiLlama.)
+  if (!token || (!token.coingeckoId && !token.pythFeedId)) return 0;
+  const cacheKey = token.coingeckoId || (token.pythFeedId ?? token.symbol);
+  const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < TTL_MS) return cached.usd;
-  const key = `coingecko:${token.coingeckoId}`;
-  const fresh = await getTokenPrices([key]);
-  const usd = fresh[key]?.price ?? cached?.usd ?? 0;
-  cache.set(token.coingeckoId, { usd, fetchedAt: Date.now() });
+
+  // Pyth first.
+  let usd = 0;
+  if (token.pythFeedId) {
+    const p = await getPythPrice(token.pythFeedId);
+    if (p && p > 0) usd = p;
+  }
+  // DefiLlama fallback → prior cached value → 0.
+  if (usd === 0 && token.coingeckoId) {
+    const key = `coingecko:${token.coingeckoId}`;
+    const fresh = await getTokenPrices([key]);
+    usd = fresh[key]?.price ?? cached?.usd ?? 0;
+  }
+
+  cache.set(cacheKey, { usd, fetchedAt: Date.now() });
   return usd;
 }
 

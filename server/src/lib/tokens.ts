@@ -26,6 +26,9 @@ export interface Token {
   address: `0x${string}`;
   decimals: number;
   coingeckoId: string;
+  /** Pyth Hermes feed id (lowercase hex, no 0x). Primary USD price source;
+   *  DefiLlama (via coingeckoId) is the fallback. */
+  pythFeedId?: string;
   native: boolean;
   chainId: number;
 }
@@ -44,6 +47,7 @@ const TOKENS_ARC_TESTNET = {
     address: "0x3600000000000000000000000000000000000000",
     decimals: 6,
     coingeckoId: "usd-coin",
+    pythFeedId: "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
     native: false,
     chainId: ARC_TESTNET_CHAIN_ID,
   },
@@ -53,6 +57,7 @@ const TOKENS_ARC_TESTNET = {
     address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
     decimals: 6,
     coingeckoId: "euro-coin",
+    pythFeedId: "76fa85158bf14ede77087fe3ae472f66213f6ea2f5b411cb2de472794990fa5c",
     native: false,
     chainId: ARC_TESTNET_CHAIN_ID,
   },
@@ -62,6 +67,7 @@ const TOKENS_ARC_TESTNET = {
     address: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF",
     decimals: 8,
     coingeckoId: "bitcoin",
+    pythFeedId: "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
     native: false,
     chainId: ARC_TESTNET_CHAIN_ID,
   },
