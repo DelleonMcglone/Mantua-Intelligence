@@ -11,7 +11,7 @@ export const HOOK_LABELS: Record<HookName, string> = {
  *  resolve a local position's hook name → address for the per-hook
  *  PositionManager routing on remove-liquidity. */
 export const HOOK_ADDRESS: Record<HookName, `0x${string}`> = {
-  "stable-protection": "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+  "stable-protection": "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
   "dynamic-fee": "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
 };
 

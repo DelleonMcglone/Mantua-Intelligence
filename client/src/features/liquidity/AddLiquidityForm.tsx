@@ -10,7 +10,7 @@ import { type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenSelector } from "@/features/swap/TokenSelector.tsx";
 import { FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
-import { isStable, safeParse } from "./create-helpers.ts";
+import { safeParse } from "./create-helpers.ts";
 import { addCtaLabel } from "./add-helpers.ts";
 import { useAddLiquidity } from "./use-add-liquidity.ts";
 import type { HookName } from "./use-create-pool.ts";
@@ -128,16 +128,14 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   // available ratio (CoinGecko 4xx, etc.) leave the other side alone.
   const tokenPrices = useTokenPrices(useMemo(() => [tokenA, tokenB], [tokenA, tokenB]));
   const priceRatioAtoB = useMemo(() => {
-    // Stable Protection pools are initialized at 1:1 server-side (the
-    // hook models the pair as a 1:1 peg), so mirror 1:1 to keep the
-    // entered amounts consistent with the price the pool will open at.
-    if (hook === "stable-protection") return 1;
+    // Mirror at the real market ratio for every hook. Stable Protection is now
+    // FX-aware (its breaker anchors to a live EUR/USD reference), so USDC/EURC
+    // opens at ~market — no more forced 1:1, which would trip the FX-aware hook.
     const pa = tokenPrices.prices[tokenA];
     const pb = tokenPrices.prices[tokenB];
     if (pa && pb && pa > 0 && pb > 0) return pa / pb;
-    if (isStable(tokenA) && isStable(tokenB)) return 1;
     return null;
-  }, [tokenPrices.prices, tokenA, tokenB, hook]);
+  }, [tokenPrices.prices, tokenA, tokenB]);
 
   // Real pair exchange-rate history (tokenB priced in tokenA) for the price
   // chart, driven by the range toggle. Reference prices from DefiLlama since
