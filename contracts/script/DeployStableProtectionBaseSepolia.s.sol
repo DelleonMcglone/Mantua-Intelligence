@@ -64,13 +64,18 @@ contract DeployStableProtectionBaseSepolia is Script {
         // before mining a salt against a non-existent contract.
         require(poolManager.code.length > 0, "PoolManager has no bytecode on this chain");
 
+        // Peg-reference admin (owner). Defaults to the deployer; override with
+        // HOOK_OWNER to point at the keeper EOA that pushes the EUR/USD ref.
+        address hookOwner = vm.envOr("HOOK_OWNER", vm.addr(pk));
+        console2.log("Hook owner:", hookOwner);
+
         // ── mine CREATE2 salt for a valid hook address ─────────────────────
         bytes32 salt;
         (hookAddr, salt) = HookMiner.find(
             CREATE2_PROXY,
             HOOK_FLAGS,
             type(StableProtectionHook).creationCode,
-            abi.encode(address(poolManager))
+            abi.encode(address(poolManager), hookOwner)
         );
         console2.log("Mined hook address:", hookAddr);
         console2.logBytes32(salt);
@@ -78,7 +83,7 @@ contract DeployStableProtectionBaseSepolia is Script {
         // ── deploy ─────────────────────────────────────────────────────────
         vm.startBroadcast(pk);
         StableProtectionHook hook =
-            new StableProtectionHook{salt: salt}(IPoolManager(poolManager));
+            new StableProtectionHook{salt: salt}(IPoolManager(poolManager), hookOwner);
         vm.stopBroadcast();
 
         require(address(hook) == hookAddr, "Mined and deployed addresses diverged");

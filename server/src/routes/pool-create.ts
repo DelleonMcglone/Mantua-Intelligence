@@ -9,7 +9,7 @@ import { logAudit } from "../lib/audit.ts";
 import { logger } from "../lib/logger.ts";
 import { buildPoolKey } from "../lib/pool-key.ts";
 import { getRequestContext } from "../lib/request-context.ts";
-import { encodeSqrtPriceX96, SQRT_PRICE_X96_1_1 } from "../lib/sqrt-price.ts";
+import { encodeSqrtPriceX96 } from "../lib/sqrt-price.ts";
 import { getToken, isTokenSymbol } from "../lib/tokens.ts";
 import { readSlot0 } from "../lib/v4-state-view.ts";
 import {
@@ -44,7 +44,6 @@ const calldataSchema = z.object({
   initialAmount0Raw: z.string().regex(/^\d+$/),
   initialAmount1Raw: z.string().regex(/^\d+$/),
 });
-
 
 poolCreateRouter.post(
   "/api/pools/create/calldata",
@@ -119,20 +118,14 @@ poolCreateRouter.post(
 
       const a0 = BigInt(initialAmount0Raw);
       const a1 = BigInt(initialAmount1Raw);
-      // Stable Protection models its pair as a 1:1 peg (the hook's E2E
-      // initializes at SQRT_PRICE_1_1 and classifies depeg zones around
-      // parity). Deriving the init price from the user's entered amounts
-      // can open the pool off-peg — even small drift, a noisy price feed,
-      // or a lopsided deposit starts it in a WARN/CRITICAL zone, and the
-      // circuit breaker then blocks every swap. Force parity for this
-      // hook so new pools open HEALTHY; all other hooks (and no-hook
-      // pools) keep the amount-derived market price.
-      const sqrtPriceX96 =
-        hook === "stable-protection"
-          ? SQRT_PRICE_X96_1_1
-          : encodeSqrtPriceX96(
-              flipped ? { amount0Raw: a1, amount1Raw: a0 } : { amount0Raw: a0, amount1Raw: a1 },
-            );
+      // Every hook (incl. the FX-aware Stable Protection) opens at the
+      // amount-derived market price. SP used to be forced to 1:1 because its
+      // breaker measured deviation from parity — but the hook now anchors to a
+      // live EUR/USD reference (set by the peg-sync keeper), so a market-priced
+      // USDC/EURC pool reads HEALTHY and forcing 1:1 would instead trip it.
+      const sqrtPriceX96 = encodeSqrtPriceX96(
+        flipped ? { amount0Raw: a1, amount1Raw: a0 } : { amount0Raw: a0, amount1Raw: a1 },
+      );
       const data = encodeFunctionData({
         abi: POOL_MANAGER_INITIALIZE_ABI,
         functionName: "initialize",
@@ -178,9 +171,7 @@ poolCreateRouter.post(
     const ctx = getRequestContext(req);
     const { chainId, txHash, tokenA, tokenB, fee, hook, outcome } = parsed.data;
     if (!isTokenSymbol(tokenA, chainId) || !isTokenSymbol(tokenB, chainId)) {
-      res
-        .status(400)
-        .json({ error: "Unknown token symbol for chain", code: "BAD_REQUEST" });
+      res.status(400).json({ error: "Unknown token symbol for chain", code: "BAD_REQUEST" });
       return;
     }
     let hookAddress: `0x${string}`;
@@ -198,7 +189,9 @@ poolCreateRouter.post(
     }
     const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook ?? null, chainId);
     const poolKeyHash = keccak256(
-      toHex(`${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}|${String(chainId)}`),
+      toHex(
+        `${key.currency0}|${key.currency1}|${String(key.fee)}|${String(key.tickSpacing)}|${key.hooks}|${String(chainId)}`,
+      ),
     );
 
     if (outcome === "success") {

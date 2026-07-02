@@ -82,6 +82,15 @@ const schema = z.object({
    *  fallback). Override to point at a self-hosted Hermes; feature is always-on
    *  with graceful fallback, so no separate enable flag. */
   PYTH_HERMES_URL: z.url().default("https://hermes.pyth.network"),
+
+  /** Owner EOA private key for the Stable Protection hook's peg-reference admin.
+   *  The peg-sync keeper signs `setPegReference` (EUR/USD) with it. Absent →
+   *  the keeper is disabled (503). Moves no user funds; only sets the FX
+   *  reference. Fund this address with USDC (Arc gas). */
+  MANTUA_ADMIN_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{64}$/)
+    .optional(),
 });
 
 export type Env = z.infer<typeof schema>;
