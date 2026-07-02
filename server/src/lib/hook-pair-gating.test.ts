@@ -86,7 +86,7 @@ describe("resolveHookForPool", () => {
   it("returns the deployed hook address for an allowed pair", () => {
     assert.equal(
       resolveHookForPool("stable-protection", USDC, EURC),
-      "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+      "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
     );
     assert.equal(
       resolveHookForPool("dynamic-fee", USDC, CIRBTC),

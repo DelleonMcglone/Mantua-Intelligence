@@ -218,7 +218,7 @@ const FAQS: FAQItem[] = [
             across five depeg zones (with a circuit breaker for extreme events) to protect
             stablecoin LPs. Pair: USDC/EURC.{" "}
             <a
-              href="https://testnet.arcscan.app/address/0xF131A048875E578A0F89393e858C0442fcD7e0C0"
+              href="https://testnet.arcscan.app/address/0xd1Deea248850BFc239Cb282b793b076357Cb20c0"
               target="_blank"
               rel="noreferrer"
               className="text-accent hover:text-accent-2 underline"

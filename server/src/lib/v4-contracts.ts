@@ -90,7 +90,7 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  * registry to be per-hook. Hook resolution + pair gating work today.
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
-  [ARC_TESTNET_CHAIN_ID]: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+  [ARC_TESTNET_CHAIN_ID]: "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
 };
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
   [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
@@ -158,7 +158,7 @@ export interface HookDeployment {
 export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = {
   "stable-protection": {
     poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
-    hook: "0xF131A048875E578A0F89393e858C0442fcD7e0C0",
+    hook: "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
     poolSwapTest: "0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1",
     poolModifyLiquidityTest: "0x4f81385fa50336e4cbA6718A803f3e2Baa09D1c0",
     positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
