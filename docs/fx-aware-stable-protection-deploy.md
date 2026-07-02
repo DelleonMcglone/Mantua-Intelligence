@@ -28,12 +28,15 @@ curl -s "https://hermes.pyth.network/v2/updates/price/latest?ids[]=a995d00bb36a6
 
 ## 2. Deploy + create + seed (from `contracts/hooks/stable-protection`)
 
+Two signers: the funded deployer deploys + seeds; the keeper (hook owner) signs
+the owner-only `setPegReference`. The keeper needs only a little USDC (gas).
+
 ```bash
 cd contracts/hooks/stable-protection
-export PRIVATE_KEY=0x<deployer-key>
-export HOOK_OWNER=0x<keeper-eoa>            # = address of MANTUA_ADMIN_PRIVATE_KEY
-export EUR_USD_X18=1143240000000000000      # from step 1
-# export SEED_L=5000000000                  # optional; default 5_000e6
+export PRIVATE_KEY=0x<funded-deployer-key>   # USDC gas + USDC & EURC to seed
+export KEEPER_PRIVATE_KEY=0x<keeper-key>     # hook owner; = MANTUA_ADMIN_PRIVATE_KEY; needs a little USDC gas
+export EUR_USD_X18=1143240000000000000       # from step 1
+# export SEED_L=5000000000                   # optional; default 5_000e6
 forge script script/DeployArc.s.sol:DeployArc \
   --rpc-url https://rpc.testnet.arc.network --broadcast -vvvv
 ```
