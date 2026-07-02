@@ -4,7 +4,7 @@ interface BridgePanelProps {
   onClose?: () => void;
   /** Pre-fill from a chat command ("bridge 10 USDC to Base"). */
   initialAmount?: string;
-  /** Destination sdkName to pre-select (e.g. "Base_Sepolia"). */
+  /** Destination sdkName to pre-select (e.g. "Sei_Atlantic"). */
   initialDestination?: string;
 }
 

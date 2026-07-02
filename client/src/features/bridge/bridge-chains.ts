@@ -1,7 +1,9 @@
 /**
- * Outbound bridge destinations (USDC, CCTP V2) from Arc Testnet. Only chains
- * Circle's CCTP supports are bridgeable — Chainlink (an oracle network) and
- * Robinhood are NOT chains and can't be a CCTP destination, so they're absent.
+ * Outbound bridge destinations (USDC, CCTP V2) from Arc Testnet. Every CCTP-V2
+ * testnet chain Bridge Kit can reach is listed — typing "bridge 10 USDC to Sei"
+ * selects the matching card. (Chainlink and Robinhood are NOT chains and can't
+ * be CCTP destinations, so they're absent; Solana is skipped because the app
+ * only holds an EVM recipient address.)
  *
  * `sdkName` is the exact Bridge Kit string chain identifier (the SDK's
  * `chain:` param also accepts these literals). If a route turns out not to
@@ -13,7 +15,14 @@ export type BridgeChainName =
   | "Ethereum_Sepolia"
   | "Arbitrum_Sepolia"
   | "Unichain_Sepolia"
-  | "Avalanche_Fuji";
+  | "Avalanche_Fuji"
+  | "Optimism_Sepolia"
+  | "Polygon_Amoy_Testnet"
+  | "Linea_Sepolia"
+  | "Sonic_Testnet"
+  | "World_Chain_Sepolia"
+  | "Sei_Testnet"
+  | "HyperEVM_Testnet";
 
 export interface BridgeDestination {
   sdkName: BridgeChainName;
@@ -33,12 +42,19 @@ const DESTINATION_ALIASES: { sdkName: BridgeChainName; aliases: RegExp }[] = [
   { sdkName: "Arbitrum_Sepolia", aliases: /\b(arbitrum|arb)\b/ },
   { sdkName: "Unichain_Sepolia", aliases: /\b(unichain|uni)\b/ },
   { sdkName: "Avalanche_Fuji", aliases: /\b(avalanche|avax|fuji)\b/ },
+  { sdkName: "Optimism_Sepolia", aliases: /\b(optimism|op)\b/ },
+  { sdkName: "Polygon_Amoy_Testnet", aliases: /\b(polygon|matic|amoy)\b/ },
+  { sdkName: "Linea_Sepolia", aliases: /\blinea\b/ },
+  { sdkName: "Sonic_Testnet", aliases: /\bsonic\b/ },
+  { sdkName: "World_Chain_Sepolia", aliases: /\b(world[\s-]?chain|world)\b/ },
+  { sdkName: "Sei_Testnet", aliases: /\bsei\b/ },
+  { sdkName: "HyperEVM_Testnet", aliases: /\b(hyperevm|hyperliquid|hyper)\b/ },
   // Ethereum last: plain "sepolia"/"eth"/"ethereum" → Ethereum Sepolia only if
   // none of the more specific chains matched above.
   { sdkName: "Ethereum_Sepolia", aliases: /\b(ethereum|eth|sepolia|mainnet)\b/ },
 ];
 
-/** Match a destination chain from free text ("bridge 10 USDC to base"). */
+/** Match a destination chain from free text ("bridge 10 USDC to sei"). */
 export function matchBridgeDestination(text: string): BridgeDestination | undefined {
   const t = text.toLowerCase();
   for (const { sdkName, aliases } of DESTINATION_ALIASES) {
@@ -77,5 +93,47 @@ export const BRIDGE_DESTINATIONS: BridgeDestination[] = [
     label: "Avalanche Fuji",
     cctpDomain: 1,
     explorerTxUrl: (h) => `https://testnet.snowtrace.io/tx/${h}`,
+  },
+  {
+    sdkName: "Optimism_Sepolia",
+    label: "OP Sepolia",
+    cctpDomain: 2,
+    explorerTxUrl: (h) => `https://sepolia-optimism.etherscan.io/tx/${h}`,
+  },
+  {
+    sdkName: "Polygon_Amoy_Testnet",
+    label: "Polygon Amoy",
+    cctpDomain: 7,
+    explorerTxUrl: (h) => `https://amoy.polygonscan.com/tx/${h}`,
+  },
+  {
+    sdkName: "Linea_Sepolia",
+    label: "Linea Sepolia",
+    cctpDomain: 11,
+    explorerTxUrl: (h) => `https://sepolia.lineascan.build/tx/${h}`,
+  },
+  {
+    sdkName: "Sonic_Testnet",
+    label: "Sonic Testnet",
+    cctpDomain: 13,
+    explorerTxUrl: (h) => `https://testnet.sonicscan.org/tx/${h}`,
+  },
+  {
+    sdkName: "World_Chain_Sepolia",
+    label: "World Chain Sepolia",
+    cctpDomain: 14,
+    explorerTxUrl: (h) => `https://sepolia.worldscan.org/tx/${h}`,
+  },
+  {
+    sdkName: "Sei_Testnet",
+    label: "Sei Testnet",
+    cctpDomain: 16,
+    explorerTxUrl: (h) => `https://seitrace.com/tx/${h}?chain=atlantic-2`,
+  },
+  {
+    sdkName: "HyperEVM_Testnet",
+    label: "HyperEVM Testnet",
+    cctpDomain: 19,
+    explorerTxUrl: (h) => `https://testnet.purrsec.com/tx/${h}`,
   },
 ];
