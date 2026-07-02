@@ -25,10 +25,12 @@ export function TestnetBridgePanel({
   onClose,
   initialAmount,
   initialDestination,
+  unsupportedDestination,
 }: {
   onClose?: () => void;
   initialAmount?: string;
   initialDestination?: string;
+  unsupportedDestination?: string;
 }) {
   const portfolio = usePortfolio();
   const confirm = useConfirmedAction();
@@ -106,6 +108,12 @@ export function TestnetBridgePanel({
           subtitle="Move USDC to another network."
           {...(onClose ? { onClose } : {})}
         />
+        {unsupportedDestination && (
+          <div className="mx-5 mt-4 text-[12px] text-amber bg-amber/10 border border-amber/30 rounded-md px-3 py-2">
+            {unsupportedDestination} isn&apos;t a supported bridge destination yet. Supported: Base,
+            Ethereum, Arbitrum, Unichain, Avalanche Fuji.
+          </div>
+        )}
         <div className="px-5 py-8 text-center text-[12px] text-text-dim">
           Connect a wallet to bridge USDC.
         </div>
@@ -158,6 +166,16 @@ export function TestnetBridgePanel({
             </span>
           </div>
         </div>
+
+        {/* Named-but-unsupported destination (e.g. "bridge … to Sei") — tell the
+            user instead of silently defaulting to the first network. */}
+        {unsupportedDestination && (
+          <div className="text-[12px] text-amber bg-amber/10 border border-amber/30 rounded-md px-3 py-2">
+            {unsupportedDestination} isn&apos;t a supported bridge destination yet. Pick one of the
+            networks below — USDC bridges from Arc to Base, Ethereum, Arbitrum, Unichain, or
+            Avalanche Fuji.
+          </div>
+        )}
 
         {/* To: destination network */}
         <div className="space-y-2">

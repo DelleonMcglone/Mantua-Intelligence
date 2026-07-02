@@ -15,7 +15,10 @@
 import type { TokenSymbol } from "./tokens.ts";
 import type { FeeTier } from "@/features/liquidity/fee-tiers.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
-import { matchBridgeDestination } from "@/features/bridge/bridge-chains.ts";
+import {
+  matchBridgeDestination,
+  detectUnsupportedBridgeDestination,
+} from "@/features/bridge/bridge-chains.ts";
 
 export type AnalyzeTopic =
   | "eth-price"
@@ -52,7 +55,7 @@ export type Intent =
   | { kind: "create-pool"; ctx?: PoolKeyCtx }
   | { kind: "remove-liquidity" }
   | { kind: "positions" }
-  | { kind: "bridge"; amount?: string; destination?: string }
+  | { kind: "bridge"; amount?: string; destination?: string; unsupportedDestination?: string }
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
   | { kind: "agent"; message?: string }
@@ -190,6 +193,9 @@ export function detectIntent(text: string): Intent | null {
   // before swap so the "to <chain>" phrasing isn't read as a swap pair.
   if (/\bbridge\b/.test(t) || /\bcross[- ]?chain\b/.test(t)) {
     const dest = matchBridgeDestination(text);
+    // A named-but-unsupported chain (e.g. "to Sei") — so the panel can say why
+    // nothing was pre-selected instead of silently defaulting to Base.
+    const unsupported = dest ? undefined : detectUnsupportedBridgeDestination(text);
     // First decimal number in the command (e.g. "bridge 10.5 USDC …").
     const amountMatch = /(\d[\d,]*\.?\d*)/.exec(t);
     const amount = amountMatch ? amountMatch[1].replace(/,/g, "") : undefined;
@@ -197,6 +203,7 @@ export function detectIntent(text: string): Intent | null {
       kind: "bridge",
       ...(amount ? { amount } : {}),
       ...(dest ? { destination: dest.sdkName } : {}),
+      ...(unsupported ? { unsupportedDestination: unsupported } : {}),
     };
   }
 

@@ -6,6 +6,8 @@ interface BridgePanelProps {
   initialAmount?: string;
   /** Destination sdkName to pre-select (e.g. "Base_Sepolia"). */
   initialDestination?: string;
+  /** A chain the user named that isn't a supported destination (e.g. "Sei"). */
+  unsupportedDestination?: string;
 }
 
 /**
@@ -13,12 +15,18 @@ interface BridgePanelProps {
  * other CCTP networks via Circle's Bridge Kit + Forwarding Service. Thin
  * pass-through that keeps a stable import surface (mirrors SwapPanel).
  */
-export function BridgePanel({ onClose, initialAmount, initialDestination }: BridgePanelProps = {}) {
+export function BridgePanel({
+  onClose,
+  initialAmount,
+  initialDestination,
+  unsupportedDestination,
+}: BridgePanelProps = {}) {
   return (
     <TestnetBridgePanel
       {...(onClose ? { onClose } : {})}
       {...(initialAmount ? { initialAmount } : {})}
       {...(initialDestination ? { initialDestination } : {})}
+      {...(unsupportedDestination ? { unsupportedDestination } : {})}
     />
   );
 }

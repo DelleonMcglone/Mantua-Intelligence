@@ -47,6 +47,30 @@ export function matchBridgeDestination(text: string): BridgeDestination | undefi
   return undefined;
 }
 
+/** Chains the app can't bridge to yet (not in BRIDGE_DESTINATIONS). Used to warn
+ *  "Sei isn't supported" instead of silently defaulting to Base. */
+const UNSUPPORTED_DESTINATIONS: { name: string; aliases: RegExp }[] = [
+  { name: "Sei", aliases: /\bsei\b/ },
+  { name: "Polygon", aliases: /\b(polygon|matic|amoy)\b/ },
+  { name: "Optimism", aliases: /\b(optimism|op)\b/ },
+  { name: "Solana", aliases: /\b(solana|sol)\b/ },
+  { name: "Sonic", aliases: /\bsonic\b/ },
+  { name: "World Chain", aliases: /\b(worldchain|world)\b/ },
+  { name: "HyperEVM", aliases: /\b(hyperevm|hyper)\b/ },
+  { name: "Linea", aliases: /\blinea\b/ },
+  { name: "Blast", aliases: /\bblast\b/ },
+  { name: "Scroll", aliases: /\bscroll\b/ },
+  { name: "zkSync", aliases: /\b(zksync|zk)\b/ },
+  { name: "BNB Chain", aliases: /\b(bnb|bsc|binance)\b/ },
+];
+
+/** If the command names a chain we DON'T support as a destination, return its
+ *  display name (so the UI can say why nothing was pre-selected). */
+export function detectUnsupportedBridgeDestination(text: string): string | undefined {
+  const t = text.toLowerCase();
+  return UNSUPPORTED_DESTINATIONS.find((d) => d.aliases.test(t))?.name;
+}
+
 export const BRIDGE_DESTINATIONS: BridgeDestination[] = [
   {
     sdkName: "Base_Sepolia",
