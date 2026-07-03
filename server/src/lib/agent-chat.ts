@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { asc, eq } from "drizzle-orm";
-import { isAddress, formatUnits } from "viem";
+import { isAddress, formatUnits, parseAbi, parseUnits } from "viem";
 import { env } from "../env.ts";
 import { db } from "../db/client.ts";
 import { chatMessages, chatSessions } from "../db/schema/chat.ts";
@@ -14,7 +14,12 @@ import {
   addLiquidityFromAgentWallet,
   removeLiquidityFromAgentWallet,
   listAgentPositions,
+  createPoolFromAgentWallet,
 } from "./agent-liquidity.ts";
+import { fundAgentWallet } from "./agent-fund.ts";
+import { bridgeFromAgentWallet } from "./agent-bridge.ts";
+import { getUserPortfolio } from "./user-portfolio.ts";
+import { baseRpcClient } from "./rpc-client.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
@@ -86,9 +91,11 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), swap tokens, send tokens, add/remove liquidity, fetch market/on-chain data, do research, and read the wallet's portfolio (balances + LP positions).
+Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, and read both the agent's portfolio AND the user's own connected wallet (get_user_wallet).
 
-Liquidity: you can add and remove liquidity, but ONLY in no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified); it acts on the no-hook pool at that tier and fails clearly if none exists. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
+Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified). If it fails because the pool doesn't exist, call create_pool for the pair+tier (initializes at the live market price), then add_liquidity again. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
+
+Bridging: you can bridge the agent wallet's USDC to another chain via Circle CCTP (bridge tool). Destinations: base, ethereum, arbitrum, unichain, avalanche, optimism, polygon, linea, sonic, world chain, sei, hyperevm (all testnets). Funds land at the USER's connected wallet on the destination unless they give an explicit 0x recipient — mention where the funds will land, and note Circle's forwarding fee is deducted from the minted amount.
 
 Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
@@ -97,7 +104,9 @@ Decision logic — ground every action in real signals, never assumptions:
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
 - Paid data (x402): prefer the free tools above. If they're insufficient, rate-limited, or gated — or you lack a capability entirely — you may search_paid_services for a paid API and then call_paid_service to pay a small (pre-capped) USDC fee per call. State the cost you paid in your reply. If a tool reports paid services are unavailable, just fall back to the free data and say what you used.
 
-Funding: you can't pull funds in yourself. When the user wants to fund the wallet, give them its address (from get_portfolio or manage_wallet) and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet); balances refresh automatically once it lands.
+Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the agent address and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
+
+Analyst advisor — when you can't execute but the user could: if a swap, add_liquidity, or bridge fails with "Insufficient agent balance" or a spending-cap error, do NOT stop at the error. (1) State the shortfall plainly (needed vs available). (2) Call get_user_wallet to read the USER's own balances. (3) If the user holds enough, deliver your analysis (the signals/peg/impact data you already fetched) and a concrete recommendation: tell them you recommend executing it themselves via the app's Swap / Add Liquidity / Bridge panel, with the exact amounts and reasoning ("you hold 250 USDC; EURC is 0.03% off peg with 0.1% impact — I'd proceed"). (4) If they don't hold enough either, say so and suggest funding options. Always ground the recommendation in real signals, never assumptions.
 
 Supported tokens (case-sensitive symbols): ${TOKEN_SYMBOLS.join(", ")}.
 
@@ -279,6 +288,52 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["url"],
     },
   },
+  {
+    name: "fund_wallet",
+    description:
+      "Request testnet USDC for the agent wallet from Circle's programmatic faucet. If the request isn't available, the result includes the agent address and manual faucet instructions to relay to the user.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_user_wallet",
+    description:
+      "Read the USER's connected wallet balances (USDC/EURC/cirBTC + USD values) — distinct from the agent's own wallet. Use when advising whether the user should execute a transaction themselves (e.g. after an insufficient-agent-balance or spending-cap error). Read-only.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "bridge",
+    description:
+      "Bridge USDC from the agent wallet on Arc to another chain via Circle CCTP. Destination accepts a chain name or alias (base, ethereum, arbitrum, unichain, avalanche, optimism, polygon, linea, sonic, world chain, sei, hyperevm). Funds land at the USER's connected wallet on the destination unless an explicit 0x recipient is given. Executes immediately (~10-60s).",
+    input_schema: {
+      type: "object",
+      properties: {
+        amount: { type: "string", description: "Decimal USDC amount, e.g. \"1.5\"." },
+        destinationChain: { type: "string", description: "Destination chain name or alias." },
+        recipient: {
+          type: "string",
+          description: "Optional 0x recipient on the destination. Defaults to the user's wallet.",
+        },
+      },
+      required: ["amount", "destinationChain"],
+    },
+  },
+  {
+    name: "create_pool",
+    description:
+      "Initialize a NO-HOOK v4 pool for an Arc token pair at the live market price (Pyth). Use when add_liquidity reports the pool doesn't exist, then add liquidity. Executes immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tokenA: { type: "string", description: "First token symbol (USDC/EURC/cirBTC)." },
+        tokenB: { type: "string", description: "Second token symbol (must differ)." },
+        fee: {
+          type: "number",
+          description: "Fee tier in pips: 100, 500, 3000, or 10000. Defaults to 3000.",
+        },
+      },
+      required: ["tokenA", "tokenB"],
+    },
+  },
 ];
 
 interface ToolInput {
@@ -289,8 +344,51 @@ function isTokenSymbol(s: unknown): s is TokenSymbol {
   return typeof s === "string" && (TOKEN_SYMBOLS as string[]).includes(s);
 }
 
+const BALANCE_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
+
+/**
+ * Pre-flight agent-balance check for write tools. Throws a structured
+ * "Insufficient agent balance" message (instead of an opaque on-chain revert)
+ * so the model can pivot to the analyst-advisor flow: check the user's wallet
+ * and recommend they execute the trade themselves if they hold enough.
+ */
+async function requireAgentBalance(
+  privyUserId: string,
+  symbol: TokenSymbol,
+  amount: string,
+): Promise<void> {
+  const wallet = await getAgentWallet(privyUserId);
+  if (!wallet) return; // provisioning errors surface from the tool itself
+  const t = getToken(symbol);
+  let needed: bigint;
+  try {
+    needed = parseUnits(amount, t.decimals);
+  } catch {
+    return; // malformed amounts fail in the tool's own validation
+  }
+  const owner = wallet.address as `0x${string}`;
+  const have = t.native
+    ? await baseRpcClient.getBalance({ address: owner })
+    : await baseRpcClient.readContract({
+        address: t.address,
+        abi: BALANCE_ABI,
+        functionName: "balanceOf",
+        args: [owner],
+      });
+  if (have < needed) {
+    throw new Error(
+      `Insufficient agent balance: needs ${amount} ${symbol}, has ${formatUnits(have, t.decimals)} ${symbol}.`,
+    );
+  }
+}
+
 /** Execute one tool call. Throws are caught by the caller and surfaced as tool errors. */
-async function executeTool(privyUserId: string, name: string, input: ToolInput): Promise<unknown> {
+async function executeTool(
+  privyUserId: string,
+  userWalletAddress: string | undefined,
+  name: string,
+  input: ToolInput,
+): Promise<unknown> {
   switch (name) {
     case "get_portfolio": {
       const p = await getAgentPortfolio(privyUserId);
@@ -361,6 +459,7 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
           throw new Error(`Swap held by the safety guard — ${verdict.reasons.join("; ")}.`);
         }
       }
+      await requireAgentBalance(privyUserId, tokenIn, String(amountIn));
       const r = await swapFromAgentWallet({
         privyUserId,
         tokenIn,
@@ -385,6 +484,7 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
       if (!isTokenSymbol(token)) {
         throw new Error(`token must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
       }
+      await requireAgentBalance(privyUserId, token, String(amount));
       const r = await sendFromAgentWallet({
         privyUserId,
         to,
@@ -431,6 +531,8 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
       const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
       if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
       const fee: FeeTier = feeRaw;
+      await requireAgentBalance(privyUserId, tokenA, amountA);
+      await requireAgentBalance(privyUserId, tokenB, amountB);
       return await addLiquidityFromAgentWallet({
         privyUserId,
         tokenA,
@@ -478,6 +580,69 @@ async function executeTool(privyUserId: string, name: string, input: ToolInput):
       const data = input["data"] && typeof input["data"] === "object" ? input["data"] : undefined;
       const result = await callPaidService({ url: input["url"], data, chain: input["chain"] });
       return { available: true, ...result };
+    }
+    case "fund_wallet": {
+      const w = await getAgentWallet(privyUserId);
+      if (!w) throw new Error("No agent wallet provisioned.");
+      try {
+        const r = await fundAgentWallet(privyUserId);
+        return { requested: true, agentAddress: r.agentAddress, network: r.blockchain };
+      } catch {
+        return {
+          requested: false,
+          agentAddress: w.address,
+          faucet: "https://faucet.circle.com",
+          note: "Programmatic faucet unavailable. Ask the user to request testnet USDC/EURC at faucet.circle.com (choose Arc Testnet) for the agent address, or transfer from their own wallet.",
+        };
+      }
+    }
+    case "get_user_wallet": {
+      if (!userWalletAddress) {
+        return { connected: false, note: "No user wallet is connected in this session." };
+      }
+      const p = await getUserPortfolio(privyUserId, userWalletAddress);
+      return {
+        connected: true,
+        address: userWalletAddress,
+        balances: p.balances.map((b) => ({
+          symbol: b.symbol,
+          balance: formatUnits(BigInt(b.balanceRaw), b.decimals),
+          usdValue: b.usdValue,
+        })),
+      };
+    }
+    case "bridge": {
+      const amountIn = input["amount"];
+      const destIn = input["destinationChain"];
+      if (typeof amountIn !== "string" || typeof destIn !== "string") {
+        throw new Error("amount and destinationChain must be strings.");
+      }
+      const amount = amountIn;
+      const destinationChain = destIn;
+      const explicit = input["recipient"];
+      let recipient: `0x${string}`;
+      if (typeof explicit === "string" && explicit.length > 0) {
+        if (!isAddress(explicit)) throw new Error("recipient must be a valid 0x EVM address.");
+        recipient = explicit;
+      } else if (userWalletAddress && isAddress(userWalletAddress)) {
+        recipient = userWalletAddress;
+      } else {
+        throw new Error(
+          "No recipient available: the user has no connected wallet — ask for an explicit 0x recipient address on the destination chain.",
+        );
+      }
+      await requireAgentBalance(privyUserId, "USDC", amount);
+      const r = await bridgeFromAgentWallet({ privyUserId, amount, destinationChain, recipient });
+      return r;
+    }
+    case "create_pool": {
+      const { tokenA, tokenB } = input;
+      if (!isTokenSymbol(tokenA) || !isTokenSymbol(tokenB)) {
+        throw new Error(`Both tokens must be Arc symbols: ${TOKEN_SYMBOLS.join(", ")}.`);
+      }
+      const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
+      if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
+      return await createPoolFromAgentWallet({ privyUserId, tokenA, tokenB, fee: feeRaw });
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -583,7 +748,7 @@ export async function* runAgentChat(params: {
       const args = (tu.input ?? {}) as Record<string, unknown>;
       yield { type: "tool_start", id: tu.id, tool: tu.name, args };
       try {
-        const data = await executeTool(privyUserId, tu.name, args);
+        const data = await executeTool(privyUserId, walletAddress, tu.name, args);
         steps.push({ tool: tu.name, args, ok: true, data });
         yield { type: "tool_result", id: tu.id, tool: tu.name, ok: true, data };
         toolResults.push({

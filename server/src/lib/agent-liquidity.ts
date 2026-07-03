@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { type Address, parseAbi, parseUnits } from "viem";
+import { type Address, encodeFunctionData, parseAbi, parseUnits } from "viem";
 import { db } from "../db/client.ts";
 import { pools, portfolioTransactions, positions } from "../db/schema/trading.ts";
 import { users } from "../db/schema/users.ts";
@@ -12,9 +12,17 @@ import { buildPoolKey } from "./pool-key.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, getTokens, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
-import { tokenAmountUsd } from "./usd-pricing.ts";
+import { getUsdPrice, tokenAmountUsd } from "./usd-pricing.ts";
+import { encodeSqrtPriceX96 } from "./sqrt-price.ts";
 import { buildAddLiquidityCalldata } from "./v4-add-liquidity.ts";
-import { getHookAddress, PERMIT2, type FeeTier, type HookName } from "./v4-contracts.ts";
+import {
+  getHookAddress,
+  getV4StackForHook,
+  PERMIT2,
+  POOL_MANAGER_INITIALIZE_ABI,
+  type FeeTier,
+  type HookName,
+} from "./v4-contracts.ts";
 import { buildRemoveLiquidityCalldata } from "./v4-remove-liquidity.ts";
 import { readSlot0 } from "./v4-state-view.ts";
 
@@ -482,4 +490,85 @@ export async function listAgentPositions(privyUserId: string): Promise<AgentPosi
     hasHook: !!r.hookAddress && r.hookAddress.toLowerCase() !== ZERO_ADDRESS.toLowerCase(),
     liquidity: r.liquidity,
   }));
+}
+
+// ─── Agent pool creation (no-hook only) ─────────────────────────────────────
+
+export interface AgentCreatePoolArgs {
+  privyUserId: string;
+  tokenA: TokenSymbol;
+  tokenB: TokenSymbol;
+  fee: FeeTier;
+}
+
+export interface AgentCreatePoolResult {
+  alreadyExists: boolean;
+  tokenA: TokenSymbol;
+  tokenB: TokenSymbol;
+  fee: FeeTier;
+  txHash?: `0x${string}`;
+  explorerUrl?: string;
+}
+
+/**
+ * Initialize a NO-HOOK v4 pool from the agent wallet. The init price comes from
+ * the live Pyth/DefiLlama USD ratio (market-fair, matching the user route's
+ * policy in routes/pool-create.ts) so the pool opens at the real rate. If the
+ * pool is already initialized, returns `{ alreadyExists: true }` so the agent
+ * can proceed straight to add_liquidity.
+ */
+export async function createPoolFromAgentWallet(
+  args: AgentCreatePoolArgs,
+): Promise<AgentCreatePoolResult> {
+  const wallet = await getAgentWallet(args.privyUserId);
+  if (!wallet) throw new AgentWalletNotFoundError(args.privyUserId);
+  if (args.tokenA === args.tokenB) throw new Error("tokenA and tokenB must differ.");
+
+  const { key, flipped } = buildPoolKey(
+    args.tokenA,
+    args.tokenB,
+    args.fee,
+    ZERO_ADDRESS,
+    null,
+    DEFAULT_CHAIN_ID,
+  );
+
+  const existing = await readSlot0(key);
+  if (existing) {
+    return { alreadyExists: true, tokenA: args.tokenA, tokenB: args.tokenB, fee: args.fee };
+  }
+
+  // Market-fair init price from live USD prices: in raw base units,
+  // amount1/amount0 = (pA/pB) · 10^dB / 10^dA for the (A, B) ordering, then
+  // swapped when the canonical currency order flips the pair.
+  const [pA, pB] = await Promise.all([getUsdPrice(args.tokenA), getUsdPrice(args.tokenB)]);
+  if (!pA || !pB) throw new Error("Live USD prices unavailable — cannot derive an init price.");
+  const SCALE = 1_000_000;
+  const tokA = getToken(args.tokenA, DEFAULT_CHAIN_ID);
+  const tokB = getToken(args.tokenB, DEFAULT_CHAIN_ID);
+  const rawA = 10n ** BigInt(tokA.decimals) * BigInt(Math.round(pB * SCALE));
+  const rawB = 10n ** BigInt(tokB.decimals) * BigInt(Math.round(pA * SCALE));
+  const sqrtPriceX96 = encodeSqrtPriceX96(
+    flipped ? { amount0Raw: rawB, amount1Raw: rawA } : { amount0Raw: rawA, amount1Raw: rawB },
+  );
+
+  const callData = encodeFunctionData({
+    abi: POOL_MANAGER_INITIALIZE_ABI,
+    functionName: "initialize",
+    args: [key, sqrtPriceX96],
+  });
+  const { txHash } = await executeAgentCalldata({
+    walletId: wallet.circleWalletId,
+    to: getV4StackForHook(key.hooks).poolManager,
+    callData,
+  });
+
+  return {
+    alreadyExists: false,
+    tokenA: args.tokenA,
+    tokenB: args.tokenB,
+    fee: args.fee,
+    txHash,
+    explorerUrl: explorerTxUrl(txHash),
+  };
 }

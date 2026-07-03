@@ -8,3 +8,6 @@
 // time. pass 2 aliases both packages to this bundle.
 export { UnifiedBalanceKit } from "@circle-fin/unified-balance-kit";
 export { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
+// Bridge Kit shares the same Circle-Wallets adapter; bundle it here too so the
+// agent's server-side bridge tool ships in the Vercel function.
+export { BridgeKit } from "@circle-fin/bridge-kit";

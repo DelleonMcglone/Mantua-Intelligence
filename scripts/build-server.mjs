@@ -62,6 +62,7 @@ await build({
     "@circle-fin/developer-controlled-wallets": dcwOut,
     "@circle-fin/unified-balance-kit": ubkOut,
     "@circle-fin/adapter-circle-wallets": ubkOut,
+    "@circle-fin/bridge-kit": ubkOut,
   },
   outfile: join(root, "api/_server.mjs"),
 });
