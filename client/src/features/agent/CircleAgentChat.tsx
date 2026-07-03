@@ -453,6 +453,133 @@ function renderResult(step: ToolStep): ReactNode {
       const d = step.data as AnalyzeData;
       return <AnalyzeView data={d} />;
     }
+    case "get_user_wallet": {
+      const d = step.data as {
+        connected: boolean;
+        address?: string;
+        balances?: { symbol: string; balance: string; usdValue: number }[];
+      };
+      if (!d.connected) {
+        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No wallet connected.</span>;
+      }
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Your wallet balances</Heading>
+          <DetailRows
+            rows={(d.balances ?? []).map((b) => ({
+              label: b.symbol,
+              value: `${fmtNum(b.balance)}${b.usdValue ? ` · $${b.usdValue.toFixed(2)}` : ""}`,
+            }))}
+          />
+        </div>
+      );
+    }
+    case "fund_wallet": {
+      const d = step.data as {
+        requested: boolean;
+        agentAddress: string;
+        faucet?: string;
+        note?: string;
+      };
+      return d.requested ? (
+        <Banner tone="success" icon="✓" title="Testnet USDC requested">
+          Circle&apos;s faucet is sending USDC to {shortAddr(d.agentAddress)} — balances refresh
+          once it lands.
+        </Banner>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Fund the agent wallet</Heading>
+          <DetailRows
+            rows={[
+              { label: "Agent address", value: shortAddr(d.agentAddress) },
+              { label: "Faucet", value: d.faucet ?? "https://faucet.circle.com" },
+            ]}
+          />
+        </div>
+      );
+    }
+    case "bridge": {
+      const d = step.data as {
+        amount: string;
+        destinationChain: string;
+        recipient: string;
+        burnTxHash?: string;
+        mintTxHash?: string;
+      };
+      const label = d.destinationChain.replace(/_/g, " ");
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Banner tone="success" icon="✓" title={`Bridged ${fmtNum(d.amount)} USDC → ${label}`}>
+            Recipient {shortAddr(d.recipient)} on {label}. Circle&apos;s forwarding fee is deducted
+            from the minted amount.
+          </Banner>
+          {d.burnTxHash && (
+            <TxRow
+              hash={d.burnTxHash}
+              explorerUrl={`https://testnet.arcscan.app/tx/${d.burnTxHash}`}
+            />
+          )}
+        </div>
+      );
+    }
+    case "create_pool": {
+      const d = step.data as {
+        alreadyExists: boolean;
+        tokenA: string;
+        tokenB: string;
+        fee: number;
+        txHash?: string;
+        explorerUrl?: string;
+      };
+      if (d.alreadyExists) {
+        return (
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            {d.tokenA}/{d.tokenB} pool already exists — adding liquidity instead.
+          </span>
+        );
+      }
+      return d.txHash && d.explorerUrl ? (
+        <Success
+          title={`Created ${d.tokenA}/${d.tokenB} pool (${(d.fee / 10000).toFixed(2)}%)`}
+          txHash={d.txHash}
+          explorerUrl={d.explorerUrl}
+        />
+      ) : (
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Pool created.</span>
+      );
+    }
+    case "get_positions": {
+      const d = step.data as {
+        positions: { id: string; pair: string; fee: number; liquidity: string }[];
+      };
+      if (d.positions.length === 0) {
+        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No open positions.</span>;
+      }
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Agent LP positions</Heading>
+          <DetailRows
+            rows={d.positions.map((p) => ({
+              label: p.pair,
+              value: `${(p.fee / 10000).toFixed(2)}% · L ${fmtNum(p.liquidity)}`,
+            }))}
+          />
+        </div>
+      );
+    }
+    case "add_liquidity":
+    case "remove_liquidity": {
+      const d = step.data as { txHash?: string; explorerUrl?: string };
+      return d.txHash && d.explorerUrl ? (
+        <Success
+          title={step.tool === "add_liquidity" ? "Liquidity added" : "Liquidity removed"}
+          txHash={d.txHash}
+          explorerUrl={d.explorerUrl}
+        />
+      ) : (
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>
+      );
+    }
     default:
       return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>;
   }
