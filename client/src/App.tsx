@@ -75,9 +75,64 @@ const AGENT_ACTION_KINDS = new Set<Intent["kind"]>([
   "send",
 ]);
 
+// ─── Route persistence ────────────────────────────────────────────────────────
+// The route lives only in React state, so a refresh used to bounce back to the
+// landing page. Persist the last in-app route to sessionStorage and restore it
+// on load: refresh keeps your place; a fresh tab/visit still starts at landing.
+const ROUTE_STORAGE_KEY = "mantua:last-route";
+const RESTORABLE_KINDS: readonly Route["kind"][] = [
+  "home",
+  "swap",
+  "pools",
+  "pool",
+  "add-liquidity",
+  "positions",
+  "asset",
+  "analyze",
+  "bridge",
+  "agent",
+];
+
+/** What we persist. Never store the landing page (clear instead), and never
+ *  store an agent `message` — restoring it would auto-resend the command on
+ *  refresh (potentially re-executing a trade). */
+function sanitizeRouteForStorage(route: Route): Route | null {
+  if (route.kind === "landing") return null;
+  if (route.kind === "agent") return { kind: "agent" };
+  return route;
+}
+
+function loadStoredRoute(): Route | null {
+  try {
+    const raw = sessionStorage.getItem(ROUTE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { kind?: unknown };
+    if (
+      typeof parsed.kind === "string" &&
+      (RESTORABLE_KINDS as readonly string[]).includes(parsed.kind)
+    ) {
+      return parsed as Route;
+    }
+  } catch {
+    // Corrupt / unavailable storage → start fresh at landing.
+  }
+  return null;
+}
+
 export default function App() {
   const { ready, authenticated, login, logout, user } = usePrivy();
-  const [route, setRoute] = useState<Route>({ kind: "landing" });
+  const [route, setRoute] = useState<Route>(() => loadStoredRoute() ?? { kind: "landing" });
+
+  // Keep the stored route in sync so a refresh restores the current view.
+  useEffect(() => {
+    try {
+      const sanitized = sanitizeRouteForStorage(route);
+      if (sanitized) sessionStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(sanitized));
+      else sessionStorage.removeItem(ROUTE_STORAGE_KEY);
+    } catch {
+      // Storage unavailable (private mode etc.) — refresh just returns to landing.
+    }
+  }, [route]);
 
   // PanelHeader's "New chat" button (rendered inside every panel)
   // falls back to this event when no `onNewChat` prop is wired —
