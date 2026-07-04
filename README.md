@@ -54,8 +54,7 @@ settlement.
   pair exchange-rate charts.
 - **Cross-chain USDC bridging.** Outbound from Arc to all 12 CCTP-V2 testnets — Base, Ethereum,
   Arbitrum, Unichain, Avalanche Fuji, OP, Polygon Amoy, Linea, Sonic, World Chain, Sei,
-  HyperEVM — via Circle CCTP (Bridge Kit); typed commands ("bridge 10 USDC to Sei") pre-select
-  the destination.
+  HyperEVM — via Circle CCTP (Bridge Kit).
 - **Unified balance / treasury.** A single multi-chain USDC balance (view + deposit) via Circle
   Gateway (Unified Balance Kit).
 - **Analyze & research.** Inline conversational research: deterministic cited data cards for
