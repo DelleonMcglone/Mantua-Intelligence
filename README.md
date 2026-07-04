@@ -155,9 +155,6 @@ token**.
 | ----------- | --------- | --------------------------------- | --------------------------- |
 | Arc Testnet | `5042002` | `https://rpc.testnet.arc.network` | https://testnet.arcscan.app |
 
-Get testnet tokens from the **[Circle Faucet](https://faucet.circle.com/)** (USDC + EURC; Arc
-USDC also pays for gas).
-
 ### Tokens
 
 | Token   | Address                                      | Decimals | Notes                         |
