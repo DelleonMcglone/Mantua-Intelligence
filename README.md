@@ -19,7 +19,7 @@ From a single natural-language prompt you can:
 - **Bridge & manage treasury** — move USDC cross-chain (Circle CCTP) and hold a unified,
   multi-chain USDC balance (Circle Gateway).
 
-## The problem — and who it's for
+## The problem and who it's for
 
 Managing stablecoin liquidity today is operationally manual, interface-fragmented,
 strategy-dependent, and exposed to peg risk across pools, venues, and market conditions.
