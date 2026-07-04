@@ -1,9 +1,12 @@
-# x402 nanopayments (agent paid research) — setup
+# x402 nanopayments (agent marketplace access) — setup
 
 The conversational agent can pay tiny USDC fees per call to Circle's **x402
-services marketplace** to access paid HTTP APIs (premium market data, etc.) when
-the free data sources are insufficient. This runs through the **Circle CLI** and
-is **local-only** by design — it needs the CLI installed, logged in, and a funded
+agent marketplace** ([agents.circle.com/services](https://agents.circle.com/services)) —
+the full catalog, not just data: web search, news, weather, sports stats,
+prediction-market odds, social lookups, academic papers, SMS/communication APIs,
+domain lookups, and more. When the agent lacks a capability, it searches the
+marketplace before declining. This runs through the **Circle CLI** and is
+**local-only** by design — it needs the CLI installed, logged in, and a funded
 CLI wallet, none of which exist in the Vercel serverless runtime.
 
 When x402 is disabled or the CLI is unavailable (e.g. on Vercel), the agent's

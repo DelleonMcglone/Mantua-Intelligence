@@ -25,6 +25,17 @@ import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
 import { isX402Available, searchServices, callPaidService } from "./x402-cli.ts";
+import {
+  getAddressInfo,
+  getAddressTransactions,
+  getAddressTokenTransfers,
+  getTokenInfo,
+  getTokenHolders,
+  getTransactionInfo,
+  summarizeWhaleSignals,
+  isEvmAddress,
+  isTxHash,
+} from "./arcscan.ts";
 
 /**
  * Conversational, autonomous agent loop.
@@ -91,7 +102,7 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, and read both the agent's portfolio AND the user's own connected wallet (get_user_wallet).
+Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
 
 Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified). If it fails because the pool doesn't exist, call create_pool for the pair+tier (initializes at the live market price), then add_liquidity again. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
 
@@ -102,7 +113,13 @@ Decision logic — ground every action in real signals, never assumptions:
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
-- Paid data (x402): prefer the free tools above. If they're insufficient, rate-limited, or gated — or you lack a capability entirely — you may search_paid_services for a paid API and then call_paid_service to pay a small (pre-capped) USDC fee per call. State the cost you paid in your reply. If a tool reports paid services are unavailable, just fall back to the free data and say what you used.
+- Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call. BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if the tools report paid services unavailable in this environment, say so plainly and do your best with built-in tools.
+
+Analyst method — you are a crypto research analyst on Arc (Circle's chain), and Arcscan (testnet.arcscan.app) is your blockchain explorer:
+- Daily briefing: when the user asks for a briefing, "what happened", or a market check, run the workflow: (1) market pulse — get_market_data with market-summary and top-stablecoins; (2) peg check — get_signals for USDC/EURC deviations; (3) portfolio review — get_portfolio and get_user_wallet; (4) anything notable on-chain. Deliver a concise analyst brief: figures first, then interpretation, then recommended actions.
+- On-chain analysis: use inspect_address for any wallet (balance, activity, whale signals), inspect_token for tokenomics + holder concentration, inspect_transaction to decode what a tx did. Whale signals to look for: accumulating a token, selling a held token, using a new protocol, rotating stables into tokens (risk-on) or tokens into stables (risk-off). NEVER suggest blindly copying a wallet — treat its activity as a hypothesis, then verify with your own data (pegs, price impact, volumes) before recommending anything.
+- Token safety: before recommending any token, check inspect_token and call out red flags explicitly — top-10 holder concentration, a tiny holder base, or supply parked in a few contracts. Exchange/pool contracts among top holders are normal; unlabeled EOA whales are the ones to scrutinize.
+- Research principles: primary sources beat summaries; cite concrete figures, never vibes; free data first, x402 paid data when free is insufficient; include the Arcscan link when discussing an address, token, or tx so the user can verify.
 
 Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the agent address and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
 
@@ -259,7 +276,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search_paid_services",
     description:
-      "Search Circle's x402 paid-API marketplace by keyword (e.g. 'crypto', 'twitter', 'prediction markets', 'papers'). Returns candidate paid endpoints with their per-call USDC price and accepted chains. Use this when free data (get_market_data) is insufficient, gated, or rate-limited, or when you lack a capability. Read-only; no payment. May be unavailable in this environment.",
+      "Search Circle's x402 agent marketplace (agents.circle.com/services) by keyword — the FULL catalog, not just data: web search, news, weather, sports stats, prediction-market odds, twitter/social, academic papers, SMS/communication APIs, domain lookups, and more. Returns candidate services with their per-call USDC price and accepted chains. BEFORE saying you can't do something, search here — a paid service may cover it. Read-only; no payment. May be unavailable in this environment.",
     input_schema: {
       type: "object",
       properties: {
@@ -271,7 +288,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "call_paid_service",
     description:
-      "Pay a small USDC fee (pre-capped) to call a paid x402 service URL from search_paid_services and return its data. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then fall back to free data).",
+      "Pay a small USDC fee (pre-capped) to call ANY x402 marketplace service URL from search_paid_services — data lookups, web search, notifications, whatever the service does — and return its response. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then say so and use built-in tools where possible).",
     input_schema: {
       type: "object",
       properties: {
@@ -332,6 +349,45 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["tokenA", "tokenB"],
+    },
+  },
+  {
+    name: "inspect_address",
+    description:
+      "On-chain analysis of ANY address on Arc via Arcscan: native balance, contract/EOA, recent transactions + token transfers, and computed whale signals (accumulating/selling per token, stables↔tokens rotation). Use for whale-watching, checking a counterparty, or reviewing a wallet's activity. Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "0x address to inspect." },
+      },
+      required: ["address"],
+    },
+  },
+  {
+    name: "inspect_token",
+    description:
+      "Tokenomics + holder analysis for a token on Arc via Arcscan: supply, holder count, top holders with % of supply, top-10 concentration, and safety red flags (heavy concentration, tiny holder count). Accepts an Arc symbol (USDC/EURC/cirBTC) or any 0x token address. Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        addressOrSymbol: {
+          type: "string",
+          description: "Token symbol (USDC/EURC/cirBTC) or 0x token address.",
+        },
+      },
+      required: ["addressOrSymbol"],
+    },
+  },
+  {
+    name: "inspect_transaction",
+    description:
+      "Decode what an Arc transaction actually did: status, method, from/to, and every token movement inside it. Use when the user pastes a tx hash or you need to verify an on-chain action. Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        hash: { type: "string", description: "0x transaction hash (66 chars)." },
+      },
+      required: ["hash"],
     },
   },
 ];
@@ -643,6 +699,60 @@ async function executeTool(
       const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
       if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
       return await createPoolFromAgentWallet({ privyUserId, tokenA, tokenB, fee: feeRaw });
+    }
+    case "inspect_address": {
+      const address = input["address"];
+      if (typeof address !== "string" || !isEvmAddress(address)) {
+        throw new Error("address must be a valid 0x EVM address.");
+      }
+      const [info, txs, transfers] = await Promise.all([
+        getAddressInfo(address),
+        getAddressTransactions(address, 8),
+        getAddressTokenTransfers(address, 15),
+      ]);
+      if (!info) {
+        return { found: false, note: "Arcscan has no data for this address (or is unreachable)." };
+      }
+      return {
+        found: true,
+        ...info,
+        recentTransactions: txs,
+        tokenTransfers: transfers,
+        signals: summarizeWhaleSignals(transfers),
+      };
+    }
+    case "inspect_token": {
+      const raw = input["addressOrSymbol"];
+      if (typeof raw !== "string" || raw.length === 0) {
+        throw new Error("addressOrSymbol is required.");
+      }
+      const address = isTokenSymbol(raw) ? getToken(raw).address : raw;
+      if (!isEvmAddress(address)) {
+        throw new Error("Provide an Arc token symbol (USDC/EURC/cirBTC) or a 0x token address.");
+      }
+      const [info, holders] = await Promise.all([getTokenInfo(address), getTokenHolders(address)]);
+      if (!info) {
+        return { found: false, note: "Arcscan has no token data for this address." };
+      }
+      const flags: string[] = [];
+      if (holders.top10Pct > 50) {
+        flags.push(
+          `Heavy concentration: top 10 holders control ${holders.top10Pct.toFixed(1)}% of supply.`,
+        );
+      }
+      if (info.holdersCount > 0 && info.holdersCount < 100) {
+        flags.push(`Very small holder base (${String(info.holdersCount)} holders).`);
+      }
+      return { found: true, ...info, ...holders, flags };
+    }
+    case "inspect_transaction": {
+      const hash = input["hash"];
+      if (typeof hash !== "string" || !isTxHash(hash)) {
+        throw new Error("hash must be a 0x transaction hash (66 chars).");
+      }
+      const tx = await getTransactionInfo(hash);
+      if (!tx) return { found: false, note: "Arcscan has no data for this transaction." };
+      return { found: true, ...tx };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
