@@ -100,6 +100,11 @@ export function RemoveLiquidityModal({ position, onClose, onSuccess }: Props) {
 
           <SlippageRow value={slippageBps} onChange={setSlippageBps} />
 
+          <p className="text-xs text-text-dim">
+            Removing liquidity also collects this position&apos;s accrued swap fees — principal +
+            fees are sent to your wallet in one transaction.
+          </p>
+
           {!ready && (
             <p className="text-xs text-amber">
               This position was created before tokenId capture — remove not available.
