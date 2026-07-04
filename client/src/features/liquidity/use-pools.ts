@@ -1,30 +1,36 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api.ts";
-import { TOKENS } from "@/lib/tokens.ts";
-import { FEE_TIER_LABELS } from "./fee-tiers.ts";
-import { getLocalPools } from "./local-pools.ts";
+import { TOKENS, isTokenSymbol } from "@/lib/tokens.ts";
+import { FEE_TIERS, FEE_TIER_LABELS, type FeeTier } from "./fee-tiers.ts";
 import type { PoolDetail, PoolSummary, ChartRange } from "./types.ts";
 
 const LOCAL_PREFIX = "local:";
 
 /**
- * Synthesize a `PoolDetail` for a testnet-only pool that lives in
- * localStorage. The server's `/api/pools/:id` only knows about
- * DefiLlama-indexed mainnet pools, so for `local:*` IDs we have to
- * build the detail client-side. TVL/volume/APY aren't tracked locally
- * yet — return zeros so the page renders without errors.
+ * Synthesize a `PoolDetail` for a testnet-only pool. The server's
+ * `/api/pools/:id` only knows about DefiLlama-indexed mainnet pools, so for
+ * `local:*` IDs we build the detail client-side. The id itself encodes the
+ * whole pool key — `local:<chainId>|<tokenA>|<tokenB>|<fee>|<hook|none>` — so
+ * we parse it directly instead of requiring a matching localStorage entry
+ * (which broke position click-through on cleared storage, other devices, and
+ * agent-created pools). TVL/volume/APY aren't tracked locally — zeros.
  */
 function synthesizeLocalPool(poolId: string): PoolDetail | null {
   const key = poolId.slice(LOCAL_PREFIX.length);
-  const local = getLocalPools().find((p) => p.key === key);
-  if (!local) return null;
-  const underlying: string[] = [TOKENS[local.tokenA].address, TOKENS[local.tokenB].address];
+  const [, tokenA, tokenB, feeStr] = key.split("|");
+  if (!tokenA || !tokenB || !isTokenSymbol(tokenA) || !isTokenSymbol(tokenB)) return null;
+  const feeNum = Number(feeStr);
+  const fee: FeeTier | null = (FEE_TIERS as readonly number[]).includes(feeNum)
+    ? (feeNum as FeeTier)
+    : null;
+  if (fee === null) return null;
+  const underlying: string[] = [TOKENS[tokenA].address, TOKENS[tokenB].address];
   return {
     pool: {
       id: poolId,
-      symbol: `${local.tokenA}-${local.tokenB}`,
+      symbol: `${tokenA}-${tokenB}`,
       project: "mantua",
-      feeTier: FEE_TIER_LABELS[local.fee],
+      feeTier: FEE_TIER_LABELS[fee],
       tvlUsd: 0,
       apy: 0,
       volumeUsd1d: 0,
