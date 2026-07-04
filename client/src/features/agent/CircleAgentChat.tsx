@@ -580,6 +580,105 @@ function renderResult(step: ToolStep): ReactNode {
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>
       );
     }
+    case "inspect_address": {
+      const d = step.data as {
+        found: boolean;
+        address?: string;
+        nativeBalance?: string;
+        isContract?: boolean;
+        label?: string | null;
+        tokenTransfers?: { token: string; direction: string; amount: string }[];
+        signals?: { notes: string[] };
+      };
+      if (!d.found) {
+        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No data on Arcscan.</span>;
+      }
+      const activity = (d.tokenTransfers ?? []).slice(0, 5);
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>
+            {d.label ?? shortAddr(d.address ?? "")} {d.isContract ? "· contract" : "· wallet"}
+          </Heading>
+          <DetailRows
+            rows={[
+              { label: "Native (USDC gas)", value: fmtNum(d.nativeBalance ?? "0") },
+              ...activity.map((t) => ({
+                label: `${t.direction === "in" ? "→ in" : "← out"} ${t.token}`,
+                value: fmtNum(t.amount),
+              })),
+            ]}
+          />
+          {(d.signals?.notes.length ?? 0) > 0 && (
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              {d.signals?.notes.join(" ")}
+            </span>
+          )}
+        </div>
+      );
+    }
+    case "inspect_token": {
+      const d = step.data as {
+        found: boolean;
+        name?: string;
+        symbol?: string;
+        totalSupply?: string;
+        holdersCount?: number;
+        top10Pct?: number;
+        flags?: string[];
+      };
+      if (!d.found) {
+        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No token data.</span>;
+      }
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>
+            {d.name} ({d.symbol})
+          </Heading>
+          <DetailRows
+            rows={[
+              { label: "Total supply", value: fmtNum(d.totalSupply ?? "0") },
+              { label: "Holders", value: (d.holdersCount ?? 0).toLocaleString() },
+              { label: "Top 10 hold", value: `${(d.top10Pct ?? 0).toFixed(1)}%` },
+            ]}
+          />
+          {(d.flags?.length ?? 0) > 0 && (
+            <Banner tone="error" icon="⚠" title="Red flags">
+              {d.flags?.join(" ")}
+            </Banner>
+          )}
+        </div>
+      );
+    }
+    case "inspect_transaction": {
+      const d = step.data as {
+        found: boolean;
+        hash?: string;
+        status?: string;
+        method?: string | null;
+        tokenMovements?: { token: string; amount: string }[];
+        arcscanUrl?: string;
+      };
+      if (!d.found) {
+        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No tx data.</span>;
+      }
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>
+            Tx {d.status}
+            {d.method ? ` · ${d.method}` : ""}
+          </Heading>
+          {(d.tokenMovements?.length ?? 0) > 0 && (
+            <DetailRows
+              rows={(d.tokenMovements ?? []).map((m, idx) => ({
+                label: `#${String(idx + 1)} ${m.token}`,
+                value: fmtNum(m.amount),
+              }))}
+            />
+          )}
+          {d.hash && d.arcscanUrl && <TxRow hash={d.hash} explorerUrl={d.arcscanUrl} />}
+        </div>
+      );
+    }
     default:
       return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>;
   }
