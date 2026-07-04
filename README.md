@@ -159,7 +159,7 @@ token**.
 
 | Token   | Address                                      | Decimals | Notes                         |
 | ------- | -------------------------------------------- | -------- | ----------------------------- |
-| USDC    | `0x3600000000000000000000000000000000000000` | 6        | Native gas token (ERC-20 i/f) |
+| USDC    | `0x3600000000000000000000000000000000000000` | 6        | Native gas token (ERC-20) |
 | EURC    | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6        | Circle EURC                   |
 | cirBTC  | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | 8        | BTC-pegged demo asset         |
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | —        | Canonical (all chains)        |
