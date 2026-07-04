@@ -38,24 +38,58 @@ settlement.
 
 ---
 
-## Core features
+## App capabilities
 
-- **Conversational autonomous agent.** A tool-using loop (Anthropic Claude) drives a
-  server-custodied Circle wallet: it swaps, sends, adds/removes liquidity, reads the portfolio,
-  and answers research questions — grounded in live signals (peg deviation, price impact) with
-  in-code safety guardrails and a daily USD spending cap.
+- **Universal command bar.** One input routes every command by intent — a card only *starts* a
+  mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
+  hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
+  open Analyze. Refresh keeps your place.
 - **Peg-aware Uniswap v4 hooks.** Four custom hooks (Stable Protection, Dynamic Fee, RWA Gate,
   Async Limit Order) embed fee logic, circuit breakers, compliance gating, and limit orders
-  directly into pool execution (see [Liquidity Hooks](#liquidity-hooks)).
-- **Autonomous de-peg rebalancing.** Opt-in agents auto-exit a stablecoin that drifts off peg
-  into the on-peg reference — gated by live signals + per-run caps — on a daily cron.
-- **Cross-chain USDC bridging.** Outbound USDC transfers from Arc to Base, Ethereum, Arbitrum,
-  Unichain (Sepolia) and Avalanche Fuji via Circle CCTP (Bridge Kit).
+  directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
+  to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
+  ~1.14 rate (see [Liquidity Hooks](#liquidity-hooks)).
+- **Swap · Liquidity · Pools.** Manual v4 swaps with live quotes and hook selection; create
+  pools and add/remove liquidity (market-priced initialization); pool detail pages with real
+  pair exchange-rate charts.
+- **Cross-chain USDC bridging.** Outbound from Arc to all 12 CCTP-V2 testnets — Base, Ethereum,
+  Arbitrum, Unichain, Avalanche Fuji, OP, Polygon Amoy, Linea, Sonic, World Chain, Sei,
+  HyperEVM — via Circle CCTP (Bridge Kit); typed commands ("bridge 10 USDC to Sei") pre-select
+  the destination.
 - **Unified balance / treasury.** A single multi-chain USDC balance (view + deposit) via Circle
   Gateway (Unified Balance Kit).
-- **Pay-per-call research (x402).** The agent can pay tiny USDC fees to call premium data APIs
-  from Circle's x402 services marketplace when free data isn't enough — local, opt-in
-  ([setup](docs/x402-setup.md)).
+- **Analyze & research.** Inline conversational research: deterministic cited data cards for
+  known topics + AI-streamed answers for free-form questions.
+- **Portfolio & earnings.** User + agent portfolios, LP positions, and fee earnings with an
+  estimated LP/hook split grouped by hook.
+
+## Agent capabilities (your Circle Agent)
+
+An autonomous financial analyst — trader and liquidity provider — running a tool-using Claude
+loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spending cap):
+
+- **Wallet** — auto-provisioned; view/manage, set the daily cap, and fund it (Circle's
+  programmatic testnet faucet, with manual faucet fallback).
+- **Trade & move** — swap (signal-guarded: peg deviation + price impact), send, and bridge USDC
+  to any CCTP chain (funds land at *your* wallet on the destination).
+- **Liquidity** — create no-hook pools at the live market price, add/remove liquidity, list
+  positions.
+- **On-chain analysis (Arcscan).** Inspect any Arc address (balance, activity, whale signals:
+  accumulating/selling, stables↔tokens rotation), any token (holders, top-10 concentration,
+  safety red flags), and any transaction (decoded token movements).
+- **Analyst workflow.** "Give me my daily briefing" → market pulse → peg check → portfolio
+  review → on-chain highlights, figures first. Never blindly copies a wallet — verifies
+  hypotheses against live data.
+- **Analyst advisor.** If the agent can't afford a trade (balance or cap), it reads *your*
+  wallet and — if you hold enough — delivers its analysis with a concrete "execute this
+  yourself" recommendation.
+- **Autonomous de-peg rebalancing.** Opt-in: auto-exits a stablecoin that drifts off peg into
+  the on-peg reference — signal-gated, capped, audited — on a daily cron.
+- **x402 agent marketplace.** Access to Circle's full paid-services catalog
+  ([agents.circle.com/services](https://agents.circle.com/services)) — web search, news,
+  weather, sports, prediction markets, social lookups, papers, SMS/communication APIs — paid
+  per-call in USDC (pre-capped); the agent searches the marketplace before declining a request
+  (local, opt-in — [setup](docs/x402-setup.md)).
 
 ---
 
@@ -77,10 +111,13 @@ settlement.
 - **Developer-Controlled Wallets** (`@circle-fin/developer-controlled-wallets`) — server-managed
   agent wallets (smart-contract accounts) that sign and execute on Arc with **sponsored gas**;
   the user's signing key is never touched by the agent path.
-- **CCTP via Bridge Kit** (`@circle-fin/bridge-kit`) — native cross-chain USDC burn-and-mint.
+- **CCTP via Bridge Kit** (`@circle-fin/bridge-kit`) — native cross-chain USDC burn-and-mint to
+  all 12 CCTP-V2 testnets, used both by the app (user wallet) and server-side by the agent's
+  Circle wallet (Circle-Wallets adapter + Forwarding Service).
 - **Gateway via Unified Balance Kit** (`@circle-fin/unified-balance-kit` +
   `@circle-fin/adapter-circle-wallets`) — unified multi-chain USDC balance and deposits.
-- **x402 services marketplace** (Circle CLI) — pay-per-call paid APIs for agent research.
+- **x402 agent marketplace** (Circle CLI) — the full paid-services catalog at
+  [agents.circle.com/services](https://agents.circle.com/services), paid per-call in USDC.
 - **USDC + EURC** stablecoins, funded for testing via the
   **[Circle Faucet](https://faucet.circle.com)**.
 
@@ -88,15 +125,25 @@ settlement.
 
 - **Arc Testnet** (chain id `5042002`) — Circle's stablecoin-native L1 where **USDC is the gas
   token**. RPC `https://rpc.testnet.arc.network`; explorer [ArcScan](https://testnet.arcscan.app).
+- **Arcscan (Blockscout) API** — powers the agent's on-chain analysis tools (address activity,
+  token holders, transaction decoding).
 - All hook stacks, tokens, and agent wallets are deployed on Arc (addresses
   [below](#deployed-contracts-arc-testnet-5042002)).
+
+### Pyth Network
+
+- **Hermes price feeds** — primary price source behind `getUsdPrice` and the peg signals
+  (USDC/USD, EURC/USD, BTC/USD, EUR/USD FX), with DefiLlama as automatic fallback. The EURC peg
+  is measured FX-neutrally (EURC/USD ÷ EUR/USD).
+- **Peg keeper** — a daily cron pushes the live EUR/USD reference on-chain to the FX-aware
+  Stable Protection hook (`setPegReference`), anchoring its circuit breaker to the real rate.
 
 ### Application
 
 - **Client** — Vite + React + TypeScript SPA; Privy auth (embedded + external wallets), viem,
   lightweight-charts.
 - **Server** — Express + TypeScript API; Anthropic **Claude** (`claude-opus-4-8`) agent loop,
-  Drizzle ORM + Postgres (Neon). Deployed on **Vercel** (serverless) with a daily rebalance cron.
+  Drizzle ORM + Postgres (Neon). Deployed on **Vercel** (serverless) with daily crons (agent rebalance + Pyth peg-sync).
 
 ---
 
@@ -132,7 +179,7 @@ pool's create / liquidity / swap / read to the stack of that pool's hook.
 
 | Hook                  | Pairs                    | Purpose                                                       |
 | --------------------- | ------------------------ | ------------------------------------------------------------- |
-| **Stable Protection** | USDC/EURC                | Peg-zone-aware fees + circuit breaker to defend LPs on depegs |
+| **Stable Protection** | USDC/EURC                | FX-aware peg-zone fees + circuit breaker (EUR/USD-anchored via Pyth) |
 | **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC | Per-swap fee scales with TWAP-derived volatility              |
 | **RWA Gate**          | USDC/EURC, USDC/cirBTC   | Permissioned pool — only allowlisted addresses may trade      |
 | **Async Limit Order** | USDC/cirBTC, EURC/cirBTC | Queue limit orders that fill at a target price                |
@@ -148,7 +195,7 @@ Each hook has its own full v4 stack.
 
 | Contract        | Address                                      |
 | --------------- | -------------------------------------------- |
-| Hook            | `0xF131A048875E578A0F89393e858C0442fcD7e0C0` |
+| Hook            | `0xd1Deea248850BFc239Cb282b793b076357Cb20c0` |
 | PoolManager     | `0x15B5f2c054b9DC788250131FCD1bcfCC34080a59` |
 | PositionManager | `0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78` |
 | StateView       | `0x73Bb8E68c08C528770880c10223670f7aee13824` |
