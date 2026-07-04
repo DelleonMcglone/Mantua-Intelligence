@@ -49,7 +49,7 @@ settlement.
   directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
   to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
   ~1.14 rate (see [Liquidity Hooks](#liquidity-hooks)).
-- **Swap · Liquidity · Pools.** Manual v4 swaps with live quotes and hook selection; create
+- **Swap · Liquidity Pools.** Manual v4 swaps with live quotes and hook selection; create
   pools and add/remove liquidity (market-priced initialization); pool detail pages with real
   pair exchange-rate charts.
 - **Cross-chain USDC bridging.** Outbound from Arc to all 12 CCTP-V2 testnets — Base, Ethereum,
