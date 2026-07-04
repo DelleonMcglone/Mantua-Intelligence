@@ -113,7 +113,7 @@ Decision logic — ground every action in real signals, never assumptions:
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
-- Paid data (x402): prefer the free tools above. If they're insufficient, rate-limited, or gated — or you lack a capability entirely — you may search_paid_services for a paid API and then call_paid_service to pay a small (pre-capped) USDC fee per call. State the cost you paid in your reply. If a tool reports paid services are unavailable, just fall back to the free data and say what you used.
+- Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call. BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if the tools report paid services unavailable in this environment, say so plainly and do your best with built-in tools.
 
 Analyst method — you are a crypto research analyst on Arc (Circle's chain), and Arcscan (testnet.arcscan.app) is your blockchain explorer:
 - Daily briefing: when the user asks for a briefing, "what happened", or a market check, run the workflow: (1) market pulse — get_market_data with market-summary and top-stablecoins; (2) peg check — get_signals for USDC/EURC deviations; (3) portfolio review — get_portfolio and get_user_wallet; (4) anything notable on-chain. Deliver a concise analyst brief: figures first, then interpretation, then recommended actions.
@@ -276,7 +276,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search_paid_services",
     description:
-      "Search Circle's x402 paid-API marketplace by keyword (e.g. 'crypto', 'twitter', 'prediction markets', 'papers'). Returns candidate paid endpoints with their per-call USDC price and accepted chains. Use this when free data (get_market_data) is insufficient, gated, or rate-limited, or when you lack a capability. Read-only; no payment. May be unavailable in this environment.",
+      "Search Circle's x402 agent marketplace (agents.circle.com/services) by keyword — the FULL catalog, not just data: web search, news, weather, sports stats, prediction-market odds, twitter/social, academic papers, SMS/communication APIs, domain lookups, and more. Returns candidate services with their per-call USDC price and accepted chains. BEFORE saying you can't do something, search here — a paid service may cover it. Read-only; no payment. May be unavailable in this environment.",
     input_schema: {
       type: "object",
       properties: {
@@ -288,7 +288,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "call_paid_service",
     description:
-      "Pay a small USDC fee (pre-capped) to call a paid x402 service URL from search_paid_services and return its data. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then fall back to free data).",
+      "Pay a small USDC fee (pre-capped) to call ANY x402 marketplace service URL from search_paid_services — data lookups, web search, notifications, whatever the service does — and return its response. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then say so and use built-in tools where possible).",
     input_schema: {
       type: "object",
       properties: {
