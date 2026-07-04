@@ -43,7 +43,7 @@ settlement.
 - **Universal command bar.** One input routes every command by intent — a card only *starts* a
   mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
   hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
-  open Analyze. Refresh keeps your place.
+  open Analyze. 
 - **Peg-aware Uniswap v4 hooks.** Four custom hooks (Stable Protection, Dynamic Fee, RWA Gate,
   Async Limit Order) embed fee logic, circuit breakers, compliance gating, and limit orders
   directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
