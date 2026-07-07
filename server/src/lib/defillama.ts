@@ -369,3 +369,116 @@ export async function getTokenHistoricalPrices(
     return out;
   });
 }
+
+// ─── Research feeds (daily-workflow "Monitor Metrics" / "Stay in the Loop") ──
+
+export interface TvlMover {
+  name: string;
+  category: string;
+  chain: string;
+  tvlUsd: number;
+  change1dPct: number;
+  change7dPct: number | null;
+}
+
+// `/protocols` is a multi-MB payload — cache the PARSED movers for 5 minutes
+// under a dedicated cache (not the raw body) so memory stays small.
+const MOVERS_TTL_MS = 5 * 60_000;
+let moversCache: { value: TvlMover[]; fetchedAt: number } | null = null;
+
+const protocolListItemSchema = z.object({
+  name: z.string(),
+  category: z.string().nullable().optional(),
+  chain: z.string().nullable().optional(),
+  tvl: z.number().nullable().optional(),
+  change_1d: z.number().nullable().optional(),
+  change_7d: z.number().nullable().optional(),
+});
+
+/**
+ * TVL outliers — the cheatsheet's "Monitor Metrics" habit: protocols whose TVL
+ * moved sharply in the last day. Filters to meaningful TVL and sorts by
+ * |change_1d| desc so the agent can flag "research why" candidates.
+ */
+export async function getTvlMovers(minTvlUsd = 50_000_000, limit = 8): Promise<TvlMover[]> {
+  const now = Date.now();
+  if (moversCache && now - moversCache.fetchedAt < MOVERS_TTL_MS) {
+    return moversCache.value.slice(0, limit);
+  }
+  try {
+    const res = await fetch(`${API_BASE}/protocols`);
+    if (!res.ok) {
+      logger.warn({ status: res.status }, "defillama protocols fetch failed");
+      return moversCache?.value.slice(0, limit) ?? [];
+    }
+    const raw = (await res.json()) as unknown[];
+    const movers: TvlMover[] = [];
+    for (const item of raw) {
+      const p = protocolListItemSchema.safeParse(item);
+      if (!p.success) continue;
+      const { name, tvl, change_1d } = p.data;
+      if (!tvl || tvl < minTvlUsd || change_1d === null || change_1d === undefined) continue;
+      // CEXes aren't DeFi TVL signals — skip them.
+      if (p.data.category === "CEX") continue;
+      movers.push({
+        name,
+        category: p.data.category ?? "?",
+        chain: p.data.chain ?? "?",
+        tvlUsd: tvl,
+        change1dPct: change_1d,
+        change7dPct: p.data.change_7d ?? null,
+      });
+    }
+    movers.sort((a, b) => Math.abs(b.change1dPct) - Math.abs(a.change1dPct));
+    const top = movers.slice(0, 50); // keep a small parsed cache
+    moversCache = { value: top, fetchedAt: now };
+    return top.slice(0, limit);
+  } catch (err) {
+    logger.warn({ err }, "defillama protocols request errored");
+    return moversCache?.value.slice(0, limit) ?? [];
+  }
+}
+
+/** Curated narrative baskets (coingecko ids) for sector performance. */
+const NARRATIVE_BASKETS: Record<string, string[]> = {
+  Bitcoin: ["bitcoin"],
+  "L1s (ETH/SOL/AVAX)": ["ethereum", "solana", "avalanche-2"],
+  "L2s": ["arbitrum", "optimism"],
+  DeFi: ["uniswap", "aave", "lido-dao"],
+  AI: ["render-token", "fetch-ai", "bittensor"],
+  RWA: ["ondo-finance", "centrifuge"],
+  Memes: ["dogecoin", "pepe"],
+  "Stablecoin ecosystem": ["usd-coin", "euro-coin"],
+};
+
+export interface NarrativePerf {
+  narrative: string;
+  avgChange24hPct: number;
+  tokens: { id: string; changePct: number }[];
+}
+
+/**
+ * Narrative (sector) performance — the cheatsheet's "check narrative
+ * performance" step. One batched percentage call across all baskets, averaged
+ * per narrative and sorted strongest-first. Narratives with no data are
+ * omitted (feed hiccups degrade gracefully).
+ */
+export async function getNarrativePerformance(): Promise<NarrativePerf[]> {
+  const allIds = [...new Set(Object.values(NARRATIVE_BASKETS).flat())].map(
+    (id) => `coingecko:${id}`,
+  );
+  const pct = await getTokenChangePercents(allIds, "24h");
+  const out: NarrativePerf[] = [];
+  for (const [narrative, ids] of Object.entries(NARRATIVE_BASKETS)) {
+    const tokens: { id: string; changePct: number }[] = [];
+    for (const id of ids) {
+      const v = pct[`coingecko:${id}`];
+      if (typeof v === "number") tokens.push({ id, changePct: v });
+    }
+    if (tokens.length === 0) continue;
+    const avg = tokens.reduce((s, t) => s + t.changePct, 0) / tokens.length;
+    out.push({ narrative, avgChange24hPct: avg, tokens });
+  }
+  out.sort((a, b) => b.avgChange24hPct - a.avgChange24hPct);
+  return out;
+}
