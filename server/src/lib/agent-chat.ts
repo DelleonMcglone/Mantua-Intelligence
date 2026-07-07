@@ -36,6 +36,8 @@ import {
   isEvmAddress,
   isTxHash,
 } from "./arcscan.ts";
+import { getTvlMovers, getNarrativePerformance } from "./defillama.ts";
+import { getTrendingCoins } from "./trending.ts";
 
 /**
  * Conversational, autonomous agent loop.
@@ -116,7 +118,9 @@ Decision logic — ground every action in real signals, never assumptions:
 - Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call. BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if the tools report paid services unavailable in this environment, say so plainly and do your best with built-in tools.
 
 Analyst method — you are a crypto research analyst on Arc (Circle's chain), and Arcscan (testnet.arcscan.app) is your blockchain explorer:
-- Daily briefing: when the user asks for a briefing, "what happened", or a market check, run the workflow: (1) market pulse — get_market_data with market-summary and top-stablecoins; (2) peg check — get_signals for USDC/EURC deviations; (3) portfolio review — get_portfolio and get_user_wallet; (4) anything notable on-chain. Deliver a concise analyst brief: figures first, then interpretation, then recommended actions.
+- Daily briefing: when the user asks for a briefing, "what happened", or a market check, run the workflow: (1) market pulse — get_market_data with market-summary and top-stablecoins; (2) stay in the loop — market_research for trending coins, narrative/sector performance, and TVL outliers; (3) peg check — get_signals for USDC/EURC deviations; (4) portfolio review — get_portfolio and get_user_wallet; (5) anything notable on-chain. Deliver a concise analyst brief: figures first, then interpretation, then recommended actions.
+- Monitor metrics (outlier rule): when market_research shows a protocol whose TVL moved sharply in a day (roughly 20%+ either way), flag it explicitly — name, size, move — and offer to dig into WHY (x402 web-search/news if the user wants the follow-up). A big TVL move without a known cause is exactly what deserves research.
+- Alpha hunting: combine narrative strength (market_research) with on-chain confirmation (inspect_address whale signals). Speed of information is an edge — on-chain data is the earliest signal; treat social narratives as later-stage.
 - On-chain analysis: use inspect_address for any wallet (balance, activity, whale signals), inspect_token for tokenomics + holder concentration, inspect_transaction to decode what a tx did. Whale signals to look for: accumulating a token, selling a held token, using a new protocol, rotating stables into tokens (risk-on) or tokens into stables (risk-off). NEVER suggest blindly copying a wallet — treat its activity as a hypothesis, then verify with your own data (pegs, price impact, volumes) before recommending anything.
 - Token safety: before recommending any token, check inspect_token and call out red flags explicitly — top-10 holder concentration, a tiny holder base, or supply parked in a few contracts. Exchange/pool contracts among top holders are normal; unlabeled EOA whales are the ones to scrutinize.
 - Research principles: primary sources beat summaries; cite concrete figures, never vibes; free data first, x402 paid data when free is insufficient; include the Arcscan link when discussing an address, token, or tx so the user can verify.
@@ -349,6 +353,21 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["tokenA", "tokenB"],
+    },
+  },
+  {
+    name: "market_research",
+    description:
+      "The daily 'stay in the loop' feed in one call: trending coins (CoinGecko), narrative/sector performance (BTC, L1s, L2s, DeFi, AI, RWA, memes, stablecoins — avg 24h moves), and TVL outliers (DefiLlama protocols with the sharpest 1-day TVL changes — 'research why' candidates). Read-only, free data. Use focus to fetch just one feed.",
+    input_schema: {
+      type: "object",
+      properties: {
+        focus: {
+          type: "string",
+          enum: ["all", "trending", "narratives", "tvl-movers"],
+          description: "Which feed(s) to fetch. Default all.",
+        },
+      },
     },
   },
   {
@@ -699,6 +718,22 @@ async function executeTool(
       const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
       if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
       return await createPoolFromAgentWallet({ privyUserId, tokenA, tokenB, fee: feeRaw });
+    }
+    case "market_research": {
+      const focus = typeof input["focus"] === "string" ? input["focus"] : "all";
+      const wantTrending = focus === "all" || focus === "trending";
+      const wantNarratives = focus === "all" || focus === "narratives";
+      const wantMovers = focus === "all" || focus === "tvl-movers";
+      const [trending, narratives, tvlMovers] = await Promise.all([
+        wantTrending ? getTrendingCoins() : Promise.resolve(null),
+        wantNarratives ? getNarrativePerformance() : Promise.resolve(null),
+        wantMovers ? getTvlMovers() : Promise.resolve(null),
+      ]);
+      return {
+        ...(trending ? { trending } : {}),
+        ...(narratives ? { narratives } : {}),
+        ...(tvlMovers ? { tvlMovers } : {}),
+      };
     }
     case "inspect_address": {
       const address = input["address"];

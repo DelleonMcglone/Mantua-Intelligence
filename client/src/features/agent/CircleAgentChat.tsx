@@ -580,6 +580,52 @@ function renderResult(step: ToolStep): ReactNode {
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>
       );
     }
+    case "market_research": {
+      const d = step.data as {
+        trending?: { symbol: string; priceChange24hPct: number | null }[];
+        narratives?: { narrative: string; avgChange24hPct: number }[];
+        tvlMovers?: { name: string; change1dPct: number }[];
+      };
+      const pct = (v: number | null | undefined) =>
+        typeof v === "number" ? `${v >= 0 ? "+" : ""}${v.toFixed(1)}%` : "—";
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(d.trending?.length ?? 0) > 0 && (
+            <>
+              <Heading>Trending</Heading>
+              <DetailRows
+                rows={(d.trending ?? []).slice(0, 5).map((t) => ({
+                  label: t.symbol,
+                  value: pct(t.priceChange24hPct),
+                }))}
+              />
+            </>
+          )}
+          {(d.narratives?.length ?? 0) > 0 && (
+            <>
+              <Heading>Narratives (24h)</Heading>
+              <DetailRows
+                rows={(d.narratives ?? []).map((n) => ({
+                  label: n.narrative,
+                  value: pct(n.avgChange24hPct),
+                }))}
+              />
+            </>
+          )}
+          {(d.tvlMovers?.length ?? 0) > 0 && (
+            <>
+              <Heading>TVL movers (1d)</Heading>
+              <DetailRows
+                rows={(d.tvlMovers ?? []).slice(0, 5).map((m) => ({
+                  label: m.name,
+                  value: pct(m.change1dPct),
+                }))}
+              />
+            </>
+          )}
+        </div>
+      );
+    }
     case "inspect_address": {
       const d = step.data as {
         found: boolean;
