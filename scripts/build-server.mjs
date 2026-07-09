@@ -60,6 +60,7 @@ await build({
   packages: "external",
   alias: {
     "@circle-fin/developer-controlled-wallets": dcwOut,
+    "@circle-fin/smart-contract-platform": dcwOut,
     "@circle-fin/unified-balance-kit": ubkOut,
     "@circle-fin/adapter-circle-wallets": ubkOut,
     "@circle-fin/bridge-kit": ubkOut,
