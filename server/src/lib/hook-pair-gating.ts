@@ -3,10 +3,8 @@
  * only; the allowlist below is the canonical hook→pair matrix:
  *  - Stable Protection: USDC/EURC (the peg-protected stable pool).
  *  - Dynamic Fee:       USDC/cirBTC, EURC/cirBTC (volatile pairs).
- *  - RWA Gate:          USDC/EURC (primary; a second, gated pool —
- *                       distinct PoolKey via the hook address) +
- *                       USDC/cirBTC (secondary).
- *  - ALO:               USDC/cirBTC, EURC/cirBTC (async limit orders).
+ * RWA Gate and ALO are deferred to mainnet (built, previously deployed on
+ * testnet) — they have no allowlist entries and are not executable here.
  * A hook must also be deployed on-chain (getHookAddress) before it can
  * be used — calling one whose address is unset throws "not deployed".
  */

@@ -44,11 +44,10 @@ settlement.
   mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
   hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
   open Analyze. 
-- **Peg-aware Uniswap v4 hooks.** Four custom hooks (Stable Protection, Dynamic Fee, RWA Gate,
-  Async Limit Order) embed fee logic, circuit breakers, compliance gating, and limit orders
-  directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
-  to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
-  ~1.14 rate (see [Liquidity Hooks](#liquidity-hooks)).
+- **Peg-aware Uniswap v4 hooks.** Two custom hooks — Stable Protection and Dynamic Fee — embed
+  fee logic and circuit breakers directly into pool execution. Stable Protection is
+  **FX-aware**: its circuit breaker anchors to the live EUR/USD rate (Pyth) instead of assuming
+  1:1, so USDC/EURC trades at the true ~1.14 rate (see [Liquidity Hooks](#liquidity-hooks)).
 - **Swap · Liquidity Pools.** Manual v4 swaps with live quotes and hook selection; create
   pools and add/remove liquidity (market-priced initialization); pool detail pages with real
   pair exchange-rate charts.
@@ -96,8 +95,8 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 
 ### Uniswap v4
 
-- **Custom hooks** — four hooks, each deployed at a mined CREATE2 address (Stable Protection,
-  Dynamic Fee, RWA Gate, Async Limit Order). Source repos linked under [Architecture](#architecture).
+- **Custom hooks** — two production hooks, each deployed at a mined CREATE2 address (Stable
+  Protection, Dynamic Fee). Source repos linked under [Architecture](#architecture).
 - **v4 periphery, per hook** — PoolManager, PositionManager, StateView, V4Quoter, and
   PoolSwapTest. The app routes each pool's create / liquidity / swap / read to its hook's own
   stack (no-hook pools fall back to the Stable Protection stack).
@@ -168,7 +167,7 @@ token**.
 
 ## Liquidity Hooks
 
-Mantua ships four Uniswap v4 hooks. Because v4 allows **one hook per pool key**, each hook is a
+Mantua ships two Uniswap v4 hooks. Because v4 allows **one hook per pool key**, each hook is a
 distinct contract deployed at a mined CREATE2 address, and each lives on its **own** Uniswap v4
 stack (PoolManager + PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every
 pool's create / liquidity / swap / read to the stack of that pool's hook.
@@ -177,8 +176,10 @@ pool's create / liquidity / swap / read to the stack of that pool's hook.
 | --------------------- | ------------------------ | ------------------------------------------------------------- |
 | **Stable Protection** | USDC/EURC                | FX-aware peg-zone fees + circuit breaker (EUR/USD-anchored via Pyth) |
 | **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC | Per-swap fee scales with TWAP-derived volatility              |
-| **RWA Gate**          | USDC/EURC (primary), USDC/cirBTC (secondary) | Permissioned pool — only allowlisted addresses may trade |
-| **Async Limit Order** | USDC/cirBTC, EURC/cirBTC | Queue limit orders that fill at a target price                |
+
+> Two further hooks — **RWA Gate** (permissioned pools via a ComplianceRegistry) and
+> **Async Limit Order** — are built and were previously deployed on testnet, but are
+> **deferred to mainnet**, where RWA-grade tokens better match their use cases.
 
 ---
 
@@ -209,33 +210,6 @@ Each hook has its own full v4 stack.
 | V4Quoter        | `0x2CF521F13658FE57958D09B40Ee3420D974EE7eC` |
 | PoolSwapTest    | `0xAa096011E6604df33762d611cbBdaA0671F19Bdb` |
 
-### RWA Gate — USDC/EURC, USDC/cirBTC
-
-| Contract           | Address                                      |
-| ------------------ | -------------------------------------------- |
-| Hook               | `0xC5B49e30Fb7FD99FCB608Bd661F28AfcC44FCA80` |
-| PoolManager        | `0xBC9C4e3e51E18Ea44c7363391d29ed300db57511` |
-| ComplianceRegistry | `0x5E33Ed3D77Ff22B9c6eD689a18a040E7633f9003` |
-| PositionManager    | `0xCa059a9a7064EcC446aB34eAe400e1a76D3288C3` |
-| StateView          | `0xBecb1cd296675CFC3fC8e63c4838590A4C97196d` |
-| V4Quoter           | `0x49ffeA1ECd7760fC55F3598D7A0d89239cfeAea9` |
-| PoolSwapTest       | `0xE6D1d7d837099132b9A6c68B1e3B2fdEe5feEF00` |
-
-> RWA Gate is permissioned: the hook calls `ComplianceRegistry.checkCompliance(sender)` on
-> swap / add / remove. The PositionManager and routers are allowlisted; the operator allowlists
-> end-user addresses via `ComplianceRegistry.addToWhitelist(addr, 0)`.
-
-### Async Limit Order (ALO) — USDC/cirBTC, EURC/cirBTC
-
-| Contract        | Address                                      |
-| --------------- | -------------------------------------------- |
-| Hook            | `0x18c2c2E657912E21091E364b5daB4f9702c810c8` |
-| PoolManager     | `0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b` |
-| PositionManager | `0x7866e36b7576DF5167cf76770799096Ba6fcD882` |
-| StateView       | `0xbF8dC490E538a7749f9DF6B34Ee740650D325b15` |
-| V4Quoter        | `0xA12B21D108Eb0ad982870d90CcB66976274d3b18` |
-| PoolSwapTest    | `0xFCf895f7F5737b1D582a0bD4b131f88434a94433` |
-
 The canonical source of truth for these addresses is
 [`server/src/lib/v4-contracts.ts`](server/src/lib/v4-contracts.ts) (`HOOK_DEPLOYMENTS_ARC`).
 
@@ -258,7 +232,8 @@ deploy/   Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
 - **Hook source repos.** [stableprotection-hook](https://github.com/DelleonMcglone/stableprotection-hook) ·
   [dynamic-fee](https://github.com/DelleonMcglone/dynamic-fee) ·
   [RWAgate](https://github.com/DelleonMcglone/RWAgate) ·
-  [limit-orders](https://github.com/DelleonMcglone/limit-orders)
+  [limit-orders](https://github.com/DelleonMcglone/limit-orders) (the last two are
+  mainnet-deferred)
 
 ---
 
