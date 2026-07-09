@@ -138,8 +138,8 @@ interface Feature {
 const FEATURES: Feature[] = [
   {
     icon: <ShieldCheck className="h-4 w-4 text-accent" />,
-    title: "Stable Protection Hook",
-    body: "A Uniswap v4 hook that dynamically adjusts swap fees across five depeg zones to protect stablecoin LPs from adverse selection. Fees scale from 0.05% in healthy conditions to 1% during severe depeg, with a circuit breaker for extreme events.",
+    title: "Liquidity Hooks",
+    body: "Two custom Uniswap v4 hooks, live on Arc. Stable Protection (USDC/EURC) is FX-aware: it measures the pool against the live EUR/USD rate (Pyth), scales fees across peg zones, and trips a circuit breaker on real depegs. Dynamic Fee (USDC/cirBTC, EURC/cirBTC) scales the per-swap fee with TWAP volatility so LPs earn more in turbulence.",
     status: "Flagship",
   },
   {
@@ -214,9 +214,9 @@ const FAQS: FAQItem[] = [
         </p>
         <ul className="mt-3 space-y-2.5 list-disc list-outside pl-5 marker:text-text-mute">
           <li>
-            <strong className="text-text">Stable Protection</strong> — dynamically adjusts swap fees
-            across five depeg zones (with a circuit breaker for extreme events) to protect
-            stablecoin LPs. Pair: USDC/EURC.{" "}
+            <strong className="text-text">Stable Protection</strong> — FX-aware peg protection:
+            measures the pool against the live EUR/USD rate (Pyth), scales fees across peg zones,
+            and trips a circuit breaker on real depegs. Pair: USDC/EURC.{" "}
             <a
               href="https://testnet.arcscan.app/address/0xd1Deea248850BFc239Cb282b793b076357Cb20c0"
               target="_blank"

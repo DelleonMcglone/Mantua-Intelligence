@@ -26,7 +26,7 @@ interface V4Addresses {
 // repo; PositionManager/StateView/V4Quoter were deployed against that same
 // PoolManager via deploy/arc-hero-periphery (tx batch, block 46501208).
 // NOTE: this single stack drives the StableProtection USDC/EURC pool only.
-// The DynamicFee/RWAGate/ALO hooks live on their OWN PoolManagers (see
+// The DynamicFee hook lives on its OWN PoolManager (see
 // HOOK_DEPLOYMENTS_ARC); executing those needs their own periphery deploy.
 const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
   [ARC_TESTNET_CHAIN_ID]: {
@@ -81,8 +81,8 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  * PoolManager on Arc testnet yet:
  *   stable-protection → PoolManager 0x15B5f2c054b9DC788250131FCD1bcfCC34080a59
  *   dynamic-fee       → PoolManager 0x7eA87A5919C119DC95855A0BE227fd3241c998F0
- *   rwa-gate          → PoolManager 0xA29B7D158f2b2113Bd60eeD765866f794096D4Dc
- *   alo               → PoolManager 0x95b7d2f0712f997A34c7D1b4CBaE144251CE083b
+ *   rwa-gate          → deferred to mainnet (was PoolManager 0xA29B…D4Dc)
+ *   alo               → deferred to mainnet (was PoolManager 0x95b7…083b)
  * `V4_BY_CHAIN` still models a single stack (poolManager + periphery), so
  * execution (add-liquidity/swap/state reads) remains blocked until we
  * either (a) get the periphery — PositionManager/StateView/Quoter/
