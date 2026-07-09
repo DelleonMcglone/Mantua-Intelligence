@@ -61,6 +61,32 @@ x402 spend never touches Arc balances or the Arc daily cap.
 5. Restart the dev server. Ask the agent a premium-data question; it will
    `search_paid_services` then `call_paid_service` and report the cost it paid.
 
+## Agent-to-agent demo — Mantua SELLS its analysis via x402
+
+Mantua is also an x402 **seller**: `GET /api/x402/analyst-brief` returns the
+agent's live analyst brief (pegs, market pulse, narratives, TVL movers) for a
+**$0.01 USDC** micro-payment, settled on Base Sepolia via the public x402
+facilitator. Payment is the auth — no login. Enable by setting
+`X402_SELLER_ADDRESS` (the 0x address that receives the USDC) in the server env;
+unset → the endpoint reports 503.
+
+1. **See the paywall** (no payment):
+   ```bash
+   curl -i https://test-mantua.vercel.app/api/x402/analyst-brief
+   # → HTTP 402 with an accepts[] payment requirement (exact / eip155:84532 / USDC)
+   ```
+2. **Pay it from the Circle CLI agent wallet** (one-time CLI setup above; the
+   buyer wallet needs USDC on Base Sepolia):
+   ```bash
+   circle services pay "https://test-mantua.vercel.app/api/x402/analyst-brief" \
+     -X GET --address <your-cli-wallet> --chain BASE --output json
+   ```
+   USDC settles to `X402_SELLER_ADDRESS`; the response is the analyst brief.
+3. **Or agent-to-agent via chat**: tell the Mantua agent
+   `call the paid service at https://test-mantua.vercel.app/api/x402/analyst-brief`
+   — the agent (buyer) pays the Mantua service (seller): one agent paying
+   another in USDC, end to end.
+
 ## Notes
 
 - Sub-cent micropayments don't require explicit confirmation; the per-call +

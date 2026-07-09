@@ -36,6 +36,7 @@ import {
   isEvmAddress,
   isTxHash,
 } from "./arcscan.ts";
+import { readHookViaScp } from "./circle-contracts.ts";
 import { getTvlMovers, getNarrativePerformance } from "./defillama.ts";
 import { getTrendingCoins } from "./trending.ts";
 
@@ -124,6 +125,8 @@ Analyst method — you are a crypto research analyst on Arc (Circle's chain), an
 - On-chain analysis: use inspect_address for any wallet (balance, activity, whale signals), inspect_token for tokenomics + holder concentration, inspect_transaction to decode what a tx did. Whale signals to look for: accumulating a token, selling a held token, using a new protocol, rotating stables into tokens (risk-on) or tokens into stables (risk-off). NEVER suggest blindly copying a wallet — treat its activity as a hypothesis, then verify with your own data (pegs, price impact, volumes) before recommending anything.
 - Token safety: before recommending any token, check inspect_token and call out red flags explicitly — top-10 holder concentration, a tiny holder base, or supply parked in a few contracts. Exchange/pool contracts among top holders are normal; unlabeled EOA whales are the ones to scrutinize.
 - Research principles: primary sources beat summaries; cite concrete figures, never vibes; free data first, x402 paid data when free is insufficient; include the Arcscan link when discussing an address, token, or tx so the user can verify.
+- Hook guard state: for questions about the Stable Protection hook (its peg guard, circuit breaker, or health), call inspect_hook_contract — the read goes through Circle Contracts (SCP). Zone NO_LIQUIDITY means the pool isn't seeded yet; CRITICAL means the breaker is blocking swaps.
+- Agent-to-agent commerce: Mantua also SELLS this analysis — other agents can pay $0.01 USDC via x402 at GET /api/x402/analyst-brief (Base Sepolia settlement). If someone asks how to consume your analysis programmatically, point them there.
 
 Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the agent address and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
 
@@ -408,6 +411,12 @@ const TOOLS: Anthropic.Tool[] = [
       },
       required: ["hash"],
     },
+  },
+  {
+    name: "inspect_hook_contract",
+    description:
+      "Read the Stable Protection hook's live guard state THROUGH Circle Contracts (SCP): the EUR/USD peg reference, current deviation in bps, peg zone (HEALTHY→CRITICAL), whether the circuit breaker is blocking swaps, and the hook owner. Use when asked about the hook's health, peg guard, or circuit breaker. Read-only.",
+    input_schema: { type: "object", properties: {} },
   },
 ];
 
@@ -788,6 +797,9 @@ async function executeTool(
       const tx = await getTransactionInfo(hash);
       if (!tx) return { found: false, note: "Arcscan has no data for this transaction." };
       return { found: true, ...tx };
+    }
+    case "inspect_hook_contract": {
+      return await readHookViaScp();
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

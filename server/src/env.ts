@@ -83,6 +83,14 @@ const schema = z.object({
    *  with graceful fallback, so no separate enable flag. */
   PYTH_HERMES_URL: z.url().default("https://hermes.pyth.network"),
 
+  /** x402 SELLER: address that receives USDC (Base Sepolia) when other agents
+   *  pay for Mantua's analyst brief at /api/x402/analyst-brief. Absent → the
+   *  seller endpoint is disabled (503). */
+  X402_SELLER_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+
   /** Owner EOA private key for the Stable Protection hook's peg-reference admin.
    *  The peg-sync keeper signs `setPegReference` (EUR/USD) with it. Absent →
    *  the keeper is disabled (503). Moves no user funds; only sets the FX

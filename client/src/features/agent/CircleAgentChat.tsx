@@ -725,6 +725,32 @@ function renderResult(step: ToolStep): ReactNode {
         </div>
       );
     }
+    case "inspect_hook_contract": {
+      const d = step.data as {
+        pegReference?: number;
+        deviationBps?: number | null;
+        zone?: string;
+        circuitBreakerBlocksSwaps?: boolean;
+        owner?: string;
+      };
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Heading>Stable Protection guard · via Circle Contracts</Heading>
+          <DetailRows
+            rows={[
+              { label: "Peg reference (EUR/USD)", value: (d.pegReference ?? 0).toFixed(5) },
+              {
+                label: "Deviation",
+                value: d.deviationBps === null ? "—" : `${String(d.deviationBps ?? 0)} bps`,
+              },
+              { label: "Zone", value: d.zone ?? "?" },
+              { label: "Breaker", value: d.circuitBreakerBlocksSwaps ? "BLOCKING" : "open" },
+              { label: "Owner", value: shortAddr(d.owner ?? "") },
+            ]}
+          />
+        </div>
+      );
+    }
     default:
       return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>;
   }
