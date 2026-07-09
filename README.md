@@ -177,7 +177,7 @@ pool's create / liquidity / swap / read to the stack of that pool's hook.
 | --------------------- | ------------------------ | ------------------------------------------------------------- |
 | **Stable Protection** | USDC/EURC                | FX-aware peg-zone fees + circuit breaker (EUR/USD-anchored via Pyth) |
 | **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC | Per-swap fee scales with TWAP-derived volatility              |
-| **RWA Gate**          | USDC/EURC, USDC/cirBTC   | Permissioned pool — only allowlisted addresses may trade      |
+| **RWA Gate**          | USDC/EURC (primary), USDC/cirBTC (secondary) | Permissioned pool — only allowlisted addresses may trade |
 | **Async Limit Order** | USDC/cirBTC, EURC/cirBTC | Queue limit orders that fill at a target price                |
 
 ---

@@ -510,10 +510,12 @@ function mantuaHooks(): AnalyzeResponse {
     topic: "mantua-hooks",
     title: "Mantua hooks",
     summary:
-      "Mantua ships two Liquidity Hooks on Uniswap v4, all on Arc Testnet: Stable Protection and Dynamic Fee. Each plugs into the pool lifecycle to add behavior vanilla pools can't.",
+      "Mantua ships four Liquidity Hooks on Uniswap v4, all on Arc Testnet. Each plugs into the pool lifecycle to add behavior vanilla pools can't. Stable Protection and Dynamic Fee are swappable in-app; RWA Gate and Async Limit Order are deployed on their own v4 stacks.",
     bullets: [
-      "Stable Protection — peg-zone-aware pool. Reads virtual reserves at every swap, classifies HEALTHY / WARN / STRESS / CRITICAL, and blocks or surcharges trades to keep the pool from draining during depegs. Arc Testnet, USDC/EURC.",
-      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Arc Testnet, USDC/cirBTC and EURC/cirBTC.",
+      "Stable Protection — FX-aware peg-zone pool. Reads virtual reserves at every swap, measures deviation against a live EUR/USD reference (Pyth), classifies HEALTHY through CRITICAL, and blocks or surcharges trades during real depegs. Pair: USDC/EURC.",
+      "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Pairs: USDC/cirBTC and EURC/cirBTC.",
+      "RWA Gate — permissioned pool: only addresses allowlisted in its ComplianceRegistry may trade. Pairs: USDC/EURC (primary) and USDC/cirBTC (secondary).",
+      "Async Limit Order (ALO) — queue limit orders on-chain that fill when the pool crosses a target price. Pairs: USDC/cirBTC and EURC/cirBTC.",
     ],
     sources: [
       { name: "Uniswap v4 Hooks", url: "https://docs.uniswap.org/contracts/v4/concepts/hooks" },
