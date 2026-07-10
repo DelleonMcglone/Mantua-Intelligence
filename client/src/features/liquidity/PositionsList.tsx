@@ -10,7 +10,7 @@ import { usePortfolio } from "@/features/portfolio/use-portfolio.ts";
 import { useOnchainPositions } from "@/features/portfolio/use-onchain-positions.ts";
 import { FEE_TIER_LABELS } from "./fee-tiers.ts";
 import { isFeeTier } from "./fee-tiers-helpers.ts";
-import { getUserLocalPositions } from "./local-positions.ts";
+import { getUserLocalPositions, mergeWithFreshBreadcrumbs } from "./local-positions.ts";
 import { localPositionToPosition } from "./position-adapters.ts";
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal.tsx";
 import { tokenLabelByAddress } from "./token-labels.ts";
@@ -28,12 +28,15 @@ export function PositionsList({ onClose }: Props = {}) {
   const [removing, setRemoving] = useState<Position | null>(null);
 
   // Testnet: authoritative on-chain positions (durable; reflects real
-  // chain state and survives a cleared localStorage cache), falling back
-  // to the breadcrumb while the fetch is in flight. Mainnet: the
-  // DB/subgraph-backed API list.
+  // chain state and survives a cleared localStorage cache), unioned with
+  // fresh mint breadcrumbs so a just-added position shows immediately even
+  // when the discovery read hits a lagging RPC node; breadcrumbs alone
+  // while the fetch is in flight. Mainnet: the DB/subgraph-backed API list.
   const data: Position[] = IS_MAINNET
     ? (apiPositions.data ?? [])
-    : (onchain.data ?? getUserLocalPositions()).map(localPositionToPosition);
+    : mergeWithFreshBreadcrumbs(onchain.data, getUserLocalPositions()).map(
+        localPositionToPosition,
+      );
   const loading = IS_MAINNET ? apiPositions.loading : onchain.loading && onchain.data === null;
   const error = IS_MAINNET ? apiPositions.error : null;
   const reload = IS_MAINNET ? apiPositions.reload : onchain.refetch;
