@@ -24,7 +24,7 @@ import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
-import { isX402Available, searchServices, callPaidService } from "./x402-cli.ts";
+import { isX402Available, searchServices, callPaidService } from "./x402-buyer.ts";
 import {
   getAddressInfo,
   getAddressTransactions,
@@ -130,7 +130,7 @@ Decision logic — ground every action in real signals, never assumptions:
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
-- Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call. BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if the tools report paid services unavailable in this environment, say so plainly and do your best with built-in tools.
+- Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call from your buyer wallet (settles on the x402 Base Sepolia rail). BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if a service only settles on mainnet or the buyer wallet lacks USDC, relay that plainly and do your best with built-in tools.
 
 Analyst method — you are a crypto research analyst on Arc (Circle's chain), and Arcscan (testnet.arcscan.app) is your blockchain explorer:
 - Daily briefing: when the user asks for a briefing, "what happened", or a market check, run the workflow: (1) market pulse — get_market_data with market-summary and top-stablecoins; (2) stay in the loop — market_research for trending coins, narrative/sector performance, and TVL outliers; (3) peg check — get_signals for USDC/EURC deviations; (4) portfolio review — get_portfolio and get_user_wallet; (5) anything notable on-chain. Deliver a concise analyst brief: figures first, then interpretation, then recommended actions.
@@ -314,7 +314,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search_paid_services",
     description:
-      "Search Circle's x402 agent marketplace (agents.circle.com/services) by keyword — the FULL catalog, not just data: web search, news, weather, sports stats, prediction-market odds, twitter/social, academic papers, SMS/communication APIs, domain lookups, and more. Returns candidate services with their per-call USDC price and accepted chains. BEFORE saying you can't do something, search here — a paid service may cover it. Read-only; no payment. May be unavailable in this environment.",
+      "Search the x402 agent marketplace (the registry behind agents.circle.com/services) by keyword — the FULL catalog, not just data: web search, news, weather, sports stats, prediction-market odds, twitter/social, academic papers, SMS/communication APIs, domain lookups, and more. Returns candidate services with their per-call USDC price and accepted networks. BEFORE saying you can't do something, search here — a paid service may cover it. Read-only; no payment.",
     input_schema: {
       type: "object",
       properties: {
@@ -326,7 +326,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "call_paid_service",
     description:
-      "Pay a small USDC fee (pre-capped) to call ANY x402 marketplace service URL from search_paid_services — data lookups, web search, notifications, whatever the service does — and return its response. Handles inspect + payment automatically. State the USD cost you paid in your reply. May be unavailable in this environment (then say so and use built-in tools where possible).",
+      "Pay a small USDC fee (pre-capped) to call ANY x402 marketplace service URL from search_paid_services — data lookups, web search, notifications, whatever the service does — and return its response. Handles the 402 payment handshake automatically (settles on the x402 Base Sepolia rail). State the USD cost you paid in your reply.",
     input_schema: {
       type: "object",
       properties: {
@@ -335,9 +335,10 @@ const TOOLS: Anthropic.Tool[] = [
           type: "object",
           description: "Optional request payload (object) matching the service's schema.",
         },
-        chain: {
+        method: {
           type: "string",
-          description: "Optional CLI chain code to pay from (e.g. BASE, MATIC). Defaults sensibly.",
+          enum: ["GET", "POST"],
+          description: "HTTP method. Defaults to GET; use POST when sending data.",
         },
       },
       required: ["url"],
@@ -855,7 +856,7 @@ async function executeTool(
         };
       }
       const data = input["data"] && typeof input["data"] === "object" ? input["data"] : undefined;
-      const result = await callPaidService({ url: input["url"], data, chain: input["chain"] });
+      const result = await callPaidService({ url: input["url"], data, method: input["method"] });
       return { available: true, ...result };
     }
     case "fund_wallet": {

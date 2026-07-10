@@ -95,8 +95,9 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 - **x402 agent marketplace.** Access to Circle's full paid-services catalog
   ([agents.circle.com/services](https://agents.circle.com/services)) — web search, news,
   weather, sports, prediction markets, social lookups, papers, SMS/communication APIs — paid
-  per-call in USDC (pre-capped); the agent searches the marketplace before declining a request
-  (local, opt-in — [setup](docs/x402-setup.md)).
+  per-call in USDC (pre-capped, daily-capped, audited); the agent searches the marketplace
+  before declining a request. HTTP-native x402 v2 buyer — works in prod, no CLI
+  ([setup](docs/x402-setup.md)).
 
 ---
 
@@ -128,8 +129,10 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 - **StableFX** (`POST /v1/exchange/stablefx/quotes`) — Circle's institutional stablecoin FX
   engine on Arc; the agent pulls RFQ reference quotes for USDC↔EURC and compares them against
   on-chain liquidity for best execution.
-- **x402 agent marketplace** (Circle CLI) — the full paid-services catalog at
-  [agents.circle.com/services](https://agents.circle.com/services), paid per-call in USDC.
+- **x402 agent marketplace** (`@x402/fetch` + `@x402/extensions` Bazaar discovery) — the full
+  paid-services catalog at [agents.circle.com/services](https://agents.circle.com/services),
+  paid per-call in USDC via EIP-3009 authorizations from the agent's buyer EOA (Mantua is also
+  a **seller**: `GET /api/x402/analyst-brief`, $0.01).
 - **USDC + EURC** stablecoins, funded for testing via the
   **[Circle Faucet](https://faucet.circle.com)**.
 
@@ -267,8 +270,9 @@ npm test -w @mantua/server   # 63 tests
 npm test -w @mantua/client   # 58 tests
 ```
 
-Optional: the agent can pay per-call for premium data via Circle's x402
-marketplace (local-only, off by default) — see [`docs/x402-setup.md`](docs/x402-setup.md).
+Optional: the agent can pay per-call for premium data via the x402
+marketplace (off by default; set `X402_ENABLED=1` + fund the buyer wallet) —
+see [`docs/x402-setup.md`](docs/x402-setup.md).
 
 ## Deploying the on-chain stacks
 

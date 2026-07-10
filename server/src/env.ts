@@ -58,25 +58,26 @@ const schema = z.object({
    *  the same header. Absent → the endpoint is disabled (503). */
   CRON_SECRET: z.string().min(1).optional(),
 
-  /** x402 nanopayments (Phase 3) — the agent pays small USDC fees per call to the
-   *  Circle services marketplace via the Circle CLI. Local-only: needs the CLI
-   *  installed, logged in, and a funded CLI wallet (Base/Polygon). Off by default;
-   *  when off (or the CLI is absent, e.g. on Vercel) the agent falls back to free
+  /** x402 nanopayments — the agent pays small USDC fees per call to the x402
+   *  agent marketplace over plain HTTP (v2 protocol; settles on Base Sepolia
+   *  via the public facilitator, no CLI and no gas needed). Off by default;
+   *  when off (or no buyer key is configured) the agent falls back to free
    *  data. See docs/x402-setup.md. */
   X402_ENABLED: z
     .union([z.literal("0"), z.literal("1")])
     .default("0")
     .transform((v) => v === "1"),
-  /** CLI agent-wallet address to pay from. If unset, discovered via the CLI. */
-  X402_WALLET_ADDRESS: z.string().min(1).optional(),
-  /** Default chain for the first pay attempt (CLI value, e.g. BASE, MATIC). */
-  X402_DEFAULT_CHAIN: z.string().min(1).default("BASE"),
-  /** Per-call hard ceiling in USDC, passed to the CLI as --max-amount. */
+  /** Buyer EOA private key that signs x402 payment authorizations (needs
+   *  Base Sepolia USDC, no gas). Falls back to MANTUA_ADMIN_PRIVATE_KEY —
+   *  the same EOA the x402 SELLER is paid to. */
+  X402_BUYER_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{64}$/)
+    .optional(),
+  /** Per-call hard ceiling in USDC. */
   X402_MAX_CALL_USD: z.coerce.number().positive().default(0.1),
   /** Daily x402 spend ceiling in USDC (summed from the audit log). */
   X402_DAILY_CAP_USD: z.coerce.number().positive().default(1),
-  /** Path/name of the Circle CLI binary. */
-  CIRCLE_CLI_PATH: z.string().min(1).default("circle"),
 
   /** Pyth Hermes base URL — primary off-chain price source (DefiLlama is the
    *  fallback). Override to point at a self-hosted Hermes; feature is always-on
