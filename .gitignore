@@ -5,12 +5,11 @@
 *.swp
 *.swo
 
-# Claude Code
-.claude/settings.local.json
-.claude/worktrees/
+# Claude Code — the whole directory is local tooling (launch.json, settings,
+# worktrees, skills); nothing in it belongs in the repo
+.claude/
 
 # Skills (reinstalled from skills-lock.json via `npx skills experimental_install`)
-.claude/skills/
 .agents/skills/
 
 # Node
