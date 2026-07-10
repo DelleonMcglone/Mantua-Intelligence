@@ -275,3 +275,5 @@ marketplace (local-only, off by default) — see [`docs/x402-setup.md`](docs/x40
 Foundry scripts for re-deploying the per-hook periphery / pool setup live under
 [`deploy/`](deploy/) — each with a README and the exact `forge script` commands
 (all use `--via-ir --optimizer-runs 200`).
+
+- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) — 25 paid x402 endpoints on Base mainnet: web search, AI analysis, crypto/stock data, SEC filings, company intel, news, sentiment, macro dashboard. $0.001-$0.15/call USDC. Local LLM-powered.
