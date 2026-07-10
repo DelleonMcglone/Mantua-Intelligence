@@ -38,6 +38,16 @@ import {
 } from "./arcscan.ts";
 import { readHookViaScp } from "./circle-contracts.ts";
 import { getTvlMovers, getNarrativePerformance } from "./defillama.ts";
+import { getStableFxQuote, isFxCurrency } from "./stablefx.ts";
+import { quoteExactInputV4 } from "./v4-onchain-swap.ts";
+import { getPythPrice, PYTH_EUR_USD_FEED_ID } from "./pyth-prices.ts";
+import {
+  getUnifiedBalances,
+  depositToUnifiedBalance,
+  spendUnifiedBalance,
+  resolveGatewaySpendChain,
+  GATEWAY_SPEND_CHAINS,
+} from "./unified-balance.ts";
 import { getTrendingCoins } from "./trending.ts";
 
 /**
@@ -105,11 +115,15 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
+Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, manage a Circle Gateway unified USDC balance (gateway: balance/deposit/spend — Arc as the settlement hub), compare FX venues for USDC↔EURC (get_fx_quote: Circle StableFX RFQ vs the on-chain pool vs Pyth interbank), create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
 
 Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified). If it fails because the pool doesn't exist, call create_pool for the pair+tier (initializes at the live market price), then add_liquidity again. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
 
 Bridging: you can bridge the agent wallet's USDC to another chain via Circle CCTP (bridge tool). Destinations: base, ethereum, arbitrum, unichain, avalanche, optimism, polygon, linea, sonic, world chain, sei, hyperevm (all testnets). Funds land at the USER's connected wallet on the destination unless they give an explicit 0x recipient — mention where the funds will land, and note Circle's forwarding fee is deducted from the minted amount.
+
+Treasury (Circle Gateway): the gateway tool manages the agent's unified USDC balance — one balance, spendable on any supported chain, with Arc as the settlement hub. Deposit consolidates agent USDC (on Arc) into it; spend settles USDC out to another chain (funds land at the AGENT's own address unless an explicit recipient is given — spends to third parties count against the daily cap). Use gateway for treasury moves ("park my USDC", "move funds to Base for later"); use bridge for one-off point-to-point transfers to the user. If spend reports delegate_pending, explain the one-time signing-delegate registration is finalizing and retry when the user asks.
+
+FX best execution: for any USDC↔EURC conversion (or FX-rate question), call get_fx_quote FIRST — it compares Circle's StableFX RFQ rate, the live on-chain pool rate, and the Pyth interbank EUR/USD reference. Recommend the venue with the better effective rate, and cite the spread vs interbank ("pool fills at 0.9138, 6bps inside StableFX — routing on-chain"). If the on-chain venue is the no-hook pool (executable: true) you can execute with swap; if it's the Stable Protection pool, you can't trade a hooked pool — recommend the user execute via the manual Swap panel with Stable Protection selected. If the recommendation is StableFX (an institutional RFQ platform), tell the user the app can't settle RFQ trades yet and offer the on-chain alternative. If StableFX reports unavailable (the API key isn't entitled), say so briefly and compare pool vs interbank instead.
 
 Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
@@ -189,6 +203,23 @@ const TOOLS: Anthropic.Tool[] = [
         tokenOut: { type: "string", description: "Symbol to swap into (optional)." },
         amountIn: { type: "string", description: "Decimal amount of tokenIn (optional)." },
       },
+    },
+  },
+  {
+    name: "get_fx_quote",
+    description:
+      "Best-execution FX comparison for USDC↔EURC: fetches Circle's StableFX RFQ reference rate, the on-chain Uniswap v4 pool rate, and the Pyth interbank EUR/USD — and recommends the better venue. Read-only; call before any USDC↔EURC conversion or when the user asks about FX rates.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from: { type: "string", enum: ["USDC", "EURC"], description: "Currency to convert from." },
+        to: { type: "string", enum: ["USDC", "EURC"], description: "Currency to convert into." },
+        amount: {
+          type: "string",
+          description: "Decimal amount of `from` to price. Defaults to 100.",
+        },
+      },
+      required: ["from", "to"],
     },
   },
   {
@@ -339,6 +370,31 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["amount", "destinationChain"],
+    },
+  },
+  {
+    name: "gateway",
+    description:
+      "Circle Gateway treasury (unified USDC balance): action=balance reads the agent's consolidated cross-chain USDC; action=deposit moves agent USDC on Arc into the unified balance; action=spend settles USDC out of the unified balance to another chain (burn on Arc, mint on the destination — Arc as the settlement hub). Spend defaults to the agent's own address on the destination. First spend may report delegate_pending while Gateway finalizes the signing delegate — relay that and retry when asked.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["balance", "deposit", "spend"] },
+        amount: {
+          type: "string",
+          description: "Decimal USDC amount. Required for deposit and spend.",
+        },
+        destinationChain: {
+          type: "string",
+          description:
+            "Spend destination chain name or alias (base, ethereum, avalanche, optimism, arbitrum, polygon, unichain, sei, sonic, hyperevm, world chain — all testnets). Required for spend.",
+        },
+        recipientAddress: {
+          type: "string",
+          description: "Optional 0x recipient on the destination. Defaults to the agent wallet.",
+        },
+      },
+      required: ["action"],
     },
   },
   {
@@ -511,6 +567,143 @@ async function executeTool(
         amountIn: formatUnits(BigInt(q.amountInRaw), getToken(q.tokenIn).decimals),
         amountOut: formatUnits(BigInt(q.amountOutRaw), getToken(q.tokenOut).decimals),
       };
+    }
+    case "get_fx_quote": {
+      const from = input["from"];
+      const to = input["to"];
+      if (!isFxCurrency(from) || !isFxCurrency(to) || from === to) {
+        throw new Error("from and to must be USDC and EURC (one of each).");
+      }
+      const amount =
+        typeof input["amount"] === "string" && Number(input["amount"]) > 0
+          ? input["amount"]
+          : "100";
+      // On-chain venue: try the agent-executable no-hook pool first, then
+      // fall back to the Stable Protection pool (the seeded, FX-aware
+      // USDC/EURC venue — manual-panel execution only).
+      const quotePool = async (): Promise<{
+        amountInRaw: string;
+        amountOutRaw: string;
+        venue: "no-hook" | "stable-protection";
+      } | null> => {
+        try {
+          const q = await quoteAgentSwap({ tokenIn: from, tokenOut: to, amountIn: amount });
+          return { amountInRaw: q.amountInRaw, amountOutRaw: q.amountOutRaw, venue: "no-hook" };
+        } catch (err) {
+          logger.warn({ err, from, to }, "fx no-hook pool quote failed; trying stable-protection");
+        }
+        try {
+          const amountInRaw = parseUnits(amount, getToken(from).decimals);
+          const q = await quoteExactInputV4({
+            tokenIn: from,
+            tokenOut: to,
+            fee: 3000,
+            hook: "stable-protection",
+            amountInRaw,
+          });
+          return {
+            amountInRaw: amountInRaw.toString(),
+            amountOutRaw: q.amountOut,
+            venue: "stable-protection",
+          };
+        } catch (err) {
+          logger.warn({ err, from, to }, "fx stable-protection pool quote failed");
+          return null;
+        }
+      };
+      const [fx, poolQuote, eurUsd] = await Promise.all([
+        getStableFxQuote({ from, to, amount }),
+        quotePool(),
+        getPythPrice(PYTH_EUR_USD_FEED_ID),
+      ]);
+
+      // Effective rates: units of `to` received per 1 unit of `from`.
+      let poolRate: number | null = null;
+      if (poolQuote) {
+        const inHuman = Number(formatUnits(BigInt(poolQuote.amountInRaw), getToken(from).decimals));
+        const outHuman = Number(
+          formatUnits(BigInt(poolQuote.amountOutRaw), getToken(to).decimals),
+        );
+        if (inHuman > 0 && Number.isFinite(outHuman)) poolRate = outHuman / inHuman;
+      }
+      let stablefxNet: number | null = null;
+      if (fx.available) {
+        const net = (Number(fx.toAmount) - Number(fx.fee)) / Number(fx.fromAmount);
+        stablefxNet = Number.isFinite(net) && net > 0 ? net : fx.rate;
+      }
+      // Interbank reference in the SAME direction (to per from).
+      const interbank = eurUsd ? (from === "USDC" ? 1 / eurUsd : eurUsd) : null;
+
+      let recommendedVenue: "stablefx" | "onchain-pool" | null = null;
+      if (stablefxNet !== null && poolRate !== null) {
+        recommendedVenue = stablefxNet > poolRate ? "stablefx" : "onchain-pool";
+      } else if (poolRate !== null) recommendedVenue = "onchain-pool";
+      else if (stablefxNet !== null) recommendedVenue = "stablefx";
+
+      const spreadPct = (rate: number | null): number | null =>
+        rate !== null && interbank ? ((rate - interbank) / interbank) * 100 : null;
+
+      return {
+        pair: `${from}->${to}`,
+        amount,
+        stablefx: fx.available
+          ? {
+              rate: fx.rate,
+              effectiveRate: stablefxNet,
+              fee: fx.fee,
+              expiresAt: fx.expiresAt,
+              spreadVsInterbankPct: spreadPct(stablefxNet),
+            }
+          : { available: false, reason: fx.reason },
+        onchainPool:
+          poolRate !== null && poolQuote
+            ? {
+                effectiveRate: poolRate,
+                spreadVsInterbankPct: spreadPct(poolRate),
+                venue: poolQuote.venue,
+                executable: poolQuote.venue === "no-hook",
+              }
+            : { available: false },
+        interbank: interbank !== null ? { rate: interbank, source: "Pyth FX.EUR/USD" } : null,
+        recommendedVenue,
+      };
+    }
+    case "gateway": {
+      const action = input["action"];
+      if (action === "balance") {
+        return await getUnifiedBalances(privyUserId);
+      }
+      const amount = input["amount"];
+      if (typeof amount !== "string" || !(Number(amount) > 0)) {
+        throw new Error("amount (positive decimal string) is required for deposit and spend.");
+      }
+      if (action === "deposit") {
+        return await depositToUnifiedBalance(privyUserId, userWalletAddress, amount);
+      }
+      if (action === "spend") {
+        const destIn = input["destinationChain"];
+        if (typeof destIn !== "string") {
+          throw new Error("destinationChain is required for spend.");
+        }
+        const destinationChain = resolveGatewaySpendChain(destIn);
+        if (!destinationChain) {
+          throw new Error(
+            `Unknown Gateway destination "${destIn}". Supported: ${GATEWAY_SPEND_CHAINS.join(", ")}.`,
+          );
+        }
+        const recipient = input["recipientAddress"];
+        if (typeof recipient === "string" && recipient.length > 0 && !isAddress(recipient)) {
+          throw new Error("recipientAddress must be a valid 0x EVM address.");
+        }
+        return await spendUnifiedBalance(privyUserId, {
+          amount,
+          destinationChain,
+          ...(typeof recipient === "string" && recipient.length > 0
+            ? { recipientAddress: recipient }
+            : {}),
+        });
+      }
+      throw new Error("action must be balance, deposit, or spend.");
     }
     case "get_signals": {
       const { tokenIn, tokenOut, amountIn } = input;

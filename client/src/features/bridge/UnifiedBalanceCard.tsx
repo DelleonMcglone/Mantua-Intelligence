@@ -15,18 +15,40 @@ function chainLabel(name: string): string {
   return name.replace(/_/g, " ");
 }
 
+/** Mirrors the server's GATEWAY_SPEND_CHAINS (spend destinations). */
+const SPEND_CHAINS = [
+  "Base_Sepolia",
+  "Ethereum_Sepolia",
+  "Avalanche_Fuji",
+  "Optimism_Sepolia",
+  "Arbitrum_Sepolia",
+  "Polygon_Amoy_Testnet",
+  "Unichain_Sepolia",
+  "Sei_Testnet",
+  "Sonic_Testnet",
+  "HyperEVM_Testnet",
+  "World_Chain_Sepolia",
+] as const;
+
 /**
  * Unified Balance (Treasury) — the agent wallet's consolidated USDC across
- * chains via Circle Gateway. View + deposit. This is the app's server-side
+ * chains via Circle Gateway. View + deposit + spend (settle out to another
+ * chain; funds land at the agent's own address). This is the app's server-side
  * agent wallet (distinct from the user wallet that drives the bridge above).
  */
 export function UnifiedBalanceCard() {
   const ub = useUnifiedBalance();
   const [amount, setAmount] = useState("");
+  const [spendAmount, setSpendAmount] = useState("");
+  const [spendChain, setSpendChain] = useState<string>(SPEND_CHAINS[0]);
 
   const depositing = ub.depositState.status === "depositing";
   const amountNum = Number(amount);
   const canDeposit = !depositing && Number.isFinite(amountNum) && amountNum > 0;
+
+  const spending = ub.spendState.status === "spending";
+  const spendNum = Number(spendAmount);
+  const canSpend = !spending && Number.isFinite(spendNum) && spendNum > 0;
 
   const explorerUrl =
     ub.depositState.explorerUrl ??
@@ -117,6 +139,79 @@ export function UnifiedBalanceCard() {
               Deposit confirmed ↗
             </a>
           )}
+
+          {/* Spend — settle USDC out to another Gateway chain */}
+          <div className="pt-2 border-t border-border-soft space-y-2">
+            <div className="text-[11px] text-text-mute">
+              Spend from the unified balance — burn on Arc, mint on the destination. Funds land at
+              the agent's own address.
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                inputMode="decimal"
+                placeholder="0.0"
+                value={spendAmount}
+                onChange={(e) => {
+                  setSpendAmount(e.target.value);
+                }}
+                disabled={spending}
+                className="border border-border-soft bg-bg-elev rounded-sm text-[15px] font-mono px-2 h-9"
+              />
+              <select
+                value={spendChain}
+                onChange={(e) => {
+                  setSpendChain(e.target.value);
+                }}
+                disabled={spending}
+                className="border border-border-soft bg-bg-elev rounded-sm text-[12px] px-2 h-9 min-w-[140px]"
+              >
+                {SPEND_CHAINS.map((c) => (
+                  <option key={c} value={c}>
+                    {chainLabel(c)}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="primary"
+                size="md"
+                disabled={!canSpend}
+                onClick={() => {
+                  void ub.spend(spendAmount, spendChain).then(() => {
+                    setSpendAmount("");
+                  });
+                }}
+              >
+                {spending ? "Spending…" : "Spend"}
+              </Button>
+            </div>
+            {ub.spendState.status === "error" && ub.spendState.error && (
+              <div className="text-[12px] text-red">{ub.spendState.error}</div>
+            )}
+            {ub.spendState.status === "pending" && (
+              <div className="text-[12px] text-text-dim">
+                {ub.spendState.note ??
+                  "The spend delegate is still registering with Gateway — retry in a minute."}
+              </div>
+            )}
+            {ub.spendState.status === "success" && (
+              <div className="text-[12px] text-accent">
+                Spent to {chainLabel(ub.spendState.destinationChain ?? "")}
+                {ub.spendState.explorerUrl ? (
+                  <>
+                    {" · "}
+                    <a
+                      href={ub.spendState.explorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:text-accent-2 font-mono"
+                    >
+                      view tx ↗
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
