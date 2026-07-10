@@ -10,6 +10,10 @@ export default tseslint.config(
       "**/dist/**",
       "**/build/**",
       "**/node_modules/**",
+      // Claude Code session worktrees — sibling checkouts of this repo whose
+      // tsconfigs otherwise register as extra TSConfigRootDir candidates and
+      // fail every parse.
+      "**/.claude/**",
       "**/.vercel/**",
       "**/.vite/**",
       // esbuild-generated server bundles for the Vercel function (see

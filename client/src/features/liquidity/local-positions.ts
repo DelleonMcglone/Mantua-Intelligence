@@ -87,6 +87,34 @@ export function getAgentLocalPositions(): LocalPosition[] {
   return getLocalPositions().filter((p) => p.owner === "agent");
 }
 
+/** How long a just-minted breadcrumb outranks the on-chain read. */
+const BREADCRUMB_FRESH_MS = 15 * 60_000;
+
+/**
+ * Union the authoritative on-chain position list with FRESH local
+ * breadcrumbs. A mint confirms on one RPC node but the discovery read may
+ * hit a lagging one, so for a short window the on-chain list can miss a
+ * position the user just opened — without this, the new position only
+ * appears after a later refresh. Fresh breadcrumbs (minted in the last few
+ * minutes) not yet visible on-chain are prepended; older breadcrumbs defer
+ * entirely to chain truth so fully-removed positions don't resurrect.
+ * `onchain === null` (fetch in flight / failed) falls back to breadcrumbs,
+ * preserving the previous behavior.
+ */
+export function mergeWithFreshBreadcrumbs(
+  onchain: LocalPosition[] | null,
+  breadcrumbs: LocalPosition[],
+): LocalPosition[] {
+  if (onchain === null) return breadcrumbs;
+  const seen = new Set(onchain.map((p) => `${String(p.chainId)}:${p.tokenId}`));
+  const fresh = breadcrumbs.filter(
+    (b) =>
+      Date.now() - b.createdAt < BREADCRUMB_FRESH_MS &&
+      !seen.has(`${String(b.chainId)}:${b.tokenId}`),
+  );
+  return [...fresh, ...onchain];
+}
+
 export function rememberLocalPosition(entry: Omit<LocalPosition, "createdAt">) {
   if (typeof window === "undefined") return;
   try {

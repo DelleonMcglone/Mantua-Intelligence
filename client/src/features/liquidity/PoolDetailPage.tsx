@@ -11,7 +11,7 @@ import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { usePool } from "./use-pools.ts";
 import { usePoolState } from "./use-pool-state.ts";
 import { usePositions } from "./use-positions.ts";
-import { getUserLocalPositions } from "./local-positions.ts";
+import { getUserLocalPositions, mergeWithFreshBreadcrumbs } from "./local-positions.ts";
 import { getLocalPools } from "./local-pools.ts";
 import { localPositionToPosition } from "./position-adapters.ts";
 import type { HookName } from "./use-create-pool.ts";
@@ -104,10 +104,11 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
       fromApi.map((p) => p.tokenId).filter((id): id is string => id !== null),
     );
     // Source positions on-chain (authoritative — survives cache clears and
-    // catches positions opened anywhere); fall back to the localStorage
-    // breadcrumb while that fetch is in flight. Both share the LocalPosition
-    // shape, so the same adapter + match works for either.
-    const source = onchainPositions.data ?? getUserLocalPositions();
+    // catches positions opened anywhere), unioned with fresh mint
+    // breadcrumbs so a just-added position shows without waiting out RPC
+    // lag; breadcrumbs alone while the fetch is in flight. Both share the
+    // LocalPosition shape, so the same adapter + match works for either.
+    const source = mergeWithFreshBreadcrumbs(onchainPositions.data, getUserLocalPositions());
     const fromOnchain: Position[] = source
       .filter((lp) => {
         if (lp.fee !== derived.fee) return false;
