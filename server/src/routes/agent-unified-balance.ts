@@ -5,7 +5,9 @@ import { CircleUnavailableError } from "../lib/circle/client.ts";
 import {
   getUnifiedBalances,
   depositToUnifiedBalance,
+  spendUnifiedBalance,
   UnifiedBalanceUnavailableError,
+  GATEWAY_SPEND_CHAINS,
 } from "../lib/unified-balance.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
@@ -85,6 +87,57 @@ agentUnifiedBalanceRouter.post(
       logger.error({ err }, "unified-balance deposit failed");
       res.status(502).json({
         error: "Deposit failed at the upstream Circle layer.",
+        code: "UPSTREAM_FAILURE",
+      });
+    }
+  },
+);
+
+const spendSchema = z.object({
+  amount: z
+    .string()
+    .regex(/^\d*\.?\d+$/, "amount must be a positive decimal")
+    .refine((s) => Number(s) > 0, "amount must be > 0"),
+  destinationChain: z.enum(GATEWAY_SPEND_CHAINS),
+  recipientAddress: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, "recipientAddress must be a 0x EVM address")
+    .optional(),
+});
+
+/**
+ * POST /api/agent/unified-balance/spend — settle USDC from the agent's
+ * unified balance (deposited on Arc) to another Gateway chain. Signed by the
+ * admin-EOA delegate; the first call may return `delegate_pending` while
+ * Gateway finalizes the delegate registration.
+ */
+agentUnifiedBalanceRouter.post(
+  "/api/agent/unified-balance/spend",
+  writeRateLimiter,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const privyUserId = req.privyUserId;
+    if (!privyUserId) {
+      res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
+      return;
+    }
+    const parsed = spendSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
+      return;
+    }
+    try {
+      res.json(await spendUnifiedBalance(privyUserId, parsed.data));
+    } catch (err) {
+      if (err instanceof CircleUnavailableError || err instanceof UnifiedBalanceUnavailableError) {
+        res.status(503).json({ error: err.message, code: "UNIFIED_BALANCE_UNAVAILABLE" });
+        return;
+      }
+      logger.error({ err }, "unified-balance spend failed");
+      res.status(502).json({
+        error: "Spend failed at the upstream Circle layer.",
         code: "UPSTREAM_FAILURE",
       });
     }

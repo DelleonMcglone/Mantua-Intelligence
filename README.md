@@ -54,8 +54,10 @@ settlement.
 - **Cross-chain USDC bridging.** Outbound from Arc to all 12 CCTP-V2 testnets — Base, Ethereum,
   Arbitrum, Unichain, Avalanche Fuji, OP, Polygon Amoy, Linea, Sonic, World Chain, Sei,
   HyperEVM — via Circle CCTP (Bridge Kit).
-- **Unified balance / treasury.** A single multi-chain USDC balance (view + deposit) via Circle
-  Gateway (Unified Balance Kit).
+- **Unified balance / treasury.** A single multi-chain USDC balance via Circle Gateway
+  (Unified Balance Kit) — view, deposit, and **spend**: settle USDC out of the unified balance
+  to any Gateway testnet (burn on Arc, mint on the destination), with Arc as the settlement
+  hub.
 - **Analyze & research.** Inline conversational research: deterministic cited data cards for
   known topics + AI-streamed answers for free-form questions.
 - **Portfolio & earnings.** User + agent portfolios, LP positions, and fee earnings with an
@@ -70,6 +72,13 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
   programmatic testnet faucet, with manual faucet fallback).
 - **Trade & move** — swap (signal-guarded: peg deviation + price impact), send, and bridge USDC
   to any CCTP chain (funds land at *your* wallet on the destination).
+- **Treasury (Circle Gateway)** — manages its own unified USDC balance: consolidate on Arc,
+  read the cross-chain breakdown, and settle USDC out to any Gateway testnet on demand (spends
+  to third parties count against the daily cap).
+- **FX best execution (StableFX)** — for USDC↔EURC the agent compares Circle's **StableFX**
+  RFQ rate, the live on-chain pool rate, and the Pyth interbank EUR/USD reference, then
+  recommends the better venue (executing on-chain when the pool wins), citing the spread vs
+  interbank.
 - **Liquidity** — create no-hook pools at the live market price, add/remove liquidity, list
   positions.
 - **On-chain analysis (Arcscan).** Inspect any Arc address (balance, activity, whale signals:
@@ -113,7 +122,12 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
   all 12 CCTP-V2 testnets, used both by the app (user wallet) and server-side by the agent's
   Circle wallet (Circle-Wallets adapter + Forwarding Service).
 - **Gateway via Unified Balance Kit** (`@circle-fin/unified-balance-kit` +
-  `@circle-fin/adapter-circle-wallets`) — unified multi-chain USDC balance and deposits.
+  `@circle-fin/adapter-circle-wallets` + `@circle-fin/adapter-viem-v2`) — unified multi-chain
+  USDC balance: deposits (agent SCA) and spends to any Gateway testnet, signed by a Gateway
+  **delegate** EOA on the SCA's behalf (SCAs can't sign burn intents directly).
+- **StableFX** (`POST /v1/exchange/stablefx/quotes`) — Circle's institutional stablecoin FX
+  engine on Arc; the agent pulls RFQ reference quotes for USDC↔EURC and compares them against
+  on-chain liquidity for best execution.
 - **x402 agent marketplace** (Circle CLI) — the full paid-services catalog at
   [agents.circle.com/services](https://agents.circle.com/services), paid per-call in USDC.
 - **USDC + EURC** stablecoins, funded for testing via the

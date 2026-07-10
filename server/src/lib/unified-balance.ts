@@ -1,9 +1,12 @@
+import { privateKeyToAccount } from "viem/accounts";
 import type * as UBK from "@circle-fin/unified-balance-kit";
 import type * as CWA from "@circle-fin/adapter-circle-wallets";
+import type * as AVW from "@circle-fin/adapter-viem-v2";
 import { env } from "../env.ts";
 import { logger } from "./logger.ts";
 import { CircleUnavailableError } from "./circle/client.ts";
 import { getAgentWallet, getOrCreateAgentWallet } from "./agent-wallet.ts";
+import { checkSpendingCap } from "./spending-cap.ts";
 
 /**
  * Circle Gateway unified balance for the agent wallet ("treasury management" —
@@ -13,11 +16,73 @@ import { getAgentWallet, getOrCreateAgentWallet } from "./agent-wallet.ts";
  * all Gateway internals (deposit → unified balance; getBalances aggregates).
  *
  * Server-side only (the SDK is); the depositor is the agent wallet's address.
- * Scope today: view + deposit. Spend-to-any-chain is a deferred follow-up (the
- * agent wallet is an SCA, so spend may need an EOA delegate for burn intents).
+ * Scope: view + deposit + spend. The agent wallet is an SCA, which can't
+ * produce the ECDSA signature Gateway burn intents need — so spend runs
+ * through a DELEGATE: the admin EOA (MANTUA_ADMIN_PRIVATE_KEY, the same
+ * keeper that signs peg-reference updates) is authorized once via
+ * addDelegate (signed by the SCA owner) and thereafter signs burn intents
+ * with `sourceAccount` set to the agent wallet, so funds still move from the
+ * AGENT's unified balance — the EOA only signs.
  */
 
 const ARC_CHAIN = "Arc_Testnet";
+
+/**
+ * Gateway testnet destinations the spend endpoint accepts. Deposits (and thus
+ * the burn allocation) live on Arc, so Arc itself isn't a destination; CCTP
+ * `bridge` covers point-to-point transfers to the wider chain list.
+ */
+export const GATEWAY_SPEND_CHAINS = [
+  "Base_Sepolia",
+  "Ethereum_Sepolia",
+  "Avalanche_Fuji",
+  "Optimism_Sepolia",
+  "Arbitrum_Sepolia",
+  "Polygon_Amoy_Testnet",
+  "Unichain_Sepolia",
+  "Sei_Testnet",
+  "Sonic_Testnet",
+  "HyperEVM_Testnet",
+  "World_Chain_Sepolia",
+] as const;
+export type GatewaySpendChain = (typeof GATEWAY_SPEND_CHAINS)[number];
+
+export function isGatewaySpendChain(v: unknown): v is GatewaySpendChain {
+  return typeof v === "string" && (GATEWAY_SPEND_CHAINS as readonly string[]).includes(v);
+}
+
+/**
+ * Resolve a user-typed chain name/alias ("base", "Base Sepolia", "op") to a
+ * Gateway spend destination, or null when it isn't one. Mirrors the fuzzy
+ * matching the CCTP bridge tool does so typed commands "just work".
+ */
+export function resolveGatewaySpendChain(input: string): GatewaySpendChain | null {
+  const norm = input
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "")
+    .replace(/(testnet|sepolia|fuji|amoy|devnet)+$/g, "");
+  const aliases: Record<string, GatewaySpendChain> = {
+    base: "Base_Sepolia",
+    ethereum: "Ethereum_Sepolia",
+    eth: "Ethereum_Sepolia",
+    avalanche: "Avalanche_Fuji",
+    avax: "Avalanche_Fuji",
+    optimism: "Optimism_Sepolia",
+    op: "Optimism_Sepolia",
+    arbitrum: "Arbitrum_Sepolia",
+    arb: "Arbitrum_Sepolia",
+    polygon: "Polygon_Amoy_Testnet",
+    matic: "Polygon_Amoy_Testnet",
+    unichain: "Unichain_Sepolia",
+    sei: "Sei_Testnet",
+    sonic: "Sonic_Testnet",
+    hyperevm: "HyperEVM_Testnet",
+    worldchain: "World_Chain_Sepolia",
+    world: "World_Chain_Sepolia",
+  };
+  if (isGatewaySpendChain(input)) return input;
+  return aliases[norm] ?? null;
+}
 
 // Lazy-load the SDKs INSIDE the call paths (not at module top level). The
 // Circle Wallets adapter currently fails to resolve a named export from the
@@ -35,6 +100,11 @@ let cwaModule: Promise<typeof CWA> | null = null;
 function loadCwa(): Promise<typeof CWA> {
   cwaModule ??= import("@circle-fin/adapter-circle-wallets");
   return cwaModule;
+}
+let avwModule: Promise<typeof AVW> | null = null;
+function loadAvw(): Promise<typeof AVW> {
+  avwModule ??= import("@circle-fin/adapter-viem-v2");
+  return avwModule;
 }
 
 /** Unified balance is unavailable when creds are missing OR an SDK fails to load. */
@@ -146,6 +216,179 @@ export async function depositToUnifiedBalance(
   return {
     txHash: res.txHash,
     ...(res.explorerUrl ? { explorerUrl: res.explorerUrl } : {}),
+    amount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Spend (via the admin-EOA delegate)
+// ---------------------------------------------------------------------------
+
+export type GatewayDelegateStatus = "none" | "pending" | "ready";
+
+export interface UnifiedSpendResult {
+  status: "spent" | "delegate_pending";
+  /** Present when status = "spent". */
+  txHash?: string;
+  explorerUrl?: string;
+  transferId?: string;
+  destinationChain: GatewaySpendChain;
+  recipientAddress: string;
+  amount: string;
+  /** Human explanation when status = "delegate_pending". */
+  note?: string;
+}
+
+interface SpendResultLike {
+  txHash?: string;
+  explorerUrl?: string;
+  transferId?: string;
+}
+
+function requireDelegateKey(): `0x${string}` {
+  const key = env.MANTUA_ADMIN_PRIVATE_KEY;
+  if (!key) {
+    throw new UnifiedBalanceUnavailableError(
+      "Gateway spend is unavailable: no delegate key configured (MANTUA_ADMIN_PRIVATE_KEY).",
+    );
+  }
+  return key as `0x${string}`;
+}
+
+async function loadKitAndAdapters(): Promise<{
+  ubk: typeof UBK;
+  cwa: typeof CWA;
+  avw: typeof AVW;
+}> {
+  try {
+    const [ubk, cwa, avw] = await Promise.all([loadUbk(), loadCwa(), loadAvw()]);
+    return { ubk, cwa, avw };
+  } catch (err) {
+    logger.error({ err }, "unified-balance SDK failed to load");
+    throw new UnifiedBalanceUnavailableError();
+  }
+}
+
+/**
+ * Is the admin EOA authorized as a Gateway delegate for the agent wallet?
+ * Read goes through the owner (SCA) adapter context on Arc.
+ */
+export async function getGatewayDelegateStatus(
+  privyUserId: string,
+): Promise<{ delegateAddress: string; status: GatewayDelegateStatus }> {
+  const wallet = await getAgentWallet(privyUserId);
+  if (!wallet) throw new UnifiedBalanceUnavailableError("No agent wallet provisioned.");
+  const { apiKey, entitySecret } = requireCreds();
+  const delegateAddress = privateKeyToAccount(requireDelegateKey()).address;
+  const { ubk, cwa } = await loadKitAndAdapters();
+  const adapter = cwa.createCircleWalletsAdapter({ apiKey, entitySecret });
+  const kit = new ubk.UnifiedBalanceKit();
+  const status = await kit.getDelegateStatus({
+    from: { adapter, chain: ARC_CHAIN, address: wallet.address },
+    delegateAddress,
+    token: "USDC",
+  });
+  return { delegateAddress, status };
+}
+
+/**
+ * Authorize the admin EOA as a Gateway delegate for the agent wallet (no-op
+ * when already ready/pending). The addDelegate tx is signed by the SCA owner
+ * through the Circle Wallets adapter — it's an on-chain call, which the SCA
+ * CAN make (only offline ECDSA burn-intent signing is out of its reach).
+ */
+export async function ensureGatewayDelegate(
+  privyUserId: string,
+): Promise<{ delegateAddress: string; status: GatewayDelegateStatus }> {
+  const current = await getGatewayDelegateStatus(privyUserId);
+  if (current.status !== "none") return current;
+
+  const wallet = await getAgentWallet(privyUserId);
+  if (!wallet) throw new UnifiedBalanceUnavailableError("No agent wallet provisioned.");
+  const { apiKey, entitySecret } = requireCreds();
+  const { ubk, cwa } = await loadKitAndAdapters();
+  const adapter = cwa.createCircleWalletsAdapter({ apiKey, entitySecret });
+  const kit = new ubk.UnifiedBalanceKit();
+  await kit.addDelegate({
+    from: { adapter, chain: ARC_CHAIN, address: wallet.address },
+    delegateAddress: current.delegateAddress,
+    token: "USDC",
+  });
+  const after = await getGatewayDelegateStatus(privyUserId);
+  logger.info(
+    { delegate: after.delegateAddress, status: after.status },
+    "gateway delegate registered",
+  );
+  return after;
+}
+
+/**
+ * Spend USDC from the agent wallet's unified balance to `destinationChain`
+ * (burn on Arc, mint on the destination) — Arc as the settlement hub. The
+ * admin-EOA delegate signs the burn intent; `sourceAccount` keeps the funds
+ * drawn from the AGENT's balance. Auto-registers the delegate on first use;
+ * if that registration is still finalizing, returns `delegate_pending`
+ * instead of throwing so callers can relay "retry shortly".
+ */
+export async function spendUnifiedBalance(
+  privyUserId: string,
+  args: {
+    amount: string;
+    destinationChain: GatewaySpendChain;
+    recipientAddress?: string | undefined;
+  },
+): Promise<UnifiedSpendResult> {
+  const { amount, destinationChain } = args;
+  const wallet = await getAgentWallet(privyUserId);
+  if (!wallet) throw new UnifiedBalanceUnavailableError("No agent wallet provisioned.");
+  requireCreds();
+  const recipientAddress = args.recipientAddress ?? wallet.address;
+
+  // Settling to the agent's OWN address on another chain is a treasury move
+  // (funds stay agent-owned — same rationale as deposit); paying a third
+  // party is a spend and counts against the daily cap (USDC ≈ USD).
+  if (recipientAddress.toLowerCase() !== wallet.address.toLowerCase()) {
+    await checkSpendingCap(wallet.address, Number(amount));
+  }
+
+  const delegate = await ensureGatewayDelegate(privyUserId);
+  if (delegate.status !== "ready") {
+    return {
+      status: "delegate_pending",
+      destinationChain,
+      recipientAddress,
+      amount,
+      note:
+        "The spend delegate was just registered with Gateway and is still finalizing — retry in a minute.",
+    };
+  }
+
+  const { ubk, avw } = await loadKitAndAdapters();
+  const adapter = avw.createViemAdapterFromPrivateKey({ privateKey: requireDelegateKey() });
+  const kit = new ubk.UnifiedBalanceKit();
+  // `useForwarder` — Circle's Forwarding Service submits the destination mint,
+  // so no wallet/adapter is needed on the destination chain (its fee comes out
+  // of the minted amount). The `from` cast bridges a nominal enum mismatch
+  // between the viem adapter's and the kit's bundled `Blockchain` types (the
+  // runtime chain names are identical).
+  const from = {
+    adapter,
+    sourceAccount: wallet.address,
+    allocations: { amount, chain: ARC_CHAIN },
+  } as unknown as UBK.SpendSource;
+  const res = (await kit.spend({
+    from,
+    to: { chain: destinationChain, recipientAddress, useForwarder: true },
+    amount,
+  })) as unknown as SpendResultLike;
+
+  return {
+    status: "spent",
+    ...(res.txHash ? { txHash: res.txHash } : {}),
+    ...(res.explorerUrl ? { explorerUrl: res.explorerUrl } : {}),
+    ...(res.transferId ? { transferId: res.transferId } : {}),
+    destinationChain,
+    recipientAddress,
     amount,
   };
 }

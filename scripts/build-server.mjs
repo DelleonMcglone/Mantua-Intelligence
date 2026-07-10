@@ -64,6 +64,7 @@ await build({
     "@circle-fin/unified-balance-kit": ubkOut,
     "@circle-fin/adapter-circle-wallets": ubkOut,
     "@circle-fin/bridge-kit": ubkOut,
+    "@circle-fin/adapter-viem-v2": ubkOut,
   },
   outfile: join(root, "api/_server.mjs"),
 });
