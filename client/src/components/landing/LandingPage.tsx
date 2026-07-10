@@ -90,7 +90,7 @@ function Hero({ onLaunch }: { onLaunch: () => void }) {
         Agent driven liquidity for Stablecoins
       </h2>
       <p className="mt-6 text-[15px] text-text-dim">
-        Hooks for logic. Agents for action. AI for intelligence.
+        Hooks for logic. Agents for action. Circle for the rails.
       </p>
       <button
         type="button"
@@ -145,7 +145,7 @@ const FEATURES: Feature[] = [
   {
     icon: <Bot className="h-4 w-4 text-accent" />,
     title: "AI Agents",
-    body: "Autonomous AI agents that manage trading and liquidity strategies collaboratively or independently, executing on-chain actions through natural-language commands.",
+    body: "The agent closes the loop for stablecoin liquidity — it buys intelligence with x402, then deploys capital with it. When it hits a question it can't answer, it searches Circle's x402 marketplace and pays per call in USDC (capped, audited, no API keys). It combines that paid intelligence with live on-chain signals — peg status, pool health, whale flows — and executes through Uniswap v4 hooks and a Circle Developer-Controlled Wallet: swap, LP, bridge via CCTP. De-pegging stablecoins are auto-exited on a daily, signal-gated schedule. Programmable money buying programmable intelligence, acting in one autonomous loop.",
     status: "Live",
   },
   {

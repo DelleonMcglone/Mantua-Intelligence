@@ -36,6 +36,23 @@ real-time market conditions, Mantua transforms stablecoin liquidity from static 
 automated financial control system for compliant routing, treasury management, and RWA
 settlement.
 
+## The autonomous loop
+
+The agent closes the loop for stablecoin liquidity: **it buys intelligence with x402, then
+deploys capital with it.**
+
+1. The agent hits a question it can't answer → **searches Circle's x402 marketplace**.
+2. **Pays per call in USDC** — capped, audited, no API keys, no accounts.
+3. **Combines paid intelligence with live on-chain signals** — peg status, pool health, whale
+   flows.
+4. **Executes through Uniswap v4 hooks + a Circle Developer-Controlled Wallet** — swap, LP,
+   bridge via CCTP.
+5. **Auto-exits de-pegging stablecoins** on a daily schedule — signal-gated and capped.
+
+Programmable money buying programmable intelligence, then acting on it in one autonomous loop.
+
+**Hooks for logic. Agents for action. Circle for the rails.**
+
 ---
 
 ## App capabilities
