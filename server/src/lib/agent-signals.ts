@@ -19,13 +19,21 @@ import { quoteAgentSwap } from "./agent-swap.ts";
  * `maxPegDeviationPct` off its peg, or whose price impact vs spot exceeds
  * `maxPriceImpactPct`, is held. Price impact also captures thin-liquidity /
  * stale-pool risk (a shallow pool fills far from spot).
+ *
+ * The impact limit is network-aware (same switch as the spending cap):
+ * 1% is calibrated for mainnet-depth pools, but testnet pools hold tens of
+ * dollars, where even a 3-USDC swap moves price >3% — a 1% limit would hold
+ * every realistic demo trade. Testnet loosens it to 10%; the peg guard (the
+ * actual safety property) stays identical on both.
  */
+
+const MAINNET = process.env.MANTUA_NETWORK === "mainnet";
 
 export const SIGNAL_THRESHOLDS = {
   /** Max |deviation| from peg for a stablecoin the swap would acquire (%). */
   maxPegDeviationPct: 0.5,
   /** Max adverse price impact of the swap vs spot (%). */
-  maxPriceImpactPct: 1.0,
+  maxPriceImpactPct: MAINNET ? 1.0 : 10.0,
 } as const;
 
 /** Symbols we treat as pegged stablecoins for the peg guard. */

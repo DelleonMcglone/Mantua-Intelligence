@@ -39,6 +39,8 @@ export interface BuildAddLiquidityArgs {
   sqrtPriceX96: bigint;
   slippageBps: number;
   owner: `0x${string}`;
+  /** ABSOLUTE unix deadline (seconds since epoch), passed verbatim to
+   *  modifyLiquidities — NOT a duration. Callers compute `now + N`. */
   deadlineSeconds: number;
   /** Target chain. Routes the calldata to the per-chain PositionManager. */
   chainId?: SupportedTestnetChainId;
