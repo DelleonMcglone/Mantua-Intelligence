@@ -482,3 +482,97 @@ export async function getNarrativePerformance(): Promise<NarrativePerf[]> {
   out.sort((a, b) => b.avgChange24hPct - a.avgChange24hPct);
   return out;
 }
+
+const protocolLookupItemSchema = z
+  .object({
+    name: z.string(),
+    slug: z.string().optional(),
+    category: z.string().nullable().optional(),
+    tvl: z.number().nullable().optional(),
+    chains: z.array(z.string()).optional(),
+    change_1d: z.number().nullable().optional(),
+    change_7d: z.number().nullable().optional(),
+  })
+  .loose();
+
+const chainTvlSchema = z.object({ name: z.string(), tvl: z.number() }).loose();
+
+export interface ProtocolLookupMatch {
+  name: string;
+  slug: string;
+  category: string | null;
+  tvlUsd: number | null;
+  change1dPct: number | null;
+  change7dPct: number | null;
+  /** Top chains the protocol is deployed on (first 6). */
+  chains: string[];
+}
+
+export interface ProtocolLookupResult {
+  query: string;
+  matches: ProtocolLookupMatch[];
+  /** Set when the query names a CHAIN (e.g. "Base", "Arbitrum") — total chain TVL. */
+  chainTvl?: { name: string; tvlUsd: number };
+}
+
+/**
+ * Free general TVL lookup — resolves a protocol OR chain by NAME (no slug
+ * needed) against DefiLlama's full registry. "uniswap" → the Uniswap
+ * entries with live TVL; "arbitrum" → protocol matches plus the chain's
+ * total TVL. Exact/prefix matches rank first. Cached for 60s.
+ */
+export async function lookupProtocols(query: string): Promise<ProtocolLookupResult> {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2 || q.length > 60) throw new Error("query must be 2-60 chars");
+
+  const protocols = await cached("all-protocols", async () => {
+    const res = await fetch(`${API_BASE}/protocols`);
+    if (!res.ok) throw new Error(`DefiLlama protocols list failed (${String(res.status)})`);
+    const parsed = z.array(protocolLookupItemSchema).safeParse(await res.json());
+    if (!parsed.success) throw new Error("DefiLlama protocols schema mismatch");
+    return parsed.data;
+  });
+
+  const scored = protocols
+    .map((p) => {
+      const name = p.name.toLowerCase();
+      const slug = (p.slug ?? "").toLowerCase();
+      let score = 0;
+      if (name === q || slug === q) score = 3;
+      else if (name.startsWith(q) || slug.startsWith(q)) score = 2;
+      else if (name.includes(q) || slug.includes(q)) score = 1;
+      return { p, score };
+    })
+    .filter((s) => s.score > 0)
+    // Rank by match quality, then by TVL so "uniswap" surfaces the big ones.
+    .sort((a, b) => b.score - a.score || (b.p.tvl ?? 0) - (a.p.tvl ?? 0))
+    .slice(0, 5);
+
+  const matches: ProtocolLookupMatch[] = scored.map(({ p }) => ({
+    name: p.name,
+    slug: p.slug ?? p.name.toLowerCase().replace(/\s+/g, "-"),
+    category: p.category ?? null,
+    tvlUsd: p.tvl ?? null,
+    change1dPct: p.change_1d ?? null,
+    change7dPct: p.change_7d ?? null,
+    chains: (p.chains ?? []).slice(0, 6),
+  }));
+
+  const result: ProtocolLookupResult = { query, matches };
+
+  // Chain TVL when the query names a chain.
+  try {
+    const chains = await cached("all-chains", async () => {
+      const res = await fetch(`${API_BASE}/v2/chains`);
+      if (!res.ok) return [];
+      const parsed = z.array(chainTvlSchema).safeParse(await res.json());
+      return parsed.success ? parsed.data : [];
+    });
+    const chain = chains.find((c) => c.name.toLowerCase() === q);
+    if (chain) result.chainTvl = { name: chain.name, tvlUsd: chain.tvl };
+  } catch {
+    // chain list is best-effort
+  }
+
+  return result;
+}
