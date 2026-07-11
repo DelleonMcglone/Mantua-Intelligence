@@ -39,11 +39,13 @@ import {
 import { readHookViaScp } from "./circle-contracts.ts";
 import { getTvlMovers, getNarrativePerformance, lookupProtocols } from "./defillama.ts";
 import { getStableFxQuote, isFxCurrency } from "./stablefx.ts";
+import { getBuyerAddress } from "./x402-buyer.ts";
 import { quoteExactInputV4 } from "./v4-onchain-swap.ts";
 import { getPythPrice, PYTH_EUR_USD_FEED_ID } from "./pyth-prices.ts";
 import {
   getUnifiedBalances,
   depositToUnifiedBalance,
+  depositToUnifiedBalanceFromBase,
   spendUnifiedBalance,
   resolveGatewaySpendChain,
   GATEWAY_SPEND_CHAINS,
@@ -121,7 +123,7 @@ Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools
 
 Bridging: you can bridge the agent wallet's USDC to another chain via Circle CCTP (bridge tool). Destinations: base, ethereum, arbitrum, unichain, avalanche, optimism, polygon, linea, sonic, world chain, sei, hyperevm (all testnets). Funds land at the USER's connected wallet on the destination unless they give an explicit 0x recipient — mention where the funds will land, and note Circle's forwarding fee is deducted from the minted amount.
 
-Treasury (Circle Gateway): the gateway tool manages the agent's unified USDC balance — one balance, spendable on any supported chain, with Arc as the settlement hub. Deposit consolidates agent USDC (on Arc) into it; spend settles USDC out to another chain (funds land at the AGENT's own address unless an explicit recipient is given — spends to third parties count against the daily cap). Use gateway for treasury moves ("park my USDC", "move funds to Base for later"); use bridge for one-off point-to-point transfers to the user. If spend reports delegate_pending, explain the one-time signing-delegate registration is finalizing and retry when the user asks.
+Treasury (Circle Gateway): the gateway tool manages the agent's unified USDC balance — one balance, spendable on any supported chain, with Arc as the settlement hub. Deposit consolidates agent USDC (on Arc) into it; deposit_base moves USDC from the ops wallet on Base Sepolia into it — when a user says their Base Sepolia USDC should be in the unified balance, tell them to send it to the ops wallet ${getBuyerAddress() ?? "(ops wallet not configured)"} on Base Sepolia, then run deposit_base for that amount (capped at 100 USDC/call). Spend settles USDC out to another chain (funds land at the AGENT's own address unless an explicit recipient is given — spends to third parties count against the daily cap). Use gateway for treasury moves ("park my USDC", "move funds to Base for later"); use bridge for one-off point-to-point transfers to the user. If spend reports delegate_pending, explain the one-time signing-delegate registration is finalizing and retry when the user asks.
 
 FX best execution: for any USDC↔EURC conversion (or FX-rate question), call get_fx_quote FIRST — it compares Circle's StableFX RFQ rate, the live on-chain pool rate, and the Pyth interbank EUR/USD reference. Recommend the venue with the better effective rate, and cite the spread vs interbank ("pool fills at 0.9138, 6bps inside StableFX — routing on-chain"). If the on-chain venue is the no-hook pool (executable: true) you can execute with swap; if it's the Stable Protection pool, you can't trade a hooked pool — recommend the user execute via the manual Swap panel with Stable Protection selected. If the recommendation is StableFX (an institutional RFQ platform), tell the user the app can't settle RFQ trades yet and offer the on-chain alternative. If StableFX reports unavailable (the API key isn't entitled), say so briefly and compare pool vs interbank instead.
 
@@ -391,14 +393,14 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "gateway",
     description:
-      "Circle Gateway treasury (unified USDC balance): action=balance reads the agent's consolidated cross-chain USDC; action=deposit moves agent USDC on Arc into the unified balance; action=spend settles USDC out of the unified balance to another chain (burn on Arc, mint on the destination — Arc as the settlement hub). Spend defaults to the agent's own address on the destination. First spend may report delegate_pending while Gateway finalizes the signing delegate — relay that and retry when asked.",
+      "Circle Gateway treasury (unified USDC balance): action=balance reads the agent's consolidated cross-chain USDC; action=deposit moves agent USDC on Arc into the unified balance; action=deposit_base moves USDC held by the ops wallet ON BASE SEPOLIA into the agent's unified balance (the top-up path after a user sends USDC to the ops wallet on Base Sepolia); action=spend settles USDC out of the unified balance to another chain (burn, mint on the destination — Arc as the settlement hub). Spend defaults to the agent's own address on the destination. First spend may report delegate_pending while Gateway finalizes the signing delegate — relay that and retry when asked.",
     input_schema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["balance", "deposit", "spend"] },
+        action: { type: "string", enum: ["balance", "deposit", "deposit_base", "spend"] },
         amount: {
           type: "string",
-          description: "Decimal USDC amount. Required for deposit and spend.",
+          description: "Decimal USDC amount. Required for deposit, deposit_base, and spend.",
         },
         destinationChain: {
           type: "string",
@@ -695,6 +697,9 @@ async function executeTool(
       }
       if (action === "deposit") {
         return await depositToUnifiedBalance(privyUserId, userWalletAddress, amount);
+      }
+      if (action === "deposit_base") {
+        return await depositToUnifiedBalanceFromBase(privyUserId, amount);
       }
       if (action === "spend") {
         const destIn = input["destinationChain"];

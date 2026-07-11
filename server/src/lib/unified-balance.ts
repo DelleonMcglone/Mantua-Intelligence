@@ -221,6 +221,74 @@ export async function depositToUnifiedBalance(
 }
 
 // ---------------------------------------------------------------------------
+// Deposit from Base Sepolia (via the ops/buyer EOA)
+// ---------------------------------------------------------------------------
+
+/** Where top-ups land: users send Base Sepolia USDC to this ops wallet, and
+ *  `depositForFromBase` moves it into the AGENT's unified balance. Same key
+ *  the x402 buyer signs with. */
+function requireOpsKey(): `0x${string}` {
+  const key = env.X402_BUYER_PRIVATE_KEY ?? env.MANTUA_ADMIN_PRIVATE_KEY;
+  if (!key) {
+    throw new UnifiedBalanceUnavailableError(
+      "Base-side deposits are unavailable: no ops wallet key configured.",
+    );
+  }
+  return key as `0x${string}`;
+}
+
+/** Per-call ceiling so an agent call can't drain the shared ops wallet
+ *  (which also funds x402 payments). */
+const DEPOSIT_BASE_MAX_USDC = 100;
+
+/**
+ * Deposit USDC held by the ops wallet ON BASE SEPOLIA into the agent's
+ * unified balance (`depositFor` — the deposit is credited to the AGENT, the
+ * ops wallet only signs and pays gas). This is the "top-up from Base" path:
+ * the user sends USDC to the ops wallet address on Base Sepolia, then the
+ * agent moves it into Gateway.
+ */
+export async function depositToUnifiedBalanceFromBase(
+  privyUserId: string,
+  amount: string,
+): Promise<UnifiedDepositResult & { source: string; sourceChain: string }> {
+  const wallet = await getAgentWallet(privyUserId);
+  if (!wallet) throw new UnifiedBalanceUnavailableError("No agent wallet provisioned.");
+  const amt = Number(amount);
+  if (!(amt > 0)) throw new Error("amount must be a positive decimal string");
+  if (amt > DEPOSIT_BASE_MAX_USDC) {
+    throw new Error(
+      `Base-side deposits are capped at ${String(DEPOSIT_BASE_MAX_USDC)} USDC per call.`,
+    );
+  }
+  const key = requireOpsKey();
+  const { ubk, avw } = await loadKitAndAdapters();
+  const adapter = avw.createViemAdapterFromPrivateKey({ privateKey: key });
+  const kit = new ubk.UnifiedBalanceKit();
+  // Cast bridges the nominal Blockchain-enum mismatch between the viem
+  // adapter's and the kit's bundled types (same as `spend` below).
+  const from = { adapter, chain: "Base_Sepolia" } as unknown as Parameters<
+    typeof kit.depositFor
+  >[0]["from"];
+  const res = (await kit.depositFor({
+    from,
+    depositAccount: wallet.address,
+    amount,
+  })) as unknown as DepositResultLike & { depositedBy?: string };
+  logger.info(
+    { amount, agent: wallet.address, txHash: res.txHash },
+    "gateway deposit from Base Sepolia",
+  );
+  return {
+    txHash: res.txHash,
+    ...(res.explorerUrl ? { explorerUrl: res.explorerUrl } : {}),
+    amount,
+    source: privateKeyToAccount(key).address,
+    sourceChain: "Base_Sepolia",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Spend (via the admin-EOA delegate)
 // ---------------------------------------------------------------------------
 
