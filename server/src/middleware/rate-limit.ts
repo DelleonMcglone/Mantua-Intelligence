@@ -14,13 +14,17 @@ const ONE_MIN_MS = 60 * 1000;
 const skipInDev = () => env.NODE_ENV === "development";
 
 /**
- * P1-007 — generic per-IP limiter for any API route. 100 req / 15 min.
- * This is the global ceiling; tighter limiters can be applied to expensive
- * routes (e.g. quote, swap) on top.
+ * P1-007 — generic per-IP limiter for any API route. 1000 req / 15 min.
+ * This is the global ceiling — sized so ONE legitimate user's polling loop
+ * (portfolio every 15s + prices + positions + pool state + charts ≈ several
+ * hundred requests per window) never trips it, while still stopping floods.
+ * The 100/15min it replaced was below a single active session's traffic and
+ * rate-limited normal usage. Chain-touching paths keep the much tighter
+ * writeRateLimiter on top.
  */
 export const ipRateLimiter: RequestHandler = rateLimit({
   windowMs: FIFTEEN_MIN_MS,
-  limit: 100,
+  limit: 1000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: skipInDev,
