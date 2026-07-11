@@ -37,7 +37,7 @@ import {
   isTxHash,
 } from "./arcscan.ts";
 import { readHookViaScp } from "./circle-contracts.ts";
-import { getTvlMovers, getNarrativePerformance } from "./defillama.ts";
+import { getTvlMovers, getNarrativePerformance, lookupProtocols } from "./defillama.ts";
 import { getStableFxQuote, isFxCurrency } from "./stablefx.ts";
 import { quoteExactInputV4 } from "./v4-onchain-swap.ts";
 import { getPythPrice, PYTH_EUR_USD_FEED_ID } from "./pyth-prices.ts";
@@ -129,7 +129,7 @@ Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
 - Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
-- For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess.
+- For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess. For ANY protocol or chain TVL question (Uniswap, Aave, Base, ...) use protocol_lookup (free, full DefiLlama registry) — never say a protocol is out of scope before trying it.
 - Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call from your buyer wallet (settles on the x402 Base Sepolia rail). BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if a service only settles on mainnet or the buyer wallet lacks USDC, relay that plainly and do your best with built-in tools.
 
 Analyst method — you are a crypto research analyst on Arc (Circle's chain), and Arcscan (testnet.arcscan.app) is your blockchain explorer:
@@ -309,6 +309,21 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["positionId", "percentage"],
+    },
+  },
+  {
+    name: "protocol_lookup",
+    description:
+      "Free TVL lookup for ANY DeFi protocol or chain by name (DefiLlama registry): current TVL, 1d/7d change, category, chains. Also returns total chain TVL when the query names a chain. Use for questions like 'what is Uniswap's TVL' — don't decline general protocol questions before trying this. Read-only, free.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Protocol or chain name, e.g. 'uniswap', 'aave', 'base'.",
+        },
+      },
+      required: ["query"],
     },
   },
   {
@@ -837,6 +852,10 @@ async function executeTool(
         slippageBps: 50,
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
       });
+    }
+    case "protocol_lookup": {
+      if (typeof input["query"] !== "string") throw new Error("query (string) is required");
+      return await lookupProtocols(input["query"]);
     }
     case "search_paid_services": {
       if (!(await isX402Available())) {

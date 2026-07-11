@@ -4,6 +4,8 @@ import { getAnthropic, type AgentChatEvent } from "./agent-chat.ts";
 import { runAnalyze, topicSchema, TOPICS } from "./analyze.ts";
 import { getTradeSignals } from "./agent-signals.ts";
 import { TOKEN_SYMBOLS, type TokenSymbol } from "./tokens.ts";
+import { lookupProtocols } from "./defillama.ts";
+import { isX402Available, searchServices, callPaidService } from "./x402-buyer.ts";
 
 /**
  * Conversational, READ-ONLY research analyst.
@@ -24,6 +26,8 @@ const SYSTEM_PROMPT = `You are Mantua's research analyst — a read-only assista
 Behaviour:
 - Ground every factual claim in the tools. Call get_market_data for prices, pegs, volumes, pool stats, market summaries, or the Mantua hooks; call get_signals for live peg deviation + spot + price-impact snapshots. Cite the figures you used; never invent numbers.
 - get_market_data takes a known topic. Supported topics: ${TOPICS.join(", ")}. For an arbitrary token's price use topic "token-price" with a symbol (e.g. BTC, ETH, SOL).
+- For ANY protocol or chain TVL question (Uniswap, Aave, Arbitrum, Base, ...) call protocol_lookup — it resolves names against DefiLlama's full registry, free. Don't say a protocol is out of scope before trying it.
+- Escalate before declining: if the free tools genuinely can't answer (live social data, news, sports, web search, anything beyond market/on-chain data), search_paid_services on Circle's x402 marketplace; if a service fits, call_paid_service and use its response — you pay a small pre-capped USDC fee and MUST state the cost you paid. If no service fits or paid tools report unavailable, say so plainly.
 - Be concise and direct — a few sentences. No preamble like "Sure, I can help". If a question is outside markets/Mantua, say briefly what you can analyze instead.
 - Plain text only — NO Markdown: no **bold**, no headings, no backticks, no "- "/"* " bullet lists. Write in sentences. Write full URLs (e.g. https://...) so the UI can link them.`;
 
@@ -57,6 +61,48 @@ const TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: "protocol_lookup",
+    description:
+      "Free TVL lookup for ANY DeFi protocol or chain by name (DefiLlama registry): current TVL, 1d/7d change, category, chains. Also returns total chain TVL when the query names a chain (e.g. 'Base', 'Arbitrum'). Use for questions like 'what is Uniswap's TVL'. Read-only, free.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Protocol or chain name, e.g. 'uniswap', 'aave', 'base'." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_paid_services",
+    description:
+      "Search the x402 agent marketplace by keyword — web search, news, weather, sports, prediction markets, twitter/social, papers, and more. Use BEFORE declining a question the free tools can't answer. Read-only; no payment.",
+    input_schema: {
+      type: "object",
+      properties: {
+        keyword: { type: "string", description: "What to search for (1–100 chars)." },
+      },
+      required: ["keyword"],
+    },
+  },
+  {
+    name: "call_paid_service",
+    description:
+      "Pay a small pre-capped USDC fee to call an x402 marketplace service URL from search_paid_services and return its response. State the USD cost you paid in your reply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The service URL from search_paid_services." },
+        data: { type: "object", description: "Optional request payload matching the service's schema." },
+        method: {
+          type: "string",
+          enum: ["GET", "POST"],
+          description: "HTTP method. Defaults to GET; use POST when sending data.",
+        },
+      },
+      required: ["url"],
+    },
+  },
 ];
 
 function asTokenSymbol(s: unknown): TokenSymbol | undefined {
@@ -82,6 +128,24 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         ...(tokenOut ? { tokenOut } : {}),
         ...(typeof input["amountIn"] === "string" ? { amountIn: input["amountIn"] } : {}),
       });
+    }
+    case "protocol_lookup": {
+      if (typeof input["query"] !== "string") throw new Error("query (string) is required");
+      return await lookupProtocols(input["query"]);
+    }
+    case "search_paid_services": {
+      if (!(await isX402Available())) {
+        return { available: false, note: "Paid services are not enabled in this environment." };
+      }
+      return { available: true, services: await searchServices(input["keyword"]) };
+    }
+    case "call_paid_service": {
+      if (!(await isX402Available())) {
+        return { available: false, note: "Paid services are not enabled in this environment." };
+      }
+      const data = input["data"] && typeof input["data"] === "object" ? input["data"] : undefined;
+      const result = await callPaidService({ url: input["url"], data, method: input["method"] });
+      return { available: true, ...result };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
