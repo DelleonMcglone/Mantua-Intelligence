@@ -14,6 +14,9 @@ export default tseslint.config(
       // tsconfigs otherwise register as extra TSConfigRootDir candidates and
       // fail every parse.
       "**/.claude/**",
+      // Throwaway operator scripts (verification/one-off ops) — outside the
+      // tsconfig project, so typed lint rules crash on them.
+      "**/*.scratch.*",
       "**/.vercel/**",
       "**/.vite/**",
       // esbuild-generated server bundles for the Vercel function (see
