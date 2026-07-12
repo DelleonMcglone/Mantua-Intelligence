@@ -92,6 +92,16 @@ const schema = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .optional(),
 
+  /** ERC-8183 AgenticCommerce job/escrow contract on Arc Testnet (ERC-1967
+   *  proxy; verified via Arcscan — same instance the agent/ package targets,
+   *  see agent/.env.example). Agent-to-agent commerce tools (create/fund/
+   *  settle jobs with USDC escrow) execute against it from the agent's
+   *  Circle wallet. */
+  AGENTIC_COMMERCE_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .default("0x0747EEf0706327138c69792bF28Cd525089e4583"),
+
   /** Owner EOA private key for the Stable Protection hook's peg-reference admin.
    *  The peg-sync keeper signs `setPegReference` (EUR/USD) with it. Absent →
    *  the keeper is disabled (503). Moves no user funds; only sets the FX

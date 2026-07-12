@@ -96,6 +96,7 @@ export type AuditAction =
   | "agent_wallet_cap_update"
   | "agent_swap"
   | "agent_intent"
+  | "agent_commerce"
   | "agent_send"
   | "agent_add_liquidity"
   | "agent_remove_liquidity"

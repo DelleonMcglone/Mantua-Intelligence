@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { privateKeyToAccount } from "viem/accounts";
 import type * as UBK from "@circle-fin/unified-balance-kit";
 import type * as CWA from "@circle-fin/adapter-circle-wallets";
@@ -84,26 +85,42 @@ export function resolveGatewaySpendChain(input: string): GatewaySpendChain | nul
   return aliases[norm] ?? null;
 }
 
-// Lazy-load the SDKs INSIDE the call paths (not at module top level). The
-// Circle Wallets adapter currently fails to resolve a named export from the
-// app's developer-controlled-wallets version, and a top-level static import of
-// it crashes the WHOLE server at boot. Loading lazily + behind try/catch keeps
-// the rest of the API up and contains any load failure to these endpoints,
-// surfaced as a clean 503. (NOTE: until the adapter/DCW version mismatch is
-// resolved, deposit will report unavailable.)
+// Lazy-load the SDKs INSIDE the call paths (not at module top level), behind
+// try/catch, so a load failure contains itself to these endpoints (503) and
+// never crashes server boot.
+//
+// Loader shape, per environment:
+//  - Vercel bundle: esbuild rewrites the literal import()/require() specifiers
+//    to the pre-bundled api/_ubk.mjs (see scripts/build-server.mjs), which
+//    resolved the adapter's CJS `Blockchain` named import at build time. The
+//    import succeeds; the fallback is dead code.
+//  - Dev (tsx / plain Node ESM): the adapter's ESM build does
+//    `import { Blockchain } from "@circle-fin/developer-controlled-wallets"`,
+//    which Node's ESM loader can't see in the CJS DCW package — the import
+//    throws. The catch falls back to requiring the package's CJS build, whose
+//    require() interop resolves the export fine.
+// Specifiers must stay LITERAL in both branches so esbuild can rewrite them.
+const nodeRequire = createRequire(import.meta.url);
+
 let ubkModule: Promise<typeof UBK> | null = null;
 function loadUbk(): Promise<typeof UBK> {
-  ubkModule ??= import("@circle-fin/unified-balance-kit");
+  ubkModule ??= import("@circle-fin/unified-balance-kit").catch(
+    () => nodeRequire("@circle-fin/unified-balance-kit") as typeof UBK,
+  );
   return ubkModule;
 }
 let cwaModule: Promise<typeof CWA> | null = null;
 function loadCwa(): Promise<typeof CWA> {
-  cwaModule ??= import("@circle-fin/adapter-circle-wallets");
+  cwaModule ??= import("@circle-fin/adapter-circle-wallets").catch(
+    () => nodeRequire("@circle-fin/adapter-circle-wallets") as typeof CWA,
+  );
   return cwaModule;
 }
 let avwModule: Promise<typeof AVW> | null = null;
 function loadAvw(): Promise<typeof AVW> {
-  avwModule ??= import("@circle-fin/adapter-viem-v2");
+  avwModule ??= import("@circle-fin/adapter-viem-v2").catch(
+    () => nodeRequire("@circle-fin/adapter-viem-v2") as typeof AVW,
+  );
   return avwModule;
 }
 
@@ -426,8 +443,7 @@ export async function spendUnifiedBalance(
       destinationChain,
       recipientAddress,
       amount,
-      note:
-        "The spend delegate was just registered with Gateway and is still finalizing — retry in a minute.",
+      note: "The spend delegate was just registered with Gateway and is still finalizing — retry in a minute.",
     };
   }
 
