@@ -72,6 +72,17 @@ export interface TradeSignals {
   verdict: { ok: boolean; reasons: string[] };
 }
 
+/**
+ * True when the signals show the token the swap would ACQUIRE breaching the
+ * peg guard. Peg breaches are size-independent (clipping the trade can't fix
+ * them), so the resolve path parks the whole swap instead of clipping.
+ */
+export function pegBreached(signals: TradeSignals, tokenOut: TokenSymbol): boolean {
+  if (!isPegged(tokenOut)) return false;
+  const peg = signals.pegs.find((p) => p.symbol === tokenOut);
+  return peg !== undefined && Math.abs(peg.deviationPct) > SIGNAL_THRESHOLDS.maxPegDeviationPct;
+}
+
 /** Peg deviation for a single stablecoin, or null when pricing is unavailable. */
 async function pegFor(symbol: TokenSymbol): Promise<PegInfo | null> {
   if (symbol === "USDC") {

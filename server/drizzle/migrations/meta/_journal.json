@@ -29,6 +29,13 @@
       "when": 1782700000000,
       "tag": "0003_agent_rebalance_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784200000000,
+      "tag": "0004_agent_intents",
+      "breakpoints": true
     }
   ]
 }
