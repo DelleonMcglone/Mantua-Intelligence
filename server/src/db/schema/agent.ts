@@ -74,6 +74,9 @@ export const agentIntents = pgTable(
     lastReason: text("last_reason"),
     attempts: integer("attempts").notNull().default(0),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    /** Earliest time the sweep should retry this intent (exponential backoff).
+     *  Null = eligible immediately; cleared on any fill (conditions improved). */
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -87,5 +90,7 @@ export const agentIntents = pgTable(
 export type AgentIntent = typeof agentIntents.$inferSelect;
 export type NewAgentIntent = typeof agentIntents.$inferInsert;
 
-/** Lifecycle states for a standing intent. */
-export type AgentIntentStatus = "pending" | "filled" | "cancelled" | "expired";
+/** Lifecycle states for a standing intent. `executing` is a short-lived
+ *  claim taken by a sweep/trigger so concurrent runs can't double-execute;
+ *  stale claims (crashed runs) are reclaimed back to `pending`. */
+export type AgentIntentStatus = "pending" | "executing" | "filled" | "cancelled" | "expired";
