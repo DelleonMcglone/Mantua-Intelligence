@@ -15,6 +15,7 @@
   ],
   "crons": [
     { "path": "/api/cron/peg-sync", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/rebalance", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/rebalance", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/intents", "schedule": "0 10 * * *" }
   ]
 }

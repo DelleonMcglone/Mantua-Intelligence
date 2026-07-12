@@ -22,7 +22,8 @@ import { getUserPortfolio } from "./user-portfolio.ts";
 import { baseRpcClient } from "./rpc-client.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
-import { getTradeSignals, SIGNAL_THRESHOLDS } from "./agent-signals.ts";
+import { getTradeSignals, SIGNAL_THRESHOLDS, type TradeSignals } from "./agent-signals.ts";
+import { resolveBlockedSwap, listIntents, cancelIntent } from "./agent-intents.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
 import { isX402Available, searchServices, callPaidService } from "./x402-buyer.ts";
 import {
@@ -117,7 +118,7 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens, send tokens, bridge USDC to other chains, manage a Circle Gateway unified USDC balance (gateway: balance/deposit/spend — Arc as the settlement hub), compare FX venues for USDC↔EURC (get_fx_quote: Circle StableFX RFQ vs the on-chain pool vs Pyth interbank), create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
+Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens (with automatic guard resolution + standing intents via standing_intents), send tokens, bridge USDC to other chains, manage a Circle Gateway unified USDC balance (gateway: balance/deposit/spend — Arc as the settlement hub), compare FX venues for USDC↔EURC (get_fx_quote: Circle StableFX RFQ vs the on-chain pool vs Pyth interbank), create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
 
 Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified). If it fails because the pool doesn't exist, call create_pool for the pair+tier (initializes at the live market price), then add_liquidity again. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
 
@@ -129,8 +130,9 @@ FX best execution: for any USDC↔EURC conversion (or FX-rate question), call ge
 
 Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
-- Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, is BLOCKED and the swap tool returns the reason. Relay that reason plainly and do NOT retry blindly.
-- Only if the user explicitly insists on proceeding after you've explained the risk, retry the swap with force=true. Never set force on your own initiative.
+- Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, trips the guard. The swap tool AUTO-RESOLVES a guard trip instead of failing: on an impact breach it executes the largest clip that stays under the limit and parks the remainder as a standing intent; on a peg breach it parks the whole amount (peg risk doesn't shrink with size). The result has guardHeld=true plus what executed and what was parked. Report both parts plainly ("swapped 12.4 USDC now at 8.9% impact; 37.6 USDC parked as a standing intent, retried automatically as liquidity recovers — say cancel to drop it"). Do NOT re-call swap for the parked remainder.
+- Standing intents are retried automatically by a daily sweep until they fill, are cancelled, or expire after 7 days. Use standing_intents (action=list) when the user asks what's queued, and action=cancel with the intent id to drop one.
+- Only if the user explicitly insists on an immediate full fill after you've explained the risk, retry the swap with force=true — it skips the guard AND the resolve path entirely. Never set force on your own initiative.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess. For ANY protocol or chain TVL question (Uniswap, Aave, Base, ...) use protocol_lookup (free, full DefiLlama registry) — never say a protocol is out of scope before trying it.
 - Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call from your buyer wallet (settles on the x402 Base Sepolia rail). BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if a service only settles on mainnet or the buyer wallet lacks USDC, relay that plainly and do your best with built-in tools.
 
@@ -227,7 +229,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "swap",
     description:
-      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately, but is BLOCKED if the live signals breach the safety thresholds (peg / price impact) unless force=true.",
+      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately. If the live signals breach the safety thresholds the swap is AUTO-RESOLVED instead of dropped: a peg breach parks the whole amount as a standing intent (retried automatically); an impact breach executes the largest clip under the limit now and parks the remainder. The result reports guardHeld=true with what executed and what was parked. force=true skips the guard entirely.",
     input_schema: {
       type: "object",
       properties: {
@@ -241,6 +243,22 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
+    },
+  },
+  {
+    name: "standing_intents",
+    description:
+      "List or cancel the agent's standing swap intents — guard-held swaps parked for automatic retry (the intent sweep re-checks signals and fills them as conditions recover, until they fill, are cancelled, or expire after 7 days). action=list shows them (id, pair, remaining amount, status, why it was held); action=cancel cancels a pending intent by id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["list", "cancel"] },
+        intentId: {
+          type: "string",
+          description: "Intent id from list. Required when action=cancel.",
+        },
+      },
+      required: ["action"],
     },
   },
   {
@@ -380,7 +398,7 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        amount: { type: "string", description: "Decimal USDC amount, e.g. \"1.5\"." },
+        amount: { type: "string", description: 'Decimal USDC amount, e.g. "1.5".' },
         destinationChain: { type: "string", description: "Destination chain name or alias." },
         recipient: {
           type: "string",
@@ -639,9 +657,7 @@ async function executeTool(
       let poolRate: number | null = null;
       if (poolQuote) {
         const inHuman = Number(formatUnits(BigInt(poolQuote.amountInRaw), getToken(from).decimals));
-        const outHuman = Number(
-          formatUnits(BigInt(poolQuote.amountOutRaw), getToken(to).decimals),
-        );
+        const outHuman = Number(formatUnits(BigInt(poolQuote.amountOutRaw), getToken(to).decimals));
         if (inHuman > 0 && Number.isFinite(outHuman)) poolRate = outHuman / inHuman;
       }
       let stablefxNet: number | null = null;
@@ -739,22 +755,28 @@ async function executeTool(
       if (!isTokenSymbol(tokenIn) || !isTokenSymbol(tokenOut)) {
         throw new Error(`tokens must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
       }
-      // Decision guardrail: hold the swap if live signals breach the safety
-      // thresholds, unless the caller explicitly forces it. Signal-feed
-      // failures don't block (verdict stays ok when data is missing).
+      // Decision guardrail: when live signals breach the safety thresholds
+      // the swap is RESOLVED, not dropped — a peg breach parks the whole
+      // amount as a standing intent; an impact breach executes the largest
+      // safe clip now and parks the remainder. force=true skips the guard
+      // entirely. Signal-feed failures don't block (verdict stays ok when
+      // data is missing).
       if (force !== true) {
-        let verdict: { ok: boolean; reasons: string[] } | null = null;
+        let signals: TradeSignals | null = null;
         try {
-          ({ verdict } = await getTradeSignals({
-            tokenIn,
-            tokenOut,
-            amountIn: String(amountIn),
-          }));
+          signals = await getTradeSignals({ tokenIn, tokenOut, amountIn: String(amountIn) });
         } catch (err) {
           logger.warn({ err, tokenIn, tokenOut }, "agent swap signal check failed; proceeding");
         }
-        if (verdict && !verdict.ok) {
-          throw new Error(`Swap held by the safety guard — ${verdict.reasons.join("; ")}.`);
+        if (signals && !signals.verdict.ok) {
+          const resolved = await resolveBlockedSwap({
+            privyUserId,
+            tokenIn,
+            tokenOut,
+            amountIn: String(amountIn),
+            signals,
+          });
+          return { guardHeld: true, ...resolved };
         }
       }
       await requireAgentBalance(privyUserId, tokenIn, String(amountIn));
@@ -773,6 +795,20 @@ async function executeTool(
         amountOut: formatUnits(BigInt(r.amountOutRaw), getToken(r.tokenOut).decimals),
         usdValue: r.usdValue,
       };
+    }
+    case "standing_intents": {
+      const action = input["action"];
+      if (action === "list") {
+        return { intents: await listIntents(privyUserId) };
+      }
+      if (action === "cancel") {
+        const intentId = input["intentId"];
+        if (typeof intentId !== "string" || intentId.length === 0) {
+          throw new Error("intentId (string) is required for cancel.");
+        }
+        return await cancelIntent(privyUserId, intentId);
+      }
+      throw new Error("action must be list or cancel.");
     }
     case "send": {
       const { to, token, amount } = input;
