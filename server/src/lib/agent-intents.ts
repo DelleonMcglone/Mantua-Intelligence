@@ -39,7 +39,7 @@ const CLIP_SAFETY_FACTOR = 0.9;
 const CLIP_SEARCH_ITERATIONS = 10;
 /** Don't execute clips or keep remainders below this USD value (dust). */
 const MIN_CLIP_USD = 1;
-/** Per-swap USD ceiling in the sweep — bounds risk with the spending cap off (testnet). */
+/** Per-swap USD ceiling in the sweep — defense-in-depth under the daily spending cap. */
 const MAX_INTENT_USD_PER_SWEEP = 100;
 /** Standing intents expire after 7 days. */
 const INTENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;

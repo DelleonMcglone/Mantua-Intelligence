@@ -19,12 +19,12 @@ import { tokenAmountUsd } from "./usd-pricing.ts";
  * the peg threshold, swap it into the on-peg reference (the least-drifting
  * stable). Each candidate swap is gated by getTradeSignals (acquired asset must
  * be on-peg, price impact under the limit) and clamped to a per-run USD ceiling
- * — important because the daily spending cap is a no-op on testnet. Every action
- * is audited; one agent's failure never aborts the sweep.
+ * on top of the daily spending cap. Every action is audited; one agent's
+ * failure never aborts the sweep.
  */
 
 const STABLES: readonly TokenSymbol[] = ["USDC", "EURC"];
-/** Per-swap USD ceiling — bounds risk even with the spending cap off (testnet). */
+/** Per-swap USD ceiling — defense-in-depth under the daily spending cap. */
 const MAX_REBALANCE_USD_PER_RUN = 100;
 /** Skip dust positions. */
 const MIN_REBALANCE_USD = 1;

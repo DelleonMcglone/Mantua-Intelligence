@@ -24,6 +24,13 @@ import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS, type TradeSignals } from "./agent-signals.ts";
 import { resolveBlockedSwap, listIntents, cancelIntent } from "./agent-intents.ts";
+import { messageAuthorizesForce } from "./force-attestation.ts";
+import {
+  createJobFromAgentWallet,
+  fundJobFromAgentWallet,
+  settleJobFromAgentWallet,
+  getJobStatus,
+} from "./agent-commerce.ts";
 import { runAnalyze, topicSchema } from "./analyze.ts";
 import { isX402Available, searchServices, callPaidService } from "./x402-buyer.ts";
 import {
@@ -118,7 +125,7 @@ Behaviour:
 - Be concise and direct. No preamble like "Sure, I can help with that."
 - Plain text only — do NOT use Markdown: no **bold**, no headings, no backticks, and no "- " or "* " bullet lists. Write naturally in sentences. When you mention a link, write the full URL (e.g. https://faucet.circle.com) so the UI can make it clickable.
 
-Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens (with automatic guard resolution + standing intents via standing_intents), send tokens, bridge USDC to other chains, manage a Circle Gateway unified USDC balance (gateway: balance/deposit/spend — Arc as the settlement hub), compare FX venues for USDC↔EURC (get_fx_quote: Circle StableFX RFQ vs the on-chain pool vs Pyth interbank), create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
+Capabilities: manage the agent wallet (view info, set the daily cap), fund the wallet, swap tokens (with automatic guard resolution + standing intents via standing_intents), send tokens, bridge USDC to other chains, manage a Circle Gateway unified USDC balance (gateway: balance/deposit/spend — Arc as the settlement hub), compare FX venues for USDC↔EURC (get_fx_quote: Circle StableFX RFQ vs the on-chain pool vs Pyth interbank), create pools and add/remove liquidity, fetch market/on-chain data, do research, make x402 micropayments for premium data, hire and settle other agents via ERC-8183 escrow jobs (create_job / fund_job / settle_job / get_job_status), read both the agent's portfolio AND the user's own connected wallet (get_user_wallet), and perform on-chain analysis of any Arc address, token, or transaction via Arcscan (inspect_address / inspect_token / inspect_transaction).
 
 Liquidity: you can create pools and add/remove liquidity, but ONLY no-hook pools and ONLY with the Arc tokens (${TOKEN_SYMBOLS.join(", ")}) — never a hooked pool. To add, call add_liquidity with the pair, both amounts, and a fee tier (default 0.30% / fee 3000 if unspecified). If it fails because the pool doesn't exist, call create_pool for the pair+tier (initializes at the live market price), then add_liquidity again. To remove, FIRST call get_positions to get the position's id, then call remove_liquidity with that id and a percentage (1–100). Execute autonomously and report the amounts; the UI shows the tx link.
 
@@ -132,7 +139,7 @@ Decision logic — ground every action in real signals, never assumptions:
 - Before a swap, call get_signals (with tokenIn/tokenOut/amountIn) to read the live peg deviations, spot prices, and the quote-implied price impact. State the relevant numbers and your reasoning in your reply ("EURC 0.03% off peg, impact 0.1% → executing").
 - Swaps are guarded in code (MODERATE thresholds): a swap that would ACQUIRE a stablecoin more than ${String(SIGNAL_THRESHOLDS.maxPegDeviationPct)}% off peg, or with price impact over ${String(SIGNAL_THRESHOLDS.maxPriceImpactPct)}%, trips the guard. The swap tool AUTO-RESOLVES a guard trip instead of failing: on an impact breach it executes the largest clip that stays under the limit and parks the remainder as a standing intent; on a peg breach it parks the whole amount (peg risk doesn't shrink with size). The result has guardHeld=true plus what executed and what was parked. Report both parts plainly ("swapped 12.4 USDC now at 8.9% impact; 37.6 USDC parked as a standing intent, retried automatically as liquidity recovers — say cancel to drop it"). Do NOT re-call swap for the parked remainder.
 - Standing intents are retried automatically by a daily sweep until they fill, are cancelled, or expire after 7 days. Use standing_intents (action=list) when the user asks what's queued, and action=cancel with the intent id to drop one.
-- Only if the user explicitly insists on an immediate full fill after you've explained the risk, retry the swap with force=true — it skips the guard AND the resolve path entirely. Never set force on your own initiative.
+- Only if the user explicitly insists on an immediate full fill after you've explained the risk, retry the swap with force=true — it skips the guard AND the resolve path entirely. Never set force on your own initiative. force is ALSO attested in code: it is only honored when the user's current message itself contains explicit override wording (like "force it", "override", "do it anyway"); otherwise the tool rejects it — relay that they must say so explicitly.
 - For data / research questions ("look up", "research", prices, volumes, peg, pools), answer from get_market_data / get_signals — cite the figures, don't guess. For ANY protocol or chain TVL question (Uniswap, Aave, Base, ...) use protocol_lookup (free, full DefiLlama registry) — never say a protocol is out of scope before trying it.
 - Paid services (x402 — Circle's agent marketplace): you have access to the FULL marketplace at agents.circle.com/services, not just data feeds — web search, news, weather, sports stats, prediction-market odds, social/twitter lookups, academic papers, SMS and other communication APIs, domain lookups, and more. Stablecoin pay-per-use means no API keys and no accounts — you pay a small pre-capped USDC fee per call from your buyer wallet (settles on the x402 Base Sepolia rail). BEFORE declining a request because you "can't do that" or lack live data, search_paid_services with a relevant keyword; if a service fits, call_paid_service and use its response. For pure market data still prefer the free tools first. Always state the cost you paid. If a paid call fails, retry once, then search for an alternative provider; if a service only settles on mainnet or the buyer wallet lacks USDC, relay that plainly and do your best with built-in tools.
 
@@ -145,6 +152,7 @@ Analyst method — you are a crypto research analyst on Arc (Circle's chain), an
 - Research principles: primary sources beat summaries; cite concrete figures, never vibes; free data first, x402 paid data when free is insufficient; include the Arcscan link when discussing an address, token, or tx so the user can verify.
 - Hook guard state: for questions about the Stable Protection hook (its peg guard, circuit breaker, or health), call inspect_hook_contract — the read goes through Circle Contracts (SCP). Zone NO_LIQUIDITY means the pool isn't seeded yet; CRITICAL means the breaker is blocking swaps.
 - Agent-to-agent commerce: Mantua also SELLS this analysis — other agents can pay $0.01 USDC via x402 at GET /api/x402/analyst-brief (Base Sepolia settlement). If someone asks how to consume your analysis programmatically, point them there.
+- Hiring other agents (ERC-8183 escrow jobs on Arc): you can hire another agent with an on-chain job contract and USDC escrow. Flow: create_job (you = client; give the provider agent's address, an evaluator address, and a description) → the PROVIDER sets the budget on-chain (not you — check get_job_status until budgetSet is true) → fund_job with the matching USDC amount (escrowed, counts against the daily cap) → the provider submits their work → the EVALUATOR settles with settle_job, releasing escrow to the provider. You can act as client and/or evaluator; never invent counterparty addresses — the user must supply them. Report jobId and tx links as you go.
 
 Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the agent address and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
 
@@ -229,7 +237,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "swap",
     description:
-      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately. If the live signals breach the safety thresholds the swap is AUTO-RESOLVED instead of dropped: a peg breach parks the whole amount as a standing intent (retried automatically); an impact breach executes the largest clip under the limit now and parks the remainder. The result reports guardHeld=true with what executed and what was parked. force=true skips the guard entirely.",
+      "Execute a token swap from the agent wallet via Uniswap on Arc. Input is denominated in tokenIn. Executes immediately. If the live signals breach the safety thresholds the swap is AUTO-RESOLVED instead of dropped: a peg breach parks the whole amount as a standing intent (retried automatically); an impact breach executes the largest clip under the limit now and parks the remainder. The result reports guardHeld=true with what executed and what was parked. force=true skips the guard entirely, but is only honored when the user's current message explicitly asks for an override (checked in code).",
     input_schema: {
       type: "object",
       properties: {
@@ -505,6 +513,62 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "create_job",
+    description:
+      "Agent-to-agent commerce (ERC-8183): create a job contract on Arc hiring another agent. Specify the provider agent's address (who does the work), the evaluator's address (who judges completion and releases escrow), and a plain-text description. Funding is a separate step (fund_job) AFTER the provider sets the budget. Executes immediately from the agent wallet.",
+    input_schema: {
+      type: "object",
+      properties: {
+        provider: { type: "string", description: "0x address of the provider agent." },
+        evaluator: { type: "string", description: "0x address of the evaluator." },
+        description: { type: "string", description: "What the job is (plain text)." },
+        expiresInSeconds: {
+          type: "number",
+          description: "Optional job expiry window in seconds. Defaults to 604800 (7 days).",
+        },
+      },
+      required: ["provider", "evaluator", "description"],
+    },
+  },
+  {
+    name: "fund_job",
+    description:
+      "Fund an ERC-8183 job's escrow with USDC from the agent wallet (approve + fund). The amount must equal the budget the provider set — check get_job_status first (budgetSet must be true). Counts against the daily spending cap. Executes immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        jobId: { type: "string", description: "Numeric job id from create_job." },
+        amountUsdc: { type: "string", description: "Decimal USDC amount matching the budget." },
+      },
+      required: ["jobId", "amountUsdc"],
+    },
+  },
+  {
+    name: "settle_job",
+    description:
+      "Settle an ERC-8183 job as its evaluator (complete), releasing the USDC escrow to the provider agent. Only works if this agent wallet is the job's evaluator and the provider has submitted. Executes immediately.",
+    input_schema: {
+      type: "object",
+      properties: {
+        jobId: { type: "string", description: "Numeric job id." },
+        reason: { type: "string", description: "Optional 0x 32-byte reason hash." },
+      },
+      required: ["jobId"],
+    },
+  },
+  {
+    name: "get_job_status",
+    description:
+      "Read an ERC-8183 job's on-chain state: whether it exists and whether its budget has been set (the precondition for fund_job). Read-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        jobId: { type: "string", description: "Numeric job id." },
+      },
+      required: ["jobId"],
+    },
+  },
+  {
     name: "inspect_hook_contract",
     description:
       "Read the Stable Protection hook's live guard state THROUGH Circle Contracts (SCP): the EUR/USD peg reference, current deviation in bps, peg zone (HEALTHY→CRITICAL), whether the circuit breaker is blocking swaps, and the hook owner. Use when asked about the hook's health, peg guard, or circuit breaker. Read-only.",
@@ -564,6 +628,8 @@ async function executeTool(
   userWalletAddress: string | undefined,
   name: string,
   input: ToolInput,
+  /** The user's current turn message — the force override is attested against it in code. */
+  userMessage: string,
 ): Promise<unknown> {
   switch (name) {
     case "get_portfolio": {
@@ -754,6 +820,13 @@ async function executeTool(
       const { tokenIn, tokenOut, amountIn, force } = input;
       if (!isTokenSymbol(tokenIn) || !isTokenSymbol(tokenOut)) {
         throw new Error(`tokens must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
+      }
+      // Code-level attestation: force is only honored when the user's CURRENT
+      // message explicitly asks to override the guard. Not model-decided.
+      if (force === true && !messageAuthorizesForce(userMessage)) {
+        throw new Error(
+          "Force override rejected: the user's current message doesn't explicitly ask to override the safety guard. Explain the risk and tell them to say e.g. 'force the swap' if they really want the full fill.",
+        );
       }
       // Decision guardrail: when live signals breach the safety thresholds
       // the swap is RESOLVED, not dropped — a peg breach parks the whole
@@ -1052,6 +1125,57 @@ async function executeTool(
       if (!tx) return { found: false, note: "Arcscan has no data for this transaction." };
       return { found: true, ...tx };
     }
+    case "create_job": {
+      const { provider, evaluator, description } = input;
+      if (typeof provider !== "string" || !isAddress(provider)) {
+        throw new Error("provider must be a valid 0x EVM address.");
+      }
+      if (typeof evaluator !== "string" || !isAddress(evaluator)) {
+        throw new Error("evaluator must be a valid 0x EVM address.");
+      }
+      if (typeof description !== "string" || description.trim().length === 0) {
+        throw new Error("description (non-empty string) is required.");
+      }
+      const expiresIn = input["expiresInSeconds"];
+      return await createJobFromAgentWallet({
+        privyUserId,
+        provider,
+        evaluator,
+        description,
+        ...(typeof expiresIn === "number" && expiresIn > 0
+          ? { expiresInSeconds: Math.floor(expiresIn) }
+          : {}),
+      });
+    }
+    case "fund_job": {
+      const { jobId, amountUsdc } = input;
+      if (typeof jobId !== "string" || !/^\d+$/.test(jobId)) {
+        throw new Error("jobId must be a numeric string.");
+      }
+      if (typeof amountUsdc !== "string" || !(Number(amountUsdc) > 0)) {
+        throw new Error("amountUsdc must be a positive decimal string.");
+      }
+      await requireAgentBalance(privyUserId, "USDC", amountUsdc);
+      return await fundJobFromAgentWallet({ privyUserId, jobId, amountUsdc });
+    }
+    case "settle_job": {
+      const { jobId, reason } = input;
+      if (typeof jobId !== "string" || !/^\d+$/.test(jobId)) {
+        throw new Error("jobId must be a numeric string.");
+      }
+      return await settleJobFromAgentWallet({
+        privyUserId,
+        jobId,
+        ...(typeof reason === "string" && reason.length > 0 ? { reason } : {}),
+      });
+    }
+    case "get_job_status": {
+      const jobId = input["jobId"];
+      if (typeof jobId !== "string" || !/^\d+$/.test(jobId)) {
+        throw new Error("jobId must be a numeric string.");
+      }
+      return await getJobStatus(jobId);
+    }
     case "inspect_hook_contract": {
       return await readHookViaScp();
     }
@@ -1159,7 +1283,7 @@ export async function* runAgentChat(params: {
       const args = (tu.input ?? {}) as Record<string, unknown>;
       yield { type: "tool_start", id: tu.id, tool: tu.name, args };
       try {
-        const data = await executeTool(privyUserId, walletAddress, tu.name, args);
+        const data = await executeTool(privyUserId, walletAddress, tu.name, args, message);
         steps.push({ tool: tu.name, args, ok: true, data });
         yield { type: "tool_result", id: tu.id, tool: tu.name, ok: true, data };
         toolResults.push({

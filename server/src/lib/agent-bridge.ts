@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import type * as BK from "@circle-fin/bridge-kit";
 import type * as CWA from "@circle-fin/adapter-circle-wallets";
 import { env } from "../env.ts";
@@ -65,15 +66,26 @@ export function resolveAgentBridgeChain(input: string): AgentBridgeChain | null 
   return CHAIN_ALIASES.find((a) => a.re.test(t))?.chain ?? null;
 }
 
-// Lazy SDK loaders (see module comment).
+// Lazy SDK loaders (see module comment). The .catch fallback requires the
+// package's CJS build for dev/plain-Node ESM, where the adapter's
+// `import { Blockchain }` from the CJS DCW package fails to resolve; in the
+// Vercel bundle the import is rewritten to the pre-bundled api/_ubk.mjs and
+// succeeds. Specifiers stay literal so esbuild can rewrite both branches
+// (same pattern as unified-balance.ts).
+const nodeRequire = createRequire(import.meta.url);
+
 let bkModule: Promise<typeof BK> | null = null;
 function loadBk(): Promise<typeof BK> {
-  bkModule ??= import("@circle-fin/bridge-kit");
+  bkModule ??= import("@circle-fin/bridge-kit").catch(
+    () => nodeRequire("@circle-fin/bridge-kit") as typeof BK,
+  );
   return bkModule;
 }
 let cwaModule: Promise<typeof CWA> | null = null;
 function loadCwa(): Promise<typeof CWA> {
-  cwaModule ??= import("@circle-fin/adapter-circle-wallets");
+  cwaModule ??= import("@circle-fin/adapter-circle-wallets").catch(
+    () => nodeRequire("@circle-fin/adapter-circle-wallets") as typeof CWA,
+  );
   return cwaModule;
 }
 

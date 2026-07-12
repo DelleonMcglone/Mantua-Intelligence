@@ -9,17 +9,19 @@ import { SafetyError } from "./errors.ts";
 import { logger } from "./logger.ts";
 
 /**
- * Phase 5b-2: cap enforcement is derived from `MANTUA_NETWORK` (one env
- * var, two effects — see Phase 5b-1). Dollar-denominated rails are
- * meaningless on testnet (USD-equivalents are fake), so when
- * MANTUA_NETWORK=testnet the hard pre-flight check is a no-op. Recording
- * still runs so the ledger code path stays exercised. Mainnet behavior
- * (full enforcement) is restored by setting MANTUA_NETWORK=mainnet.
+ * Cap enforcement is ON by default on every network. Phase 5b-2 originally
+ * keyed this off MANTUA_NETWORK (no-op unless mainnet), but the cap is the
+ * guardrail the agent's own system prompt promises users, and the autonomy
+ * loops (chat swaps, rebalance sweep, intent sweep) all route through it —
+ * a rail that only binds in prod is a rail that never gets exercised.
+ * Testnet USD equivalents come from the same live price feeds as mainnet,
+ * so the semantics hold; only the tokens are play money.
  *
- * Read at import time, intentionally — flipping requires a server restart,
- * matching the rest of the chain-config rollover.
+ * Set SPENDING_CAP_ENFORCEMENT=off to restore the no-op explicitly (e.g.
+ * for a high-volume demo). Read at import time, intentionally — flipping
+ * requires a server restart, matching the rest of the chain-config rollover.
  */
-const SPENDING_CAP_ENFORCED = process.env.MANTUA_NETWORK === "mainnet";
+const SPENDING_CAP_ENFORCED = process.env.SPENDING_CAP_ENFORCEMENT !== "off";
 
 function utcDate(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
@@ -74,14 +76,11 @@ export async function getDailySpend(
  * configured cap or the hard absolute ceiling. Read-only; does NOT increment
  * the ledger. Call `recordSpending` after the on-chain receipt confirms.
  *
- * Skipped when MANTUA_NETWORK !== 'mainnet' (Phase 5b-2): testnet USD
- * equivalents are fake, so a dollar-denominated cap has no meaningful
- * semantics. Other Phase 1 rails (slippage, kill-switch, rate limit,
- * audit log) stay enforced regardless of network.
+ * Enforced on every network unless SPENDING_CAP_ENFORCEMENT=off.
  */
 export async function checkSpendingCap(address: string, usdAmount: number): Promise<void> {
   if (!SPENDING_CAP_ENFORCED) {
-    logger.debug({ address, usdAmount }, "spending cap skipped (MANTUA_NETWORK != mainnet)");
+    logger.debug({ address, usdAmount }, "spending cap skipped (SPENDING_CAP_ENFORCEMENT=off)");
     return;
   }
   if (usdAmount < 0) throw new Error("checkSpendingCap: usdAmount must be non-negative");
