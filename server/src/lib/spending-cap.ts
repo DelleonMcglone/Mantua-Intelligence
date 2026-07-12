@@ -23,6 +23,11 @@ import { logger } from "./logger.ts";
  */
 const SPENDING_CAP_ENFORCED = process.env.SPENDING_CAP_ENFORCEMENT !== "off";
 
+/** Whether the daily cap binds (callers can preflight-clamp instead of erroring). */
+export function isSpendingCapEnforced(): boolean {
+  return SPENDING_CAP_ENFORCED;
+}
+
 function utcDate(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { findMaxSafeClipRaw } from "./agent-intents.ts";
+import { computeBackoffMs, findMaxSafeClipRaw, nextUtcMidnight } from "./agent-intents.ts";
 
 /**
  * AMM-shaped impact model for the search tests: impact grows linearly with
@@ -65,5 +65,41 @@ void describe("findMaxSafeClipRaw", () => {
       impactForAmountRaw: () => Promise.resolve(Number.NaN),
     });
     assert.equal(clip, null);
+  });
+});
+
+void describe("computeBackoffMs", () => {
+  const MIN = 60_000;
+
+  void it("starts at the 15-minute base and doubles per attempt", () => {
+    assert.equal(computeBackoffMs(0), 15 * MIN);
+    assert.equal(computeBackoffMs(1), 30 * MIN);
+    assert.equal(computeBackoffMs(2), 60 * MIN);
+    assert.equal(computeBackoffMs(3), 120 * MIN);
+  });
+
+  void it("caps at 6 hours", () => {
+    assert.equal(computeBackoffMs(5), 6 * 60 * MIN);
+    assert.equal(computeBackoffMs(20), 6 * 60 * MIN);
+    // Huge attempt counts must not overflow into Infinity/NaN.
+    assert.equal(computeBackoffMs(10_000), 6 * 60 * MIN);
+  });
+
+  void it("treats negative attempts as zero", () => {
+    assert.equal(computeBackoffMs(-3), 15 * MIN);
+  });
+});
+
+void describe("nextUtcMidnight", () => {
+  void it("returns the next 00:00 UTC after the given time", () => {
+    const from = new Date("2026-07-12T15:30:45.000Z");
+    assert.equal(nextUtcMidnight(from).toISOString(), "2026-07-13T00:00:00.000Z");
+  });
+
+  void it("rolls a midnight input to the FOLLOWING midnight", () => {
+    // setUTCHours(24,...) always moves forward one day, so an intent shelved
+    // exactly at the reset boundary waits for the next one — safe behavior.
+    const from = new Date("2026-07-12T00:00:00.000Z");
+    assert.equal(nextUtcMidnight(from).toISOString(), "2026-07-13T00:00:00.000Z");
   });
 });

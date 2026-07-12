@@ -1,4 +1,4 @@
-import { createWalletClient, http, parseUnits } from "viem";
+import { createWalletClient, http, parseAbi, parseUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
 import { env } from "../env.ts";
@@ -8,6 +8,7 @@ import { buildPoolKey } from "./pool-key.ts";
 import { computePoolId } from "./pool-id.ts";
 import { HOOK_DEPLOYMENTS_ARC } from "./v4-contracts.ts";
 import { DEFAULT_CHAIN_ID } from "./chains.ts";
+import { baseRpcClient } from "./rpc-client.ts";
 
 /**
  * Peg-reference keeper for the FX-aware Stable Protection hook.
@@ -16,9 +17,16 @@ import { DEFAULT_CHAIN_ID } from "./chains.ts";
  * `setPegReference`). This reads the live EUR/USD from Pyth Hermes (the same
  * source as our price layer) and pushes it on-chain via the owner EOA, so the
  * USDC/EURC pool at the true ~1.14 rate reads HEALTHY instead of tripping the
- * breaker. Runs on a daily cron; EUR/USD moves slowly relative to the 5%
- * CRITICAL band. Disabled (503) when `MANTUA_ADMIN_PRIVATE_KEY` is unset.
+ * breaker. Runs on an hourly cron, drift-gated: the on-chain ref is read
+ * first and the write is skipped when it is within DRIFT_GATE_BPS of the
+ * live rate, so cadence doesn't translate into hourly transactions (EUR/USD
+ * moves slowly relative to the 5% CRITICAL band). Disabled (503) when
+ * `MANTUA_ADMIN_PRIVATE_KEY` is unset.
  */
+
+/** Skip the on-chain write when |live − on-chain| / on-chain is below this.
+ *  10 bps matches the hook's HEALTHY band edge; the breaker sits at 500. */
+const DRIFT_GATE_BPS = 10;
 
 /** SP hook is the recommended hook for USDC/EURC at fee tier 100 (→ DYNAMIC_FEE). */
 const SP_FEE_TIER = 100;
@@ -48,10 +56,26 @@ export interface PegSyncResult {
   refX18: string;
   poolId: string;
   hook: string;
-  txHash: string;
+  /** Present when a write happened; absent when the drift gate skipped it. */
+  txHash?: string;
+  skipped: boolean;
+  /** |live − on-chain| in basis points of the on-chain ref (Infinity when unset). */
+  driftBps: number;
 }
 
-/** Read EUR/USD from Pyth and push it to the SP hook's peg reference on Arc. */
+/**
+ * Drift between the live and on-chain refs in bps of the on-chain value,
+ * computed in X18 bigint to avoid float drift. An unset on-chain ref (0)
+ * reads as Infinity so the caller always writes it.
+ */
+export function pegDriftBps(liveX18: bigint, onchainX18: bigint): number {
+  if (onchainX18 <= 0n) return Number.POSITIVE_INFINITY;
+  const diff = liveX18 > onchainX18 ? liveX18 - onchainX18 : onchainX18 - liveX18;
+  return Number((diff * 10_000n) / onchainX18);
+}
+
+/** Read EUR/USD from Pyth and push it to the SP hook's peg reference on Arc,
+ *  unless the on-chain ref is already within the drift gate. */
 export async function syncEurUsdPegReference(): Promise<PegSyncResult> {
   const key = env.MANTUA_ADMIN_PRIVATE_KEY;
   if (!key) throw new PegSyncUnavailableError();
@@ -72,6 +96,26 @@ export async function syncEurUsdPegReference(): Promise<PegSyncResult> {
   );
   const poolId = computePoolId(poolKey);
 
+  // Drift gate: skip the write when the on-chain ref is already fresh.
+  const onchainRefX18 = await baseRpcClient.readContract({
+    address: sp.hook,
+    abi: parseAbi(["function pegReferenceX18(bytes32) view returns (uint256)"]),
+    functionName: "pegReferenceX18",
+    args: [poolId],
+  });
+  const driftBps = pegDriftBps(refX18, onchainRefX18);
+  if (driftBps < DRIFT_GATE_BPS) {
+    logger.info({ eurUsd, driftBps, poolId }, "peg-sync: within drift gate, skipping write");
+    return {
+      eurUsd,
+      refX18: refX18.toString(),
+      poolId,
+      hook: sp.hook,
+      skipped: true,
+      driftBps,
+    };
+  }
+
   const account = privateKeyToAccount(key as `0x${string}`);
   const wallet = createWalletClient({
     account,
@@ -86,6 +130,17 @@ export async function syncEurUsdPegReference(): Promise<PegSyncResult> {
     args: [poolId, refX18],
   });
 
-  logger.info({ eurUsd, refX18: refX18.toString(), poolId, txHash }, "peg-sync: set EUR/USD ref");
-  return { eurUsd, refX18: refX18.toString(), poolId, hook: sp.hook, txHash };
+  logger.info(
+    { eurUsd, refX18: refX18.toString(), poolId, txHash, driftBps },
+    "peg-sync: set EUR/USD ref",
+  );
+  return {
+    eurUsd,
+    refX18: refX18.toString(),
+    poolId,
+    hook: sp.hook,
+    txHash,
+    skipped: false,
+    driftBps,
+  };
 }

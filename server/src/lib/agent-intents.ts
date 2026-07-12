@@ -1,4 +1,4 @@
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { type Address, formatUnits, parseAbi, parseUnits } from "viem";
 import { db } from "../db/client.ts";
 import { agentIntents, type AgentIntent } from "../db/schema/agent.ts";
@@ -7,6 +7,8 @@ import { logger } from "./logger.ts";
 import { logAudit } from "./audit.ts";
 import { getAgentWallet, AgentWalletNotFoundError } from "./agent-wallet.ts";
 import { quoteAgentSwap, swapFromAgentWallet } from "./agent-swap.ts";
+import { getDailyCap, getDailySpend, isSpendingCapEnforced } from "./spending-cap.ts";
+import { SafetyError } from "./errors.ts";
 import {
   getTradeSignals,
   pegBreached,
@@ -43,6 +45,14 @@ const MIN_CLIP_USD = 1;
 const MAX_INTENT_USD_PER_SWEEP = 100;
 /** Standing intents expire after 7 days. */
 const INTENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Retry backoff: base delay doubled per attempt, capped. */
+const BACKOFF_BASE_MS = 15 * 60 * 1000;
+const BACKOFF_MAX_MS = 6 * 60 * 60 * 1000;
+/** Claims older than this are from crashed runs (function maxDuration is 300s). */
+const CLAIM_STALE_MS = 10 * 60 * 1000;
+/** Intents processed per sweep — keeps a run well inside the 300s ceiling
+ *  (each fill can take two Circle txs at up to ~60s of polling apiece). */
+const MAX_INTENTS_PER_SWEEP = 5;
 
 const ERC20_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
 
@@ -379,10 +389,247 @@ export interface IntentSweepSummary {
 }
 
 /**
- * Retry every pending standing intent against live signals. Fills whatever
- * has become safe — the whole remainder when the verdict clears, or another
- * clip when liquidity only partially recovered. Per-swap USD ceiling bounds
- * each run; one intent's failure never aborts the sweep.
+ * Retry backoff: skipped intents wait min(15min × 2^attempts, 6h) before the
+ * sweep reconsiders them. Cleared on any fill (the strongest "conditions
+ * improved" signal) and ignored by opportunistic pair triggers.
+ */
+export function computeBackoffMs(attempts: number): number {
+  const exp = Math.min(Math.max(attempts, 0), 30); // clamp: 2^30 already > 6h in ms
+  return Math.min(BACKOFF_BASE_MS * 2 ** exp, BACKOFF_MAX_MS);
+}
+
+/** The daily-cap reset boundary (00:00 UTC) after `from`. */
+export function nextUtcMidnight(from: Date): Date {
+  const d = new Date(from);
+  d.setUTCHours(24, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Claim an intent for execution: pending → executing, atomically. Returns the
+ * claimed row, or null when another run already claimed/settled it. Every
+ * subsequent write in the processing path is guarded `AND status='executing'`
+ * so a stale process's late write can't stomp a reclaimed-and-refilled row.
+ */
+async function claimIntent(intentId: string): Promise<AgentIntent | null> {
+  const rows = await db
+    .update(agentIntents)
+    .set({ status: "executing", updatedAt: new Date() })
+    .where(and(eq(agentIntents.id, intentId), eq(agentIntents.status, "pending")))
+    .returning();
+  return rows.at(0) ?? null;
+}
+
+/** Release a claimed intent back to pending as a skip: attempt counted (unless
+ *  countAttempt=false, e.g. cap-exhausted), lastReason set, backoff applied. */
+async function releaseSkipped(
+  claimed: AgentIntent,
+  reason: string,
+  opts: { nextCheckAt: Date; countAttempt: boolean },
+): Promise<void> {
+  const now = new Date();
+  await db
+    .update(agentIntents)
+    .set({
+      status: "pending",
+      attempts: opts.countAttempt ? claimed.attempts + 1 : claimed.attempts,
+      lastCheckedAt: now,
+      lastReason: reason,
+      nextCheckAt: opts.nextCheckAt,
+      updatedAt: now,
+    })
+    .where(and(eq(agentIntents.id, claimed.id), eq(agentIntents.status, "executing")));
+}
+
+/**
+ * Process one CLAIMED intent against live signals: fill the whole remainder
+ * when the verdict clears, another safe clip when liquidity only partially
+ * recovered, or release with backoff. Shared by the cron sweep and the
+ * opportunistic pair triggers. Never leaves the row in `executing` on a
+ * normal path; the caller's catch releases it on unexpected errors.
+ */
+async function processClaimedIntent(
+  claimed: AgentIntent,
+  privyUserId: string,
+  triggerSource: string,
+): Promise<IntentSweepAction> {
+  const pair = `${claimed.tokenIn}->${claimed.tokenOut}`;
+  const tokenIn = claimed.tokenIn as TokenSymbol;
+  const tokenOut = claimed.tokenOut as TokenSymbol;
+  const inDef = getToken(tokenIn);
+  let remainingRaw = parseUnits(claimed.amountRemaining, inDef.decimals);
+  const backoffAt = (): Date => new Date(Date.now() + computeBackoffMs(claimed.attempts));
+
+  // Clamp the attempt to balance and the per-sweep USD ceiling.
+  const balance = await balanceOf(tokenIn, claimed.walletAddress as Address);
+  let targetRaw = remainingRaw < balance ? remainingRaw : balance;
+  if (targetRaw > 0n) {
+    const targetUsd = await tokenAmountUsd(tokenIn, targetRaw);
+    if (targetUsd > MAX_INTENT_USD_PER_SWEEP) {
+      const fracPpm = BigInt(Math.floor((MAX_INTENT_USD_PER_SWEEP / targetUsd) * 1_000_000));
+      targetRaw = (targetRaw * fracPpm) / 1_000_000n;
+    }
+  }
+  if (targetRaw <= 0n) {
+    const reason = "insufficient agent balance";
+    await releaseSkipped(claimed, reason, { nextCheckAt: backoffAt(), countAttempt: true });
+    return { intentId: claimed.id, pair, outcome: "skipped", reason };
+  }
+
+  // Spending-cap preflight: clamp to today's remaining headroom; when the
+  // wallet is capped out, shelve until the UTC-midnight reset WITHOUT
+  // counting an attempt (nothing about the trade itself was wrong).
+  if (isSpendingCapEnforced()) {
+    const [cap, spent] = await Promise.all([
+      getDailyCap(claimed.walletAddress),
+      getDailySpend(claimed.walletAddress),
+    ]);
+    const headroomUsd = cap - spent;
+    if (headroomUsd < MIN_CLIP_USD) {
+      const reason = `daily spending cap reached ($${spent.toFixed(2)}/$${String(cap)})`;
+      await releaseSkipped(claimed, reason, {
+        nextCheckAt: nextUtcMidnight(new Date()),
+        countAttempt: false,
+      });
+      return { intentId: claimed.id, pair, outcome: "skipped", reason };
+    }
+    const targetUsd = await tokenAmountUsd(tokenIn, targetRaw);
+    if (targetUsd > headroomUsd) {
+      const fracPpm = BigInt(Math.floor((headroomUsd / targetUsd) * 1_000_000));
+      targetRaw = (targetRaw * fracPpm) / 1_000_000n;
+    }
+    if (targetRaw <= 0n) {
+      const reason = "daily spending cap headroom below dust";
+      await releaseSkipped(claimed, reason, {
+        nextCheckAt: nextUtcMidnight(new Date()),
+        countAttempt: false,
+      });
+      return { intentId: claimed.id, pair, outcome: "skipped", reason };
+    }
+  }
+
+  const targetAmount = formatUnits(targetRaw, inDef.decimals);
+  const signals = await getTradeSignals({ tokenIn, tokenOut, amountIn: targetAmount });
+
+  let execRaw: bigint | null = null;
+  if (signals.verdict.ok) {
+    execRaw = targetRaw;
+  } else if (!pegBreached(signals, tokenOut)) {
+    const spotRate = signals.trade?.spotRate;
+    if (spotRate !== undefined && Number.isFinite(spotRate) && spotRate > 0) {
+      const limit = SIGNAL_THRESHOLDS.maxPriceImpactPct * CLIP_SAFETY_FACTOR;
+      execRaw = await findMaxSafeClipRaw({
+        amountInRaw: targetRaw,
+        maxImpactPct: limit,
+        impactForAmountRaw: (raw) => impactAtAmount(tokenIn, tokenOut, raw, spotRate),
+      });
+    }
+  }
+  if (execRaw !== null && execRaw > 0n) {
+    const execUsd = await tokenAmountUsd(tokenIn, execRaw);
+    if (execUsd < MIN_CLIP_USD) execRaw = null;
+  }
+
+  if (execRaw === null || execRaw <= 0n) {
+    const reason = signals.verdict.reasons.join("; ") || "no executable size";
+    await releaseSkipped(claimed, reason, { nextCheckAt: backoffAt(), countAttempt: true });
+    return { intentId: claimed.id, pair, outcome: "skipped", reason };
+  }
+
+  // Stamp the row before broadcasting so a crash between the on-chain swap
+  // and the DB update below is auditable when the stale claim is reclaimed.
+  const execAmount = formatUnits(execRaw, inDef.decimals);
+  await db
+    .update(agentIntents)
+    .set({ lastReason: `executing swap of ${execAmount} ${tokenIn}`, updatedAt: new Date() })
+    .where(and(eq(agentIntents.id, claimed.id), eq(agentIntents.status, "executing")));
+
+  const swap = await swapFromAgentWallet({ privyUserId, tokenIn, tokenOut, amountIn: execAmount });
+
+  remainingRaw -= execRaw;
+  const remainingUsd = remainingRaw > 0n ? await tokenAmountUsd(tokenIn, remainingRaw) : 0;
+  const done = remainingRaw <= 0n || remainingUsd < MIN_CLIP_USD;
+  const now = new Date();
+  await db
+    .update(agentIntents)
+    .set({
+      amountRemaining: formatUnits(remainingRaw > 0n ? remainingRaw : 0n, inDef.decimals),
+      status: done ? "filled" : "pending",
+      attempts: claimed.attempts + 1,
+      lastCheckedAt: now,
+      lastReason: null,
+      // A fill is the strongest "conditions improved" signal — retry the
+      // remainder immediately rather than serving out an old backoff.
+      nextCheckAt: null,
+      updatedAt: now,
+    })
+    .where(and(eq(agentIntents.id, claimed.id), eq(agentIntents.status, "executing")));
+
+  await logAudit({
+    walletAddress: claimed.walletAddress,
+    action: "agent_swap",
+    outcome: "success",
+    txHash: swap.txHash,
+    params: {
+      triggerSource,
+      intentId: claimed.id,
+      tokenIn,
+      tokenOut,
+      amountIn: execAmount,
+      usdValue: swap.usdValue,
+      intentStatus: done ? "filled" : "pending",
+    },
+  });
+  return {
+    intentId: claimed.id,
+    pair,
+    outcome: done ? "filled" : "partial",
+    reason: `executed ${execAmount} ${tokenIn}`,
+    txHash: swap.txHash,
+  };
+}
+
+/** Claim + process + error-release for one intent id. Never throws. */
+async function runOneIntent(
+  intentId: string,
+  privyUserId: string,
+  triggerSource: string,
+): Promise<IntentSweepAction | null> {
+  const claimed = await claimIntent(intentId);
+  if (!claimed) return null; // raced by another run — fine
+  try {
+    return await processClaimedIntent(claimed, privyUserId, triggerSource);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn({ err, intentId }, "intent processing failed");
+    const capExhausted = err instanceof SafetyError && err.code === "spending_cap_exceeded";
+    await releaseSkipped(claimed, reason, {
+      nextCheckAt: capExhausted
+        ? nextUtcMidnight(new Date())
+        : new Date(Date.now() + computeBackoffMs(claimed.attempts)),
+      countAttempt: !capExhausted,
+    }).catch(() => {});
+    await logAudit({
+      walletAddress: claimed.walletAddress,
+      action: "agent_swap",
+      outcome: "failure",
+      params: { triggerSource, intentId, error: reason },
+    });
+    return {
+      intentId,
+      pair: `${claimed.tokenIn}->${claimed.tokenOut}`,
+      outcome: capExhausted ? "skipped" : "error",
+      reason,
+    };
+  }
+}
+
+/**
+ * Retry pending standing intents against live signals. Runs frequently (every
+ * 15 min via cron), so it is concurrency-safe (claim-based execution),
+ * backoff-aware, and bounded: at most MAX_INTENTS_PER_SWEEP intents per run so
+ * a sweep fits comfortably inside the function's 300s ceiling. One intent's
+ * failure never aborts the sweep.
  */
 export async function runIntentSweep(): Promise<IntentSweepSummary> {
   const summary: IntentSweepSummary = {
@@ -396,7 +643,23 @@ export async function runIntentSweep(): Promise<IntentSweepSummary> {
   };
   const now = new Date();
 
-  // Expire first so stale instructions can't fire.
+  // Reclaim stale claims from crashed runs. 10 min > the 300s function
+  // maxDuration, so a claim older than that cannot still be alive.
+  const reclaimed = await db
+    .update(agentIntents)
+    .set({ status: "pending", updatedAt: now })
+    .where(
+      and(
+        eq(agentIntents.status, "executing"),
+        lt(agentIntents.updatedAt, new Date(now.getTime() - CLAIM_STALE_MS)),
+      ),
+    )
+    .returning({ id: agentIntents.id, lastReason: agentIntents.lastReason });
+  for (const row of reclaimed) {
+    logger.warn({ intentId: row.id, lastReason: row.lastReason }, "reclaimed stale intent claim");
+  }
+
+  // Expire before selecting so stale instructions can't fire.
   const expired = await db
     .update(agentIntents)
     .set({ status: "expired", updatedAt: now })
@@ -418,149 +681,77 @@ export async function runIntentSweep(): Promise<IntentSweepSummary> {
     });
   }
 
-  const pending = await db
-    .select({ intent: agentIntents, privyUserId: users.privyUserId })
+  const eligible = await db
+    .select({ intentId: agentIntents.id, privyUserId: users.privyUserId })
     .from(agentIntents)
     .innerJoin(users, eq(agentIntents.userId, users.id))
-    .where(eq(agentIntents.status, "pending"))
-    .orderBy(agentIntents.createdAt);
+    .where(
+      and(
+        eq(agentIntents.status, "pending"),
+        or(isNull(agentIntents.nextCheckAt), lte(agentIntents.nextCheckAt, now)),
+      ),
+    )
+    .orderBy(agentIntents.createdAt)
+    .limit(MAX_INTENTS_PER_SWEEP);
 
-  for (const { intent, privyUserId } of pending) {
+  for (const { intentId, privyUserId } of eligible) {
     summary.checked++;
-    const pair = `${intent.tokenIn}->${intent.tokenOut}`;
-    try {
-      const tokenIn = intent.tokenIn as TokenSymbol;
-      const tokenOut = intent.tokenOut as TokenSymbol;
-      const inDef = getToken(tokenIn);
-      let remainingRaw = parseUnits(intent.amountRemaining, inDef.decimals);
-
-      // Clamp the attempt to balance and the per-sweep USD ceiling.
-      const balance = await balanceOf(tokenIn, intent.walletAddress as Address);
-      let targetRaw = remainingRaw < balance ? remainingRaw : balance;
-      if (targetRaw > 0n) {
-        const targetUsd = await tokenAmountUsd(tokenIn, targetRaw);
-        if (targetUsd > MAX_INTENT_USD_PER_SWEEP) {
-          const fracPpm = BigInt(Math.floor((MAX_INTENT_USD_PER_SWEEP / targetUsd) * 1_000_000));
-          targetRaw = (targetRaw * fracPpm) / 1_000_000n;
-        }
-      }
-      if (targetRaw <= 0n) {
-        await bumpAttempt(intent.id, "insufficient agent balance");
-        summary.skipped++;
-        summary.actions.push({
-          intentId: intent.id,
-          pair,
-          outcome: "skipped",
-          reason: "insufficient agent balance",
-        });
-        continue;
-      }
-
-      const targetAmount = formatUnits(targetRaw, inDef.decimals);
-      const signals = await getTradeSignals({ tokenIn, tokenOut, amountIn: targetAmount });
-
-      let execRaw: bigint | null = null;
-      if (signals.verdict.ok) {
-        execRaw = targetRaw;
-      } else if (!pegBreached(signals, tokenOut)) {
-        const spotRate = signals.trade?.spotRate;
-        if (spotRate !== undefined && Number.isFinite(spotRate) && spotRate > 0) {
-          const limit = SIGNAL_THRESHOLDS.maxPriceImpactPct * CLIP_SAFETY_FACTOR;
-          execRaw = await findMaxSafeClipRaw({
-            amountInRaw: targetRaw,
-            maxImpactPct: limit,
-            impactForAmountRaw: (raw) => impactAtAmount(tokenIn, tokenOut, raw, spotRate),
-          });
-        }
-      }
-      if (execRaw !== null && execRaw > 0n) {
-        const execUsd = await tokenAmountUsd(tokenIn, execRaw);
-        if (execUsd < MIN_CLIP_USD) execRaw = null;
-      }
-
-      if (execRaw === null || execRaw <= 0n) {
-        const reason = signals.verdict.reasons.join("; ") || "no executable size";
-        await bumpAttempt(intent.id, reason);
-        summary.skipped++;
-        summary.actions.push({ intentId: intent.id, pair, outcome: "skipped", reason });
-        continue;
-      }
-
-      const execAmount = formatUnits(execRaw, inDef.decimals);
-      const swap = await swapFromAgentWallet({
-        privyUserId,
-        tokenIn,
-        tokenOut,
-        amountIn: execAmount,
-      });
-
-      remainingRaw -= execRaw;
-      const remainingUsd = remainingRaw > 0n ? await tokenAmountUsd(tokenIn, remainingRaw) : 0;
-      const done = remainingRaw <= 0n || remainingUsd < MIN_CLIP_USD;
-      await db
-        .update(agentIntents)
-        .set({
-          amountRemaining: formatUnits(remainingRaw > 0n ? remainingRaw : 0n, inDef.decimals),
-          status: done ? "filled" : "pending",
-          attempts: intent.attempts + 1,
-          lastCheckedAt: now,
-          lastReason: null,
-          updatedAt: now,
-        })
-        .where(eq(agentIntents.id, intent.id));
-
-      if (done) summary.filled++;
-      else summary.partial++;
-      summary.actions.push({
-        intentId: intent.id,
-        pair,
-        outcome: done ? "filled" : "partial",
-        reason: `executed ${execAmount} ${tokenIn}`,
-        txHash: swap.txHash,
-      });
-      await logAudit({
-        walletAddress: intent.walletAddress,
-        action: "agent_swap",
-        outcome: "success",
-        txHash: swap.txHash,
-        params: {
-          triggerSource: "intent_sweep",
-          intentId: intent.id,
-          tokenIn,
-          tokenOut,
-          amountIn: execAmount,
-          usdValue: swap.usdValue,
-          intentStatus: done ? "filled" : "pending",
-        },
-      });
-    } catch (err) {
-      summary.errors++;
-      const reason = err instanceof Error ? err.message : String(err);
-      logger.warn({ err, intentId: intent.id }, "intent sweep: intent failed");
-      summary.actions.push({ intentId: intent.id, pair, outcome: "error", reason });
-      await bumpAttempt(intent.id, reason).catch(() => {});
-      await logAudit({
-        walletAddress: intent.walletAddress,
-        action: "agent_swap",
-        outcome: "failure",
-        params: { triggerSource: "intent_sweep", intentId: intent.id, error: reason },
-      });
-    }
+    const action = await runOneIntent(intentId, privyUserId, "intent_sweep");
+    if (!action) continue;
+    summary.actions.push(action);
+    if (action.outcome === "filled") summary.filled++;
+    else if (action.outcome === "partial") summary.partial++;
+    else if (action.outcome === "skipped") summary.skipped++;
+    else if (action.outcome === "error") summary.errors++;
   }
 
   return summary;
 }
 
-async function bumpAttempt(intentId: string, reason: string): Promise<void> {
-  const now = new Date();
-  const rows = await db
-    .select({ attempts: agentIntents.attempts })
-    .from(agentIntents)
-    .where(eq(agentIntents.id, intentId))
-    .limit(1);
-  const attempts = rows.at(0)?.attempts ?? 0;
-  await db
-    .update(agentIntents)
-    .set({ attempts: attempts + 1, lastCheckedAt: now, lastReason: reason, updatedAt: now })
-    .where(eq(agentIntents.id, intentId));
+/**
+ * Opportunistic retry after an action that changed a pool's state (a swap or
+ * liquidity change in chat): immediately re-try pending intents on the SAME
+ * unordered pair — a swap moves price in favor of the OPPOSITE direction and
+ * liquidity changes affect both, so direction is deliberately not matched.
+ * Ignores backoff (conditions just changed). Bounded and never throws; the
+ * cron sweep is the backstop if this is cut short.
+ */
+export async function retryIntentsForPair(
+  tokenA: TokenSymbol,
+  tokenB: TokenSymbol,
+  opts: { excludeIntentId?: string | undefined; max?: number } = {},
+): Promise<IntentSweepAction[]> {
+  const max = opts.max ?? 2;
+  const actions: IntentSweepAction[] = [];
+  try {
+    const pairMatch = or(
+      and(eq(agentIntents.tokenIn, tokenA), eq(agentIntents.tokenOut, tokenB)),
+      and(eq(agentIntents.tokenIn, tokenB), eq(agentIntents.tokenOut, tokenA)),
+    );
+    const rows = await db
+      .select({ intentId: agentIntents.id, privyUserId: users.privyUserId })
+      .from(agentIntents)
+      .innerJoin(users, eq(agentIntents.userId, users.id))
+      .where(
+        opts.excludeIntentId
+          ? and(
+              eq(agentIntents.status, "pending"),
+              pairMatch,
+              ne(agentIntents.id, opts.excludeIntentId),
+            )
+          : and(eq(agentIntents.status, "pending"), pairMatch),
+      )
+      .orderBy(agentIntents.createdAt)
+      .limit(max);
+    for (const { intentId, privyUserId } of rows) {
+      const action = await runOneIntent(intentId, privyUserId, "pair_trigger");
+      if (action) actions.push(action);
+    }
+    if (actions.length > 0) {
+      logger.info({ tokenA, tokenB, actions }, "opportunistic intent retry ran");
+    }
+  } catch (err) {
+    logger.warn({ err, tokenA, tokenB }, "opportunistic intent retry failed");
+  }
+  return actions;
 }

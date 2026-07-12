@@ -23,7 +23,13 @@ import { baseRpcClient } from "./rpc-client.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS, type TradeSignals } from "./agent-signals.ts";
-import { resolveBlockedSwap, listIntents, cancelIntent } from "./agent-intents.ts";
+import {
+  resolveBlockedSwap,
+  listIntents,
+  cancelIntent,
+  retryIntentsForPair,
+} from "./agent-intents.ts";
+import { waitUntil } from "@vercel/functions";
 import { messageAuthorizesForce } from "./force-attestation.ts";
 import {
   createJobFromAgentWallet,
@@ -587,6 +593,24 @@ function isTokenSymbol(s: unknown): s is TokenSymbol {
 const BALANCE_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
 
 /**
+ * Run background work past the end of the request without blocking the tool
+ * result. On Vercel, waitUntil keeps the function alive until the promise
+ * settles; outside a Vercel request context (local dev, tests) it may throw,
+ * in which case the already-started promise simply runs in-process. Errors
+ * are swallowed — the cron sweep is the backstop for anything cut short.
+ */
+function deferBackground(work: Promise<unknown>): void {
+  const safe = work.catch((err: unknown) => {
+    logger.warn({ err }, "deferred background work failed");
+  });
+  try {
+    waitUntil(safe);
+  } catch {
+    void safe;
+  }
+}
+
+/**
  * Pre-flight agent-balance check for write tools. Throws a structured
  * "Insufficient agent balance" message (instead of an opaque on-chain revert)
  * so the model can pivot to the analyst-advisor flow: check the user's wallet
@@ -849,6 +873,14 @@ async function executeTool(
             amountIn: String(amountIn),
             signals,
           });
+          if (resolved.action === "clipped") {
+            // The clip moved the pool — opportunistically retry OTHER intents
+            // on this pair (the one just parked is excluded: signals are bad
+            // for it right now by construction).
+            deferBackground(
+              retryIntentsForPair(tokenIn, tokenOut, { excludeIntentId: resolved.intent?.id }),
+            );
+          }
           return { guardHeld: true, ...resolved };
         }
       }
@@ -859,6 +891,9 @@ async function executeTool(
         tokenOut,
         amountIn: String(amountIn),
       });
+      // Pool state just changed — retry pending intents on this pair now
+      // instead of waiting for the next cron tick.
+      deferBackground(retryIntentsForPair(tokenIn, tokenOut));
       return {
         txHash: r.txHash,
         explorerUrl: r.explorerUrl,
@@ -940,7 +975,7 @@ async function executeTool(
       const fee: FeeTier = feeRaw;
       await requireAgentBalance(privyUserId, tokenA, amountA);
       await requireAgentBalance(privyUserId, tokenB, amountB);
-      return await addLiquidityFromAgentWallet({
+      const addResult = await addLiquidityFromAgentWallet({
         privyUserId,
         tokenA,
         tokenB,
@@ -951,6 +986,9 @@ async function executeTool(
         slippageBps: 50,
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
       });
+      // Deeper liquidity helps intents in BOTH directions on this pair.
+      deferBackground(retryIntentsForPair(tokenA, tokenB));
+      return addResult;
     }
     case "remove_liquidity": {
       const positionId = input["positionId"];

@@ -36,6 +36,13 @@
       "when": 1784200000000,
       "tag": "0004_agent_intents",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784300000000,
+      "tag": "0005_agent_intents_backoff",
+      "breakpoints": true
     }
   ]
 }
