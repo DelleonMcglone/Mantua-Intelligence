@@ -382,6 +382,14 @@ describe("detectIntent: bridge (Swap panel's Bridge venue)", () => {
     });
   });
 
+  it("'Bridge 10USDC to Base' (no space before token) → bridge with amount + destination", () => {
+    assert.deepEqual(detectIntent("Bridge 10USDC to Base"), {
+      kind: "bridge",
+      amount: "10",
+      destination: "Base_Sepolia",
+    });
+  });
+
   it("'Bridge USDC to arbitrum' (no amount) → bridge with destination only", () => {
     assert.deepEqual(detectIntent("Bridge USDC to arbitrum"), {
       kind: "bridge",

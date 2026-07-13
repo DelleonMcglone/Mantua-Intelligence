@@ -14,7 +14,10 @@ import {
   recommendedHookForPair,
 } from "@/features/liquidity/hook-recommendations.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
-import { BridgeForm } from "@/features/bridge/BridgeForm.tsx";
+import { BRIDGE_DESTINATIONS, type BridgeDestination } from "@/features/bridge/bridge-chains.ts";
+import { useBridge } from "@/features/bridge/use-bridge.ts";
+import { BridgeDestinationSelector } from "./BridgeDestinationSelector.tsx";
+import { TokenIcon } from "./TokenIcon.tsx";
 import { TokenSelector } from "./TokenSelector.tsx";
 import { formatTokenAmount, parseTokenAmount } from "./format.ts";
 import { useTestnetMaxInput, useTestnetQuote, useTestnetSwap } from "./use-testnet-swap.ts";
@@ -96,18 +99,42 @@ function ctaLabel(status: ReturnType<typeof useTestnetSwap>["state"]["status"]):
   }
 }
 
+function bridgeCtaLabel(
+  status: ReturnType<typeof useBridge>["state"]["status"],
+  amountEntered: boolean,
+  overBalance: boolean,
+): string {
+  switch (status) {
+    case "preparing":
+      return "Preparing…";
+    case "approving":
+      return "Approve in wallet…";
+    case "burning":
+      return "Burning on Arc…";
+    case "attesting":
+      return "Awaiting attestation…";
+    case "minting":
+      return "Minting on destination…";
+    case "success":
+      return "Bridge complete";
+    default:
+      return !amountEntered ? "Enter amount" : overBalance ? "Insufficient USDC" : "Review bridge";
+  }
+}
+
 /**
  * Testnet-only swap panel — talks to `/api/v4/quote` (V4Quoter) and
  * `/api/v4/swap/calldata` (PoolSwapTest helper). Mainnet keeps the
  * production `SwapPanel` which uses Uniswap's Trading API. Lives as a
  * sibling component so the production swap path stays untouched.
  *
- * UX delta vs mainnet:
- * - Explicit fee-tier picker, since v4 swaps go against a specific
- *   PoolKey. Defaults from `DEFAULT_FEE_TIER_FOR_PAIR`.
- * - Hook selector that mirrors the create-pool form. Routing picks
- *   the pool whose `(currency0, currency1, fee, tickSpacing, hooks)`
- *   matches the user's selection.
+ * Venues: every pair trades against its recommended-hook pool or the
+ * no-hook pool, and the panel also hosts the CCTP bridge as a third
+ * venue — same Sell/Buy layout, but the Buy side becomes "USDC on
+ * <chain>" (1:1 mint on the destination) and the CTA runs the Bridge
+ * Kit flow from the user's wallet. The switcher sits above the CTA:
+ *   USDC/EURC          → Stable Protection | No Hook | Bridge
+ *   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook | Bridge
  */
 export function TestnetSwapPanel({
   onClose,
@@ -117,19 +144,18 @@ export function TestnetSwapPanel({
   initialVenue,
   initialBridgeDestination,
 }: Props) {
-  const seedIn: TokenSymbol = initialTokenIn ?? "USDC";
+  const seedIn: TokenSymbol = initialVenue === "bridge" ? "USDC" : (initialTokenIn ?? "USDC");
   const seedOut: TokenSymbol = initialTokenOut ?? "EURC";
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
-  const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut);
+  const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut === seedIn ? "EURC" : seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
-  // Every supported pair trades against its recommended-hook pool OR a
-  // no-hook pool — and the panel also hosts the CCTP bridge as a third
-  // venue, so the switcher reads e.g.:
-  //   USDC/EURC          → Stable Protection | No Hook | Bridge
-  //   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook | Bridge
-  // Defaults to the recommended hook (venue "hook").
   const pairHook = useMemo(() => recommendedHookForPair(tokenIn, tokenOut), [tokenIn, tokenOut]);
   const [venue, setVenue] = useState<SwapVenue>(initialVenue ?? "hook");
+  const [destination, setDestination] = useState<BridgeDestination>(
+    () =>
+      BRIDGE_DESTINATIONS.find((d) => d.sdkName === initialBridgeDestination) ??
+      BRIDGE_DESTINATIONS[0],
+  );
   const hook: HookName | "none" = useMemo(
     () => (pairHook && venue === "hook" ? pairHook : "none"),
     [pairHook, venue],
@@ -144,8 +170,14 @@ export function TestnetSwapPanel({
 
   const confirm = useConfirmedAction();
   const swap = useTestnetSwap();
+  const bridge = useBridge();
   const portfolio = usePortfolio();
   const chainId = useCurrentChainId();
+
+  // Pairs without a recommended hook offer only No Hook | Bridge; normalize
+  // the default "hook" selection onto "none" so the switcher highlights.
+  const activeVenue: SwapVenue = !pairHook && venue === "hook" ? "none" : venue;
+  const isBridge = activeVenue === "bridge";
 
   // When the user switches networks, rescope the Sell/Buy pickers to
   // valid, distinct tokens for the new chain (e.g. Base ETH/cbBTC don't
@@ -185,7 +217,7 @@ export function TestnetSwapPanel({
     fee,
     hook: hook === "none" ? null : hook,
     balanceRaw: balanceIn,
-    enabled: balanceIn > 0n && venue !== "bridge",
+    enabled: balanceIn > 0n && !isBridge,
   });
   const cappedMax = useMemo<bigint | null>(() => {
     if (poolMax.maxInputRaw === null) return null;
@@ -199,13 +231,11 @@ export function TestnetSwapPanel({
       const buffer = 200_000_000_000_000n;
       raw = raw > buffer ? raw - buffer : 0n;
     }
-    // Clamp to the largest amount the pool can absorb. Skip the clamp
-    // when `cappedMax` is null (loading / lookup failed) OR zero (no
-    // pool exists for this pair+fee+hook combo): clamping-to-zero was
-    // making the chips silently do nothing on testnet pairs without
-    // depth. Let the value through and surface "no pool" via the
-    // quote-failure path instead.
-    if (cappedMax !== null && cappedMax > 0n && raw > cappedMax) raw = cappedMax;
+    // Clamp to the largest amount the pool can absorb (swap venues only —
+    // the bridge moves USDC 1:1, no pool involved). Skip the clamp when
+    // `cappedMax` is null (loading / lookup failed) OR zero (no pool
+    // exists for this pair+fee+hook combo).
+    if (!isBridge && cappedMax !== null && cappedMax > 0n && raw > cappedMax) raw = cappedMax;
     setAmount(formatTokenAmount(tokenIn, raw));
   }
 
@@ -222,7 +252,7 @@ export function TestnetSwapPanel({
     // Skip the quote round-trip when we already know the hook will
     // reject the pair on-chain — surfaces the inline reason instead —
     // and in bridge mode, where no pool quote applies.
-    enabled: amountInRaw !== "0" && hookIncompatible === null && venue !== "bridge",
+    enabled: amountInRaw !== "0" && hookIncompatible === null && !isBridge,
   });
 
   const expectedOut = quote.data ? formatTokenAmount(tokenOut, quote.data.amountOut) : "";
@@ -248,6 +278,17 @@ export function TestnetSwapPanel({
     setTokenOut(tokenIn);
   }
 
+  // Bridging is USDC-only from Arc: entering the Bridge venue pins the
+  // Sell token to USDC (restoring a distinct Buy token if needed). The
+  // Buy side becomes the destination-chain picker.
+  function selectVenue(v: SwapVenue) {
+    if (v === "bridge" && tokenIn !== "USDC") {
+      if (tokenOut === "USDC") setTokenOut(tokenIn);
+      setTokenIn("USDC");
+    }
+    setVenue(v);
+  }
+
   async function onSwap() {
     if (!quote.data) return;
     const ok = await confirm({
@@ -268,9 +309,29 @@ export function TestnetSwapPanel({
 
   const amountEntered = amountInRaw !== "0" && parseFloat(amount) > 0;
 
-  // Pairs without a recommended hook offer only No Hook | Bridge; normalize
-  // the default "hook" selection onto "none" so the switcher highlights.
-  const activeVenue: SwapVenue = !pairHook && venue === "hook" ? "none" : venue;
+  // ── Bridge-mode state ──────────────────────────────────────────────────
+  const bridgeStatus = bridge.state.status;
+  const bridgeBusy =
+    bridgeStatus === "preparing" ||
+    bridgeStatus === "approving" ||
+    bridgeStatus === "burning" ||
+    bridgeStatus === "attesting" ||
+    bridgeStatus === "minting";
+  const bridgeOverBalance = BigInt(amountInRaw) > balanceIn;
+  const canBridge =
+    Boolean(portfolio.walletAddress) && !bridgeBusy && amountEntered && !bridgeOverBalance;
+
+  async function onBridge() {
+    if (!canBridge) return;
+    const ok = await confirm({
+      title: `Bridge ${amount} USDC → ${destination.label}`,
+      description: `From Arc Testnet via Circle CCTP. You sign approve + burn on Arc; Circle mints USDC to your address on ${destination.label}.`,
+      confirmLabel: "Bridge",
+    });
+    if (!ok) return;
+    await bridge.execute({ amount, destination });
+  }
+
   const venueOptions: readonly SwapVenue[] = pairHook
     ? ["hook", "none", "bridge"]
     : ["none", "bridge"];
@@ -283,9 +344,129 @@ export function TestnetSwapPanel({
       <PanelSubHeader title="Swap" {...(onClose ? { onClose } : {})} />
 
       <div className="flex-1 overflow-auto px-5 pt-2 pb-5">
-        {/* Venue switcher: the pair's recommended hook pool, the no-hook
-            pool, or the CCTP bridge (move USDC to another network). */}
-        <div className="mb-4">
+        {/* Sell card */}
+        <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5">
+          <div className="flex items-center justify-between text-[13px]">
+            <span>Sell{isBridge ? " · Arc Testnet" : ""}</span>
+            <span className="text-text-dim">
+              Balance: {balanceInDisplay} {tokenIn}
+            </span>
+          </div>
+          {/* Input diagnostics (no-pool / hook rejection) describe the
+              NEXT swap, so suppress them once a swap has completed — otherwise
+              a post-swap max-input probe that trips the SP circuit breaker
+              shows a "rejected" banner right next to the success view. They
+              return when the user starts a fresh swap ("Make another swap"). */}
+          {!isBridge &&
+            swap.state.status !== "success" &&
+            amountEntered &&
+            cappedMax !== null &&
+            cappedMax === 0n && (
+              <div className="text-[11px] text-amber mt-1.5">
+                {poolMax.reason
+                  ? `Swap rejected by hook: ${humanizeRevertReason(poolMax.reason)}`
+                  : `No pool found for ${tokenIn}/${tokenOut} at this fee tier and hook. Try a different fee tier, hook, or pair.`}
+              </div>
+            )}
+          <div className="flex gap-2 mt-2.5">
+            {(
+              [
+                { label: "25%", pct: 25 },
+                { label: "50%", pct: 50 },
+                { label: "75%", pct: 75 },
+                { label: "Max", pct: 100 },
+              ] as const
+            ).map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => {
+                  applyPercent(p.pct);
+                }}
+                disabled={balanceIn === 0n}
+                className="flex-1 py-[7px] border border-border bg-transparent text-text-dim rounded-xs text-[12px] cursor-pointer font-medium hover:text-text hover:border-text-mute transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-3.5">
+            <input
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+              }}
+              placeholder="0.00"
+              className={`flex-1 min-w-0 bg-transparent border-none outline-none p-0 font-mono text-[38px] font-light tracking-[-0.03em] ${
+                amountEntered ? "text-text" : "text-text-mute"
+              }`}
+            />
+            {isBridge ? (
+              // Bridging is USDC-only — fixed pill instead of the picker.
+              <span className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-panel-solid border border-border text-[14px] font-medium">
+                <TokenIcon symbol="USDC" size={20} />
+                USDC
+              </span>
+            ) : (
+              <TokenSelector value={tokenIn} onChange={selectTokenIn} />
+            )}
+          </div>
+        </div>
+
+        {!isBridge && (
+          <div className="flex justify-center -my-2.5 relative z-10">
+            <button
+              type="button"
+              onClick={flip}
+              aria-label="Flip tokens"
+              className="w-[34px] h-[34px] rounded-full bg-bg-elev border border-border flex items-center justify-center cursor-pointer text-green hover:border-green/60 transition-colors"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M7 20V4M7 4l-4 4M7 4l4 4" />
+                <path d="M17 4v16M17 20l-4-4M17 20l4-4" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Buy card — in bridge mode the Buy side is the same USDC arriving
+            on the destination chain (1:1 mint, forwarding fee deducted). */}
+        <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5 mt-3">
+          <div className="flex items-center justify-between text-[13px]">
+            <span>Buy{isBridge ? ` · ${destination.label}` : ""}</span>
+            <span className="text-text-dim">expected</span>
+          </div>
+          <div className="flex items-center justify-between mt-3.5">
+            <input
+              value={isBridge ? (amountEntered ? amount : "") : expectedOut}
+              readOnly
+              placeholder="0.00"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none p-0 font-mono text-[38px] font-light tracking-[-0.03em] text-text-mute"
+            />
+            {isBridge ? (
+              <BridgeDestinationSelector
+                value={destination}
+                onChange={setDestination}
+                disabled={bridgeBusy}
+              />
+            ) : (
+              <TokenSelector value={tokenOut} onChange={selectTokenOut} />
+            )}
+          </div>
+        </div>
+
+        {/* Venue switcher — above the CTA: hook pool | no-hook pool | bridge. */}
+        <div className="mt-5">
           <p className="text-[10px] text-text-mute tracking-[0.08em] mb-1.5 font-semibold">VENUE</p>
           <div className="flex gap-1 bg-bg-elev p-0.5 rounded-md border border-border-soft">
             {venueOptions.map((v) => (
@@ -293,7 +474,7 @@ export function TestnetSwapPanel({
                 key={v}
                 type="button"
                 onClick={() => {
-                  setVenue(v);
+                  selectVenue(v);
                 }}
                 className={`flex-1 py-2 text-[12px] rounded-xs font-medium ${
                   activeVenue === v ? "bg-chip text-text" : "bg-transparent text-text-dim"
@@ -305,211 +486,167 @@ export function TestnetSwapPanel({
           </div>
         </div>
 
-        {activeVenue === "bridge" ? (
-          <BridgeForm
-            initialAmount={initialVenue === "bridge" ? initialAmount : undefined}
-            initialDestination={initialBridgeDestination}
-          />
+        {isBridge ? (
+          <p className="text-[11px] text-text-mute mt-3">
+            Via Circle CCTP + Forwarding Service — you sign approve and burn on Arc; Circle mints
+            USDC to your address on {destination.label}. No destination gas required.
+          </p>
         ) : (
-          <>
-            {/* Sell card */}
-            <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5">
-              <div className="flex items-center justify-between text-[13px]">
-                <span>Sell</span>
-                <span className="text-text-dim">
-                  Balance: {balanceInDisplay} {tokenIn}
-                </span>
-              </div>
-              {/* Input diagnostics (no-pool / hook rejection) describe the
-              NEXT swap, so suppress them once a swap has completed — otherwise
-              a post-swap max-input probe that trips the SP circuit breaker
-              shows a "rejected" banner right next to the success view. They
-              return when the user starts a fresh swap ("Make another swap"). */}
-              {swap.state.status !== "success" &&
-                amountEntered &&
-                cappedMax !== null &&
-                cappedMax === 0n && (
-                  <div className="text-[11px] text-amber mt-1.5">
-                    {poolMax.reason
-                      ? `Swap rejected by hook: ${humanizeRevertReason(poolMax.reason)}`
-                      : `No pool found for ${tokenIn}/${tokenOut} at this fee tier and hook. Try a different fee tier, hook, or pair.`}
-                  </div>
-                )}
-              <div className="flex gap-2 mt-2.5">
-                {(
-                  [
-                    { label: "25%", pct: 25 },
-                    { label: "50%", pct: 50 },
-                    { label: "75%", pct: 75 },
-                    { label: "Max", pct: 100 },
-                  ] as const
-                ).map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => {
-                      applyPercent(p.pct);
-                    }}
-                    disabled={balanceIn === 0n}
-                    className="flex-1 py-[7px] border border-border bg-transparent text-text-dim rounded-xs text-[12px] cursor-pointer font-medium hover:text-text hover:border-text-mute transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center justify-between mt-3.5">
-                <input
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => {
-                    setAmount(e.target.value);
-                  }}
-                  placeholder="0.00"
-                  className={`flex-1 min-w-0 bg-transparent border-none outline-none p-0 font-mono text-[38px] font-light tracking-[-0.03em] ${
-                    amountEntered ? "text-text" : "text-text-mute"
-                  }`}
-                />
-                <TokenSelector value={tokenIn} onChange={selectTokenIn} />
-              </div>
-            </div>
+          <div className="mt-3 flex items-center justify-between text-[13px]">
+            <span className="text-text-dim">Fee tier</span>
+            <span className="font-mono text-text">{FEE_TIER_LABELS[fee]}</span>
+          </div>
+        )}
 
-            <div className="flex justify-center -my-2.5 relative z-10">
-              <button
-                type="button"
-                onClick={flip}
-                aria-label="Flip tokens"
-                className="w-[34px] h-[34px] rounded-full bg-bg-elev border border-border flex items-center justify-center cursor-pointer text-green hover:border-green/60 transition-colors"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M7 20V4M7 4l-4 4M7 4l4 4" />
-                  <path d="M17 4v16M17 20l-4-4M17 20l4-4" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Buy card */}
-            <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5 mt-3">
-              <div className="flex items-center justify-between text-[13px]">
-                <span>Buy</span>
-                <span className="text-text-dim">expected</span>
-              </div>
-              <div className="flex items-center justify-between mt-3.5">
-                <input
-                  value={expectedOut}
-                  readOnly
-                  placeholder="0.00"
-                  className="flex-1 min-w-0 bg-transparent border-none outline-none p-0 font-mono text-[38px] font-light tracking-[-0.03em] text-text-mute"
-                />
-                <TokenSelector value={tokenOut} onChange={selectTokenOut} />
-              </div>
-            </div>
-
-            {/* The venue switcher above picks the pool; surface the derived tier. */}
-            <div className="mt-5 flex items-center justify-between text-[13px]">
-              <span className="text-text-dim">Fee tier</span>
-              <span className="font-mono text-text">{FEE_TIER_LABELS[fee]}</span>
-            </div>
-
-            {hookIncompatible && (
-              <p className="text-xs text-amber text-center mt-3">{hookIncompatible}</p>
-            )}
-            {!hookIncompatible && quote.loading && (
-              <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>
-            )}
-            {/* Humanize the quote failure to a specific, actionable reason. Skip it
+        {!isBridge && hookIncompatible && (
+          <p className="text-xs text-amber text-center mt-3">{hookIncompatible}</p>
+        )}
+        {!isBridge && !hookIncompatible && quote.loading && (
+          <p className="text-xs text-text-dim text-center mt-3">Fetching quote…</p>
+        )}
+        {/* Humanize the quote failure to a specific, actionable reason. Skip it
             when the under-Sell banner already shows the same diagnosis (the
             max-input probe trips at cappedMax === 0). */}
-            {!hookIncompatible && quote.error && !(amountEntered && cappedMax === 0n) && (
-              <p className="text-xs text-red text-center mt-3">
-                {humanizeRevertReason(quote.error.message)}
-              </p>
-            )}
-            {!hookIncompatible && !quote.error && noLiquidity && (
-              <p className="text-xs text-amber text-center mt-3">
-                Insufficient liquidity — this pool returned almost nothing for that amount. Try the
-                No Hook option, a different fee tier, or another pair.
-              </p>
-            )}
+        {!isBridge && !hookIncompatible && quote.error && !(amountEntered && cappedMax === 0n) && (
+          <p className="text-xs text-red text-center mt-3">
+            {humanizeRevertReason(quote.error.message)}
+          </p>
+        )}
+        {!isBridge && !hookIncompatible && !quote.error && noLiquidity && (
+          <p className="text-xs text-amber text-center mt-3">
+            Insufficient liquidity — this pool returned almost nothing for that amount. Try the No
+            Hook option, a different fee tier, or another pair.
+          </p>
+        )}
 
-            <Button
-              variant="primary"
-              size="lg"
-              disabled={
-                hookIncompatible !== null ||
-                !quote.data ||
-                noLiquidity ||
-                !amountEntered ||
-                swap.state.status === "quoting" ||
-                swap.state.status === "approving" ||
-                swap.state.status === "signing" ||
-                swap.state.status === "pending" ||
-                swap.state.status === "success"
-              }
-              onClick={() => {
-                void onSwap();
-              }}
-              className="w-full mt-5"
-            >
-              {hookIncompatible
-                ? "Hook unavailable for this pair"
-                : !amountEntered
-                  ? "Enter amount"
-                  : noLiquidity
-                    ? "Insufficient liquidity"
-                    : ctaLabel(swap.state.status)}
-            </Button>
+        {isBridge ? (
+          <Button
+            variant="primary"
+            size="lg"
+            disabled={!canBridge || bridgeStatus === "success"}
+            onClick={() => {
+              void onBridge();
+            }}
+            className="w-full mt-5"
+          >
+            {!portfolio.walletAddress
+              ? "Connect a wallet to bridge"
+              : bridgeCtaLabel(bridgeStatus, amountEntered, bridgeOverBalance)}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="lg"
+            disabled={
+              hookIncompatible !== null ||
+              !quote.data ||
+              noLiquidity ||
+              !amountEntered ||
+              swap.state.status === "quoting" ||
+              swap.state.status === "approving" ||
+              swap.state.status === "signing" ||
+              swap.state.status === "pending" ||
+              swap.state.status === "success"
+            }
+            onClick={() => {
+              void onSwap();
+            }}
+            className="w-full mt-5"
+          >
+            {hookIncompatible
+              ? "Hook unavailable for this pair"
+              : !amountEntered
+                ? "Enter amount"
+                : noLiquidity
+                  ? "Insufficient liquidity"
+                  : ctaLabel(swap.state.status)}
+          </Button>
+        )}
 
-            {swap.state.message &&
-              swap.state.status !== "idle" &&
-              swap.state.status !== "error" && (
-                <p className="text-xs text-text-mute text-center mt-2">{swap.state.message}</p>
-              )}
+        {/* Bridge progress / results */}
+        {isBridge &&
+          bridge.state.message &&
+          bridgeStatus !== "success" &&
+          bridgeStatus !== "error" && (
+            <p className="text-xs text-text-dim text-center mt-2">{bridge.state.message}</p>
+          )}
+        {isBridge && bridgeStatus === "error" && bridge.state.error && (
+          <p className="text-xs text-red text-center mt-3">{bridge.state.error}</p>
+        )}
+        {isBridge && bridge.state.burnTx && (
+          <a
+            href={`${EXPLORER_TX_URL}${bridge.state.burnTx}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-3 w-full font-mono"
+          >
+            Burn on Arc <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {isBridge && bridge.state.mintTx && (
+          <a
+            href={destination.explorerTxUrl(bridge.state.mintTx)}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-2 w-full font-mono"
+          >
+            Mint on {destination.label} <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {isBridge && bridgeStatus === "success" && (
+          <button
+            type="button"
+            onClick={() => {
+              bridge.reset();
+              setAmount("");
+            }}
+            className="block mx-auto mt-3 px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] cursor-pointer hover:text-text hover:border-text-mute transition-colors"
+          >
+            Bridge again
+          </button>
+        )}
 
-            {swap.state.approvalTx && (
-              <a
-                href={`${EXPLORER_TX_URL}${swap.state.approvalTx}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
-              >
-                Approval tx <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            {swap.state.txHash && (
-              <a
-                href={`${EXPLORER_TX_URL}${swap.state.txHash}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-3 w-full"
-              >
-                View on ArcScan <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            {swap.state.status === "success" && (
-              <button
-                type="button"
-                onClick={() => {
-                  swap.reset();
-                  setAmount("");
-                }}
-                className="block mx-auto mt-3 px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] cursor-pointer hover:text-text hover:border-text-mute transition-colors"
-              >
-                Make another swap
-              </button>
-            )}
-            {swap.state.status === "error" && swap.state.error && (
-              <p className="text-xs text-red text-center mt-3">{swap.state.error.message}</p>
-            )}
-          </>
+        {/* Swap progress / results */}
+        {!isBridge &&
+          swap.state.message &&
+          swap.state.status !== "idle" &&
+          swap.state.status !== "error" && (
+            <p className="text-xs text-text-mute text-center mt-2">{swap.state.message}</p>
+          )}
+        {!isBridge && swap.state.approvalTx && (
+          <a
+            href={`${EXPLORER_TX_URL}${swap.state.approvalTx}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-text-dim hover:text-accent inline-flex items-center gap-1 justify-center mt-3 w-full"
+          >
+            Approval tx <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {!isBridge && swap.state.txHash && (
+          <a
+            href={`${EXPLORER_TX_URL}${swap.state.txHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-accent hover:text-accent-2 inline-flex items-center gap-1 justify-center mt-3 w-full"
+          >
+            View on ArcScan <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {!isBridge && swap.state.status === "success" && (
+          <button
+            type="button"
+            onClick={() => {
+              swap.reset();
+              setAmount("");
+            }}
+            className="block mx-auto mt-3 px-3 py-1.5 rounded-xs border border-border bg-transparent text-text-dim text-[12px] cursor-pointer hover:text-text hover:border-text-mute transition-colors"
+          >
+            Make another swap
+          </button>
+        )}
+        {!isBridge && swap.state.status === "error" && swap.state.error && (
+          <p className="text-xs text-red text-center mt-3">{swap.state.error.message}</p>
         )}
       </div>
     </div>
