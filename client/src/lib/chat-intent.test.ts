@@ -372,3 +372,32 @@ describe("detectIntent: portfolio", () => {
     assert.equal(detectIntent("Drain my wallet"), null);
   });
 });
+
+describe("detectIntent: bridge (Swap panel's Bridge venue)", () => {
+  it("'Bridge 10 USDC to Base' → bridge with amount + destination", () => {
+    assert.deepEqual(detectIntent("Bridge 10 USDC to Base"), {
+      kind: "bridge",
+      amount: "10",
+      destination: "Base_Sepolia",
+    });
+  });
+
+  it("'Bridge USDC to arbitrum' (no amount) → bridge with destination only", () => {
+    assert.deepEqual(detectIntent("Bridge USDC to arbitrum"), {
+      kind: "bridge",
+      destination: "Arbitrum_Sepolia",
+    });
+  });
+
+  it("'bridge' alone → bridge with no prefill", () => {
+    assert.deepEqual(detectIntent("bridge"), { kind: "bridge" });
+  });
+
+  it("'cross-chain transfer 2.5 USDC to optimism' → bridge", () => {
+    assert.deepEqual(detectIntent("cross-chain transfer 2.5 USDC to optimism"), {
+      kind: "bridge",
+      amount: "2.5",
+      destination: "Optimism_Sepolia",
+    });
+  });
+});

@@ -16,6 +16,8 @@ import { EarningsTabBody } from "./EarningsTab.tsx";
 import { useEarnings } from "./use-earnings.ts";
 import { earningPoolCount } from "./earnings.ts";
 import { useOnchainPositions } from "./use-onchain-positions.ts";
+import { UnifiedBalanceTab } from "./UnifiedBalanceTab.tsx";
+import { useUnifiedBalance } from "./use-unified-balance.ts";
 
 interface PortfolioPosition {
   a: AssetSymbol;
@@ -90,7 +92,9 @@ interface AssetsCardProps {
 export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}) {
   const chainId = useCurrentChainId();
   const chainName = CHAIN_INFO[chainId].displayName;
-  const [tab, setTab] = useState<"assets" | "positions" | "agent" | "earnings">("assets");
+  const [tab, setTab] = useState<"assets" | "positions" | "agent" | "unified" | "earnings">(
+    "assets",
+  );
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>("Descending");
   const [openSort, setOpenSort] = useState(false);
@@ -104,6 +108,9 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
   const portfolio = usePortfolio();
   const agent = useAgentPortfolio();
   const earnings = useEarnings(portfolio.walletAddress);
+  // Agent treasury (Circle Gateway) — fetched here so the tab count and the
+  // tab body share one request.
+  const unifiedBalance = useUnifiedBalance();
   // Authoritative on-chain positions. While this loads (or if it errors)
   // we fall back to the localStorage breadcrumb so the tab is never blank.
   const onchainPositions = useOnchainPositions(portfolio.walletAddress);
@@ -170,6 +177,12 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
       k: "agent" as const,
       label: "Agent",
       count: agentAssets.length + agentPositionRows.length,
+    },
+    {
+      k: "unified" as const,
+      label: "Unified Balance",
+      // Chains currently holding part of the unified balance.
+      count: unifiedBalance.data?.breakdown?.filter((b) => Number(b.amount) > 0).length ?? 0,
     },
     {
       k: "earnings" as const,
@@ -433,6 +446,8 @@ export function AssetsCard({ onSelectPool, onSelectAsset }: AssetsCardProps = {}
           agentPositionRows={agentPositionRows}
         />
       )}
+
+      {tab === "unified" && <UnifiedBalanceTab ub={unifiedBalance} />}
 
       {tab === "earnings" && (
         <EarningsTabBody earnings={earnings} walletAddress={portfolio.walletAddress} />

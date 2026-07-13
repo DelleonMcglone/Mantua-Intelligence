@@ -14,7 +14,6 @@ import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
-import { BridgePanel } from "./features/bridge/BridgePanel.tsx";
 import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
 import type { HookName } from "./features/liquidity/use-create-pool.ts";
@@ -40,6 +39,10 @@ type Route =
       tokenOut?: TokenSymbol;
       hook?: HookName | null;
       amountIn?: string;
+      /** Venue tab to open on: hook pool, no-hook pool, or the bridge. */
+      venue?: "hook" | "none" | "bridge";
+      /** Bridge Kit sdkName of the destination chain (bridge venue). */
+      bridgeDestination?: string;
       /** Bumped on every chat command so the panel remounts and re-applies
        *  the parsed tokens/hook/amount even when the route is otherwise
        *  identical — otherwise a repeated "swap USDC for EURC" does nothing. */
@@ -57,7 +60,6 @@ type Route =
       /** Free-form symbol to pass to the `token-price` runner. */
       symbol?: string;
     }
-  | { kind: "bridge"; amount?: string; destination?: string; nonce?: number }
   | { kind: "agent"; message?: string };
 
 // Intents that the manual Uniswap-v4 panels own when a hook is named.
@@ -89,7 +91,6 @@ const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "positions",
   "asset",
   "analyze",
-  "bridge",
   "agent",
 ];
 
@@ -284,6 +285,10 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
           {...(route.hook ? { initialHook: route.hook } : {})}
           {...(route.amountIn ? { initialAmount: route.amountIn } : {})}
+          {...(route.venue ? { initialVenue: route.venue } : {})}
+          {...(route.bridgeDestination
+            ? { initialBridgeDestination: route.bridgeDestination }
+            : {})}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -365,17 +370,6 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
-    case "bridge":
-      return (
-        <BridgePanel
-          key={`bridge-${String(route.nonce ?? 0)}`}
-          {...(route.amount ? { initialAmount: route.amount } : {})}
-          {...(route.destination ? { initialDestination: route.destination } : {})}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
     case "agent":
       return (
         <AgentPanel
@@ -396,8 +390,6 @@ function promptToRoute(id: HomePromptId): Route {
       return { kind: "swap" };
     case "analyze":
       return { kind: "analyze" };
-    case "bridge":
-      return { kind: "bridge" };
     case "agent":
       return { kind: "agent" };
   }
@@ -442,14 +434,6 @@ function nextSwapNonce(): number {
   return swapNonce;
 }
 
-// Same trick for bridge: a fresh nonce per command remounts the panel so a
-// repeated "bridge … to …" re-applies the parsed amount/destination.
-let bridgeNonce = 0;
-function nextBridgeNonce(): number {
-  bridgeNonce += 1;
-  return bridgeNonce;
-}
-
 function intentToRoute(intent: Intent): Route {
   switch (intent.kind) {
     case "home":
@@ -488,11 +472,14 @@ function intentToRoute(intent: Intent): Route {
         ...(intent.symbol ? { symbol: intent.symbol } : {}),
       };
     case "bridge":
+      // Bridging lives inside the Swap panel as its third venue — a bridge
+      // command opens Swap with the Bridge tab selected and prefilled.
       return {
-        kind: "bridge",
-        ...(intent.amount ? { amount: intent.amount } : {}),
-        ...(intent.destination ? { destination: intent.destination } : {}),
-        nonce: nextBridgeNonce(),
+        kind: "swap",
+        venue: "bridge",
+        ...(intent.amount ? { amountIn: intent.amount } : {}),
+        ...(intent.destination ? { bridgeDestination: intent.destination } : {}),
+        nonce: nextSwapNonce(),
       };
   }
 }

@@ -1,8 +1,8 @@
-import { ArrowLeftRight, ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
+import { ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
 import { Logo } from "./Logo.tsx";
 import { PanelHeader } from "./PanelHeader.tsx";
 
-export type HomePromptId = "pool" | "swap" | "analyze" | "bridge" | "agent";
+export type HomePromptId = "pool" | "swap" | "analyze" | "agent";
 
 interface Props {
   onPromptSelect: (id: HomePromptId) => void;
@@ -16,8 +16,7 @@ const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
     icon: BarChart3,
   },
   { id: "pool", title: "Create / Add Liquidity with Stable protection", icon: Droplet },
-  { id: "swap", title: "Swap Stablecoins with Dynamic fee logic", icon: ArrowUpDown },
-  { id: "bridge", title: "Bridge USDC to another network", icon: ArrowLeftRight },
+  { id: "swap", title: "Swap stablecoins or bridge USDC to another network", icon: ArrowUpDown },
   { id: "agent", title: "Create / Manage Circle Agent", icon: Bot },
 ];
 
