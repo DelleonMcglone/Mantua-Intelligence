@@ -320,7 +320,7 @@ export function TestnetSwapPanel({
                   Balance: {balanceInDisplay} {tokenIn}
                 </span>
               </div>
-              {/* Input diagnostics (pool-depth cap / hook rejection) describe the
+              {/* Input diagnostics (no-pool / hook rejection) describe the
               NEXT swap, so suppress them once a swap has completed — otherwise
               a post-swap max-input probe that trips the SP circuit breaker
               shows a "rejected" banner right next to the success view. They
@@ -333,15 +333,6 @@ export function TestnetSwapPanel({
                     {poolMax.reason
                       ? `Swap rejected by hook: ${humanizeRevertReason(poolMax.reason)}`
                       : `No pool found for ${tokenIn}/${tokenOut} at this fee tier and hook. Try a different fee tier, hook, or pair.`}
-                  </div>
-                )}
-              {swap.state.status !== "success" &&
-                cappedMax !== null &&
-                cappedMax > 0n &&
-                cappedMax < balanceIn && (
-                  <div className="text-[11px] text-text-mute mt-1.5">
-                    Pool depth caps swaps at ~{formatTokenAmount(tokenIn, cappedMax)} {tokenIn}.
-                    Percent chips clamp here.
                   </div>
                 )}
               <div className="flex gap-2 mt-2.5">
