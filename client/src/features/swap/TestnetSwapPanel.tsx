@@ -347,7 +347,7 @@ export function TestnetSwapPanel({
         {/* Sell card */}
         <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5">
           <div className="flex items-center justify-between text-[13px]">
-            <span>Sell{isBridge ? " · Arc Testnet" : ""}</span>
+            <span>{isBridge ? "Bridge from · Arc Testnet" : "Sell"}</span>
             <span className="text-text-dim">
               Balance: {balanceInDisplay} {tokenIn}
             </span>
@@ -443,7 +443,7 @@ export function TestnetSwapPanel({
             on the destination chain (1:1 mint, forwarding fee deducted). */}
         <div className="bg-bg-elev border border-border-soft rounded-md px-4 py-3.5 mt-3">
           <div className="flex items-center justify-between text-[13px]">
-            <span>Buy{isBridge ? ` · ${destination.label}` : ""}</span>
+            <span>{isBridge ? `Bridge to · ${destination.label}` : "Buy"}</span>
             <span className="text-text-dim">expected</span>
           </div>
           <div className="flex items-center justify-between mt-3.5">
