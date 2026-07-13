@@ -13,9 +13,9 @@
  * meant to cover.
  */
 import type { TokenSymbol } from "./tokens.ts";
-import type { FeeTier } from "@/features/liquidity/fee-tiers.ts";
-import type { HookName } from "@/features/liquidity/use-create-pool.ts";
-import { matchBridgeDestination } from "@/features/bridge/bridge-chains.ts";
+import type { FeeTier } from "../features/liquidity/fee-tiers.ts";
+import type { HookName } from "../features/liquidity/use-create-pool.ts";
+import { matchBridgeDestination } from "../features/bridge/bridge-chains.ts";
 
 export type AnalyzeTopic =
   | "eth-price"
@@ -185,9 +185,10 @@ const ACTION_VERB_RE =
 export function detectIntent(text: string): Intent | null {
   const t = text.toLowerCase();
 
-  // Bridge first — "bridge 10 USDC to Base" / "cross-chain transfer" opens the
-  // bridge panel, pre-filling the amount + destination when present. Checked
-  // before swap so the "to <chain>" phrasing isn't read as a swap pair.
+  // Bridge first — "bridge 10 USDC to Base" / "bridge USDC to base" /
+  // "cross-chain transfer" opens the Swap panel on its Bridge venue,
+  // pre-filling the amount + destination when present. Checked before swap
+  // so the "to <chain>" phrasing isn't read as a swap pair.
   if (/\bbridge\b/.test(t) || /\bcross[- ]?chain\b/.test(t)) {
     const dest = matchBridgeDestination(text);
     // First decimal number in the command (e.g. "bridge 10.5 USDC …").

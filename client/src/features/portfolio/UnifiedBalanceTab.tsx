@@ -16,14 +16,16 @@ function chainLabel(name: string): string {
 }
 
 /**
- * Unified Balance (Treasury) — the agent wallet's consolidated USDC across
- * chains via Circle Gateway. View + deposit (the deposit SOURCE is the agent
- * wallet on Arc). Spending out of the unified balance is an Agent command,
- * not part of this card. This is the app's server-side agent wallet
- * (distinct from the user wallet that drives the bridge above).
+ * Unified Balance (Treasury) tab in the Portfolio card — the agent wallet's
+ * consolidated USDC across chains via Circle Gateway. View + deposit (the
+ * deposit SOURCE is the agent wallet on Arc). Spending out of the unified
+ * balance is an Agent command, not part of this tab. This is the app's
+ * server-side agent wallet (distinct from the user's connected wallet).
+ *
+ * `ub` is passed in by AssetsCard (which also derives the tab count from
+ * it) so the balance is fetched once, not per-component.
  */
-export function UnifiedBalanceCard() {
-  const ub = useUnifiedBalance();
+export function UnifiedBalanceTab({ ub }: { ub: ReturnType<typeof useUnifiedBalance> }) {
   const [amount, setAmount] = useState("");
 
   const depositing = ub.depositState.status === "depositing";
@@ -37,14 +39,11 @@ export function UnifiedBalanceCard() {
       : undefined);
 
   return (
-    <div className="bg-panel-solid border border-border-soft rounded-md p-4 space-y-3">
-      <div>
-        <div className="text-[13px] font-semibold">Unified Balance</div>
-        <div className="text-[11px] text-text-mute mt-0.5">
-          Consolidate USDC across chains into one balance, accessible anywhere — reduces the working
-          capital you tie up per chain. Deposits move USDC from the agent wallet on Arc. (Agent
-          treasury · Circle Gateway)
-        </div>
+    <div className="p-4 space-y-3">
+      <div className="text-[11px] text-text-mute">
+        Consolidate USDC across chains into one balance, accessible anywhere — reduces the working
+        capital you tie up per chain. Deposits move USDC from the agent wallet on Arc. (Agent
+        treasury · Circle Gateway)
       </div>
 
       {ub.loading && !ub.data && <div className="text-[12px] text-text-dim">Loading balance…</div>}

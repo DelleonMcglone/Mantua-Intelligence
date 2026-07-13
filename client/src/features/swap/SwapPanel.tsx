@@ -1,6 +1,6 @@
 import { type TokenSymbol } from "@/lib/tokens.ts";
 import type { HookName } from "@/features/liquidity/use-create-pool.ts";
-import { TestnetSwapPanel } from "./TestnetSwapPanel.tsx";
+import { TestnetSwapPanel, type SwapVenue } from "./TestnetSwapPanel.tsx";
 
 interface SwapPanelProps {
   onClose?: () => void;
@@ -13,6 +13,11 @@ interface SwapPanelProps {
    *  ("swap 10 USDC for EURC with stable protection"). */
   initialHook?: HookName;
   initialAmount?: string;
+  /** Pre-select the venue tab; "bridge" for bridge commands
+   *  ("bridge 10 USDC to base"). */
+  initialVenue?: SwapVenue;
+  /** Bridge Kit sdkName of the destination chain, for bridge commands. */
+  initialBridgeDestination?: string;
 }
 
 /**
@@ -28,6 +33,8 @@ export function SwapPanel({
   initialTokenOut,
   initialHook,
   initialAmount,
+  initialVenue,
+  initialBridgeDestination,
 }: SwapPanelProps = {}) {
   return (
     <TestnetSwapPanel
@@ -36,6 +43,8 @@ export function SwapPanel({
       {...(initialTokenOut ? { initialTokenOut } : {})}
       {...(initialHook ? { initialHook } : {})}
       {...(initialAmount ? { initialAmount } : {})}
+      {...(initialVenue ? { initialVenue } : {})}
+      {...(initialBridgeDestination ? { initialBridgeDestination } : {})}
     />
   );
 }
