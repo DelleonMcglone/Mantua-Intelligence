@@ -15,6 +15,7 @@ import {
 } from "../lib/v4-onchain-swap.ts";
 import { HOOK_NAMES, isFeeTier } from "../lib/v4-contracts.ts";
 import { HookPairNotAllowedError } from "../lib/hook-pair-gating.ts";
+import { isTransientRpcError } from "../lib/rpc-client.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 
@@ -173,6 +174,13 @@ v4SwapRouter.post(
       res.json({ maxInputRaw: maxInput.toString(), reason });
     } catch (err) {
       logger.warn({ err, tokenIn, tokenOut, hook, chainId }, "v4 max-input search failed");
+      // Transient RPC failures (rate limit / timeout) are not swap
+      // rejections — fail open to the uncapped balance instead of
+      // surfacing the raw RPC error as a "rejected by hook" banner.
+      if (isTransientRpcError(err)) {
+        res.json({ maxInputRaw: upperBoundRaw, reason: null });
+        return;
+      }
       const reason = err instanceof Error ? err.message : null;
       res.json({ maxInputRaw: "0", reason });
     }

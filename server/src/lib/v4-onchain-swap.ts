@@ -1,7 +1,7 @@
 import { BaseError, decodeAbiParameters, decodeErrorResult, encodeFunctionData } from "viem";
 import { buildPoolKey, type PoolKey } from "./pool-key.ts";
 import { logger } from "./logger.ts";
-import { getRpcClient } from "./rpc-client.ts";
+import { getRpcClient, isTransientRpcError } from "./rpc-client.ts";
 import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import {
@@ -14,6 +14,7 @@ import {
   type HookName,
 } from "./v4-contracts.ts";
 import { assertHookPairAllowedBySymbol } from "./hook-pair-gating.ts";
+import { TtlCache } from "./ttl-cache.ts";
 import { readSlot0 } from "./v4-state-view.ts";
 
 /**
@@ -253,6 +254,16 @@ const CANDIDATE_FEES: readonly FeeTier[] = [100, 500, 3000, 10000];
  * USDC/EURC pool created at 0.01%, say. Probe the requested tier first,
  * then the other standard tiers; return null if none is initialized.
  */
+/**
+ * Tier resolution is sticky — an initialized pool never de-initializes —
+ * so cache hits long. A null (no pool at any tier) is cached briefly so a
+ * just-created pool is picked up within seconds. Collapses the up-to-4
+ * slot0 probes this does per quote / max-input call.
+ */
+const resolvedFeeCache = new TtlCache<FeeTier | null>();
+const RESOLVED_FEE_TTL_MS = 10 * 60_000;
+const RESOLVED_FEE_NULL_TTL_MS = 10_000;
+
 async function resolveInitializedFee(
   tokenIn: TokenSymbol,
   tokenOut: TokenSymbol,
@@ -260,14 +271,23 @@ async function resolveInitializedFee(
   requestedFee: FeeTier,
   chainId: SupportedTestnetChainId,
 ): Promise<FeeTier | null> {
-  const hookAddr = resolveHookAddress(hook, chainId);
-  const tiers: FeeTier[] = [requestedFee, ...CANDIDATE_FEES.filter((f) => f !== requestedFee)];
-  for (const fee of tiers) {
-    const { key } = buildPoolKey(tokenIn, tokenOut, fee, hookAddr, hook, chainId);
-    const slot0 = await readSlot0(key, chainId);
-    if (slot0) return fee;
-  }
-  return null;
+  // The pool key sorts currencies, so direction doesn't matter — normalize
+  // the pair in the cache key to share hits across both directions.
+  const pair = [tokenIn, tokenOut].sort().join("/");
+  return resolvedFeeCache.get(
+    `${String(chainId)}:${pair}:${hook ?? "none"}:${String(requestedFee)}`,
+    async () => {
+      const hookAddr = resolveHookAddress(hook, chainId);
+      const tiers: FeeTier[] = [requestedFee, ...CANDIDATE_FEES.filter((f) => f !== requestedFee)];
+      for (const fee of tiers) {
+        const { key } = buildPoolKey(tokenIn, tokenOut, fee, hookAddr, hook, chainId);
+        const slot0 = await readSlot0(key, chainId);
+        if (slot0) return fee;
+      }
+      return null;
+    },
+    (v) => (v === null ? RESOLVED_FEE_NULL_TTL_MS : RESOLVED_FEE_TTL_MS),
+  );
 }
 
 /**
@@ -326,9 +346,39 @@ export interface MaxQuotableResult {
    *  the upper-bound probe's revert data. Null when the pool absorbed
    *  the swap or when no decode was possible. */
   reason: string | null;
+  /** True when the probe couldn't run (transient RPC failure) and the
+   *  result failed open to the upper bound. Not cached. */
+  transient?: boolean;
 }
 
+/**
+ * The probe costs up to 25 eth_calls, and the panel re-fires it on every
+ * token/balance change — cache per exact args for a minute so remounts and
+ * repeat visits don't re-run the binary search against a rate-limited RPC.
+ * Transient (failed-open) results are not cached.
+ */
+const maxInputCache = new TtlCache<MaxQuotableResult>();
+const MAX_INPUT_TTL_MS = 60_000;
+
 export async function findMaxQuotableInputV4(
+  args: Omit<OnchainQuoteArgs, "amountInRaw"> & { upperBound: bigint },
+): Promise<MaxQuotableResult> {
+  const cacheKey = [
+    String(args.chainId ?? DEFAULT_CHAIN_ID),
+    args.tokenIn,
+    args.tokenOut,
+    String(args.fee),
+    args.hook ?? "none",
+    args.upperBound.toString(),
+  ].join(":");
+  return maxInputCache.get(
+    cacheKey,
+    () => findMaxQuotableInputV4Uncached(args),
+    (v) => (v.transient ? 0 : MAX_INPUT_TTL_MS),
+  );
+}
+
+async function findMaxQuotableInputV4Uncached(
   args: Omit<OnchainQuoteArgs, "amountInRaw"> & { upperBound: bigint },
 ): Promise<MaxQuotableResult> {
   const { upperBound, ...rest } = args;
@@ -362,6 +412,18 @@ export async function findMaxQuotableInputV4(
     }
   })();
   if (firstError === null) return { maxInput: upperBound, reason: null };
+
+  // A transient RPC failure (rate limit / timeout) is NOT a hook rejection —
+  // don't run 24 more doomed probes against a limited endpoint, and don't
+  // surface the raw RPC text as a "rejected by hook" reason. Fail open to the
+  // uncapped balance; the quote + execution path still validates the swap.
+  if (isTransientRpcError(firstError)) {
+    logger.warn(
+      { tokenIn: args.tokenIn, tokenOut: args.tokenOut, hook: args.hook },
+      "v4 max-input: transient RPC failure — failing open to upper bound",
+    );
+    return { maxInput: upperBound, reason: null, transient: true };
+  }
 
   let lo = 0n;
   let hi = upperBound;

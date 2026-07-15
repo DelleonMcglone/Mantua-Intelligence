@@ -51,3 +51,27 @@ export function getRpcClient(_chainId: SupportedTestnetChainId) {
   // compatibility and future multi-chain reintroduction.
   return arcClient;
 }
+
+/**
+ * True when an error is a transient RPC/transport failure (rate limit,
+ * timeout, connection drop) rather than a deterministic contract revert.
+ * Callers use this to fail open / retry instead of surfacing the raw RPC
+ * error as if it were an on-chain rejection ("Swap rejected by hook: RPC
+ * Request failed… request limit reached").
+ */
+export function isTransientRpcError(err: unknown): boolean {
+  const seen = new Set<unknown>();
+  let cur: unknown = err;
+  while (cur instanceof Error && !seen.has(cur)) {
+    seen.add(cur);
+    if (
+      /request limit reached|rate limit|too many requests|429|timed? ?out|ECONNRESET|ECONNREFUSED|fetch failed|socket hang up/i.test(
+        cur.message,
+      )
+    ) {
+      return true;
+    }
+    cur = cur.cause;
+  }
+  return false;
+}
