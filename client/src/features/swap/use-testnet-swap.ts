@@ -9,9 +9,9 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import { createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
+import { createPublicClient, createWalletClient, custom, parseAbi } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { getChainInfo, getRpcUrl } from "@/lib/chains.ts";
+import { getChainInfo, getRpcTransport } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
 import { getToken, type TokenSymbol } from "@/lib/tokens.ts";
 import { type FeeTier } from "@/features/liquidity/fee-tiers.ts";
@@ -202,7 +202,7 @@ export function useTestnetSwap() {
     () =>
       createPublicClient({
         chain: getChainInfo(chainId).viemChain,
-        transport: http(getRpcUrl(chainId)),
+        transport: getRpcTransport(chainId),
       }),
     [chainId],
   );

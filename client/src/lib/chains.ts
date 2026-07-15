@@ -8,6 +8,7 @@
  * concern, leaving room to add Arc Mainnet later.
  */
 
+import { fallback, http, type FallbackTransport } from "viem";
 import { arcTestnet, type Chain } from "viem/chains";
 import { cleanEnv } from "./env.ts";
 
@@ -111,4 +112,29 @@ export function getRpcUrl(chainId: SupportedTestnetChainId): string {
     cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined) ||
     CHAIN_INFO[chainId].defaultRpcUrl
   );
+}
+
+/**
+ * Arc's three public RPC hosts. The primary rate-limits under load
+ * ("request limit reached"), so browser reads use a fallback transport
+ * across all of them instead of a single `http(getRpcUrl(...))`.
+ */
+const PUBLIC_ARC_RPC_URLS = [
+  "https://rpc.testnet.arc.network",
+  "https://rpc.quicknode.testnet.arc.network",
+  "https://rpc.blockdaemon.testnet.arc.network",
+] as const;
+
+/**
+ * Hardened viem transport for browser-side public clients: rotates across
+ * the public Arc RPC hosts when one errors or rate-limits, batches
+ * concurrent JSON-RPC calls into one HTTP request, and retries transient
+ * failures. A `VITE_ARC_RPC_URL` override goes first in the rotation.
+ * Use this instead of `http(getRpcUrl(chainId))`.
+ */
+export function getRpcTransport(chainId: SupportedTestnetChainId): FallbackTransport {
+  const override = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
+  const base = override || CHAIN_INFO[chainId].defaultRpcUrl;
+  const urls = [base, ...PUBLIC_ARC_RPC_URLS.filter((u) => u !== base)];
+  return fallback(urls.map((url) => http(url, { batch: true, retryCount: 1, retryDelay: 300 })));
 }

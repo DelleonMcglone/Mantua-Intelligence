@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import { createPublicClient, createWalletClient, custom, http } from "viem";
+import { createPublicClient, createWalletClient, custom } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import { CHAIN_INFO, getRpcUrl } from "@/lib/chains.ts";
+import { CHAIN_INFO, getRpcTransport } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
 import { getToken, type TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
@@ -89,7 +89,7 @@ export function useAddLiquidity() {
         await wallet.switchChain(chainId);
       }
       const chain = CHAIN_INFO[chainId].viemChain;
-      const publicClient = createPublicClient({ chain, transport: http(getRpcUrl(chainId)) });
+      const publicClient = createPublicClient({ chain, transport: getRpcTransport(chainId) });
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({

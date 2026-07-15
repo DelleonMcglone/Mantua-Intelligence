@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import { createPublicClient, createWalletClient, custom, http } from "viem";
+import { createPublicClient, createWalletClient, custom } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "../chain.ts";
-import { ARC_TESTNET_CHAIN_ID, getRpcUrl } from "../chains.ts";
+import { ARC_TESTNET_CHAIN_ID, getRpcTransport } from "../chains.ts";
 
 /**
  * Public viem client for read-only chain calls on Arc Testnet. Override
@@ -15,7 +15,7 @@ import { ARC_TESTNET_CHAIN_ID, getRpcUrl } from "../chains.ts";
  */
 export const publicClient = createPublicClient({
   chain: ACTIVE_CHAIN,
-  transport: http(getRpcUrl(ARC_TESTNET_CHAIN_ID)),
+  transport: getRpcTransport(ARC_TESTNET_CHAIN_ID),
 });
 
 /**

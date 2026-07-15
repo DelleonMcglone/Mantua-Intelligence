@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
-import { createPublicClient, createWalletClient, custom, http } from "viem";
+import { createPublicClient, createWalletClient, custom } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
-import { ARC_TESTNET_CHAIN_ID, getRpcUrl } from "@/lib/chains.ts";
+import { ARC_TESTNET_CHAIN_ID, getRpcTransport } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
 
 const publicClient = createPublicClient({
   chain: ACTIVE_CHAIN,
-  transport: http(getRpcUrl(ARC_TESTNET_CHAIN_ID)),
+  transport: getRpcTransport(ARC_TESTNET_CHAIN_ID),
 });
 
 export interface RemoveArgs {
