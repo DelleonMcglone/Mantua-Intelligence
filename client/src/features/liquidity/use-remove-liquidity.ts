@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hardenProvider } from "@/lib/privy/wallet-client.ts";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
@@ -59,7 +60,7 @@ export function useRemoveLiquidity() {
       const walletClient = createWalletClient({
         account: owner,
         chain: ACTIVE_CHAIN,
-        transport: custom(provider),
+        transport: custom(hardenProvider(provider)),
       });
 
       setState({ status: "preparing" });

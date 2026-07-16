@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hardenProvider } from "@/lib/privy/wallet-client.ts";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
@@ -95,7 +96,7 @@ export function useAddLiquidity() {
       const walletClient = createWalletClient({
         account: owner,
         chain,
-        transport: custom(provider),
+        transport: custom(hardenProvider(provider)),
       });
 
       // Step 0 — initialize the pool if it doesn't exist yet.

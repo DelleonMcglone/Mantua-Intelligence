@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+import { hardenProvider } from "@/lib/privy/wallet-client.ts";
 /**
  * Arc Testnet swap path — the only swap path. Uniswap's Trading API
  * doesn't index Arc, so swaps quote and execute on-chain: this hook
@@ -221,7 +222,7 @@ export function useTestnetSwap() {
       const walletClient = createWalletClient({
         account: owner,
         chain: viemChain,
-        transport: custom(provider),
+        transport: custom(hardenProvider(provider)),
       }) as any;
 
       setState({ status: "quoting", message: "Building swap…" });

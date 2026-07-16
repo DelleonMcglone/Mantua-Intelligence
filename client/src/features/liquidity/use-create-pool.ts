@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hardenProvider } from "@/lib/privy/wallet-client.ts";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom } from "viem";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
@@ -73,7 +74,7 @@ export function useCreatePool() {
       const walletClient = createWalletClient({
         account: wallet.address as `0x${string}`,
         chain,
-        transport: custom(provider),
+        transport: custom(hardenProvider(provider)),
       });
       const txHash = await walletClient.sendTransaction({
         account: wallet.address as `0x${string}`,

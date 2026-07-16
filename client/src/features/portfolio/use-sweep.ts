@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createWalletClient, custom } from "viem";
 import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
-import { publicClient } from "@/lib/privy/wallet-client.ts";
+import { hardenProvider, publicClient } from "@/lib/privy/wallet-client.ts";
 import { api } from "@/lib/api.ts";
 
 interface SweepTx {
@@ -45,7 +45,7 @@ export function useSweep() {
       const walletClient = createWalletClient({
         account: owner,
         chain: ACTIVE_CHAIN,
-        transport: custom(provider),
+        transport: custom(hardenProvider(provider)),
       });
 
       setState({ status: "preparing" });
