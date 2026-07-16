@@ -9,8 +9,50 @@
  */
 
 import { fallback, http, type FallbackTransport } from "viem";
-import { arcTestnet, type Chain } from "viem/chains";
+import { arcTestnet as viemArcTestnet, type Chain } from "viem/chains";
 import { cleanEnv } from "./env.ts";
+
+/**
+ * Arc's three public RPC hosts. The primary rate-limits under load
+ * ("request limit reached"), so reads use a fallback transport across all
+ * of them (see getRpcTransport) and wallet traffic gets a different
+ * primary host (below).
+ */
+const PUBLIC_ARC_RPC_URLS = [
+  "https://rpc.testnet.arc.network",
+  "https://rpc.quicknode.testnet.arc.network",
+  "https://rpc.blockdaemon.testnet.arc.network",
+] as const;
+
+/**
+ * Chain definition handed to Privy (defaultChain/supportedChains) and to
+ * every walletClient. The embedded wallet's own JSON-RPC traffic
+ * (eth_gasPrice / eth_estimateGas / eth_sendRawTransaction) uses
+ * `rpcUrls.default.http[0]` directly — no fallback — so writes were
+ * competing with the app's read traffic on the same overloaded primary
+ * host and 429-ing ("Custom eth_gasPrice: Request is being rate
+ * limited"). Reorder the hosts so wallet ops start on Blockdaemon while
+ * reads start on the main host; a VITE_ARC_RPC_URL override goes first.
+ */
+const walletRpcOverride = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
+const WALLET_RPC_URLS = [
+  ...(walletRpcOverride ? [walletRpcOverride] : []),
+  "https://rpc.blockdaemon.testnet.arc.network",
+  "https://rpc.quicknode.testnet.arc.network",
+  "https://rpc.testnet.arc.network",
+];
+
+// Inferred type (not annotated `: Chain`): Privy's PrivyClientConfig wants its
+// own structurally-compatible Chain type, which viem's *generic* Chain doesn't
+// unify with under exactOptionalPropertyTypes — the spread's inferred literal
+// type satisfies both.
+export const arcTestnet = {
+  ...viemArcTestnet,
+  rpcUrls: {
+    ...viemArcTestnet.rpcUrls,
+    default: { http: WALLET_RPC_URLS },
+  },
+} satisfies Chain;
 
 export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
 
@@ -18,9 +60,9 @@ export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
  * Arc Testnet — Circle's public testnet (chain id 5042002), where USDC
  * is the native gas token: native gas uses 18 decimals, while the USDC
  * ERC-20 (0x3600…0000 in `tokens.ts`) uses 6. viem ships this chain
- * natively, so we re-export it for the Privy config + per-chain RPC.
+ * natively; we export the customized copy above (wallet-first RPC order)
+ * for the Privy config + per-chain RPC.
  */
-export { arcTestnet };
 
 export const SUPPORTED_TESTNET_CHAIN_IDS = [ARC_TESTNET_CHAIN_ID] as const;
 
@@ -113,17 +155,6 @@ export function getRpcUrl(chainId: SupportedTestnetChainId): string {
     CHAIN_INFO[chainId].defaultRpcUrl
   );
 }
-
-/**
- * Arc's three public RPC hosts. The primary rate-limits under load
- * ("request limit reached"), so browser reads use a fallback transport
- * across all of them instead of a single `http(getRpcUrl(...))`.
- */
-const PUBLIC_ARC_RPC_URLS = [
-  "https://rpc.testnet.arc.network",
-  "https://rpc.quicknode.testnet.arc.network",
-  "https://rpc.blockdaemon.testnet.arc.network",
-] as const;
 
 /**
  * Hardened viem transport for browser-side public clients: rotates across
