@@ -35,8 +35,17 @@ const PUBLIC_ARC_RPC_URLS = [
  * reads start on the main host; a VITE_ARC_RPC_URL override goes first.
  */
 const walletRpcOverride = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
+/**
+ * Same-origin server proxy (`/api/rpc`) goes first: it rotates across all
+ * three public hosts server-side and caches hot calls (eth_gasPrice), so
+ * wallet-originated RPC — including what Privy's embedded wallet fetches on
+ * its own — stops dying on per-IP rate limits. Public hosts remain as
+ * fallbacks (and cover non-browser contexts where `window` is undefined).
+ */
+const rpcProxyUrl = typeof window === "undefined" ? null : `${window.location.origin}/api/rpc`;
 const WALLET_RPC_URLS = [
   ...(walletRpcOverride ? [walletRpcOverride] : []),
+  ...(rpcProxyUrl ? [rpcProxyUrl] : []),
   "https://rpc.blockdaemon.testnet.arc.network",
   "https://rpc.quicknode.testnet.arc.network",
   "https://rpc.testnet.arc.network",

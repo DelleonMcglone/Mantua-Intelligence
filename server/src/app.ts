@@ -28,6 +28,7 @@ import { liquidityRemoveRouter } from "./routes/liquidity-remove.ts";
 import { poolCreateRouter } from "./routes/pool-create.ts";
 import { poolStateRouter } from "./routes/pool-state.ts";
 import { poolsRouter } from "./routes/pools.ts";
+import { rpcProxyRouter } from "./routes/rpc-proxy.ts";
 import { earningsRouter } from "./routes/earnings.ts";
 import { portfolioRouter } from "./routes/portfolio.ts";
 import { positionsRouter } from "./routes/positions.ts";
@@ -52,6 +53,7 @@ app.use(killSwitch);
 app.use(attachAuth);
 
 app.use(healthRouter);
+app.use(rpcProxyRouter);
 app.use(poolsRouter);
 app.use(poolCreateRouter);
 app.use(poolStateRouter);

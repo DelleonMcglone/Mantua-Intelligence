@@ -60,10 +60,38 @@ const PUBLIC_RPC_METHODS = new Set([
  */
 export function hardenProvider(provider: RequestableProvider): RequestableProvider {
   return {
-    request: (args: Eip1193RequestArgs) =>
-      PUBLIC_RPC_METHODS.has(args.method)
-        ? (publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>)(args)
-        : provider.request(args),
+    request: async (args: Eip1193RequestArgs) => {
+      if (PUBLIC_RPC_METHODS.has(args.method)) {
+        return (publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>)(args);
+      }
+      // Pre-fill gas fields before the tx reaches the wallet. For JSON-RPC
+      // accounts viem skips fee preparation and Privy's embedded wallet then
+      // fills gas itself against a single upstream ("RPC 0x4cef52 Custom
+      // eth_gasPrice: Request is being rate limited"). Handing it a fully
+      // specified tx removes those lookups; fills come from the hardened
+      // fallback transport. Best-effort — on failure the wallet falls back
+      // to its own estimation.
+      if (args.method === "eth_sendTransaction" && Array.isArray(args.params)) {
+        const [tx, ...restParams] = args.params as [Record<string, unknown>, ...unknown[]];
+        const filled = { ...tx };
+        try {
+          if (!filled["gasPrice"] && !filled["maxFeePerGas"]) {
+            filled["gasPrice"] = `0x${(await publicClient.getGasPrice()).toString(16)}`;
+          }
+          if (!filled["gas"]) {
+            const est = (await (
+              publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>
+            )({ method: "eth_estimateGas", params: [tx] })) as string;
+            // 25% headroom — estimates on hook pools can run tight.
+            filled["gas"] = `0x${((BigInt(est) * 125n) / 100n).toString(16)}`;
+          }
+        } catch {
+          // Leave missing fields for the wallet to fill.
+        }
+        return provider.request({ ...args, params: [filled, ...restParams] });
+      }
+      return provider.request(args);
+    },
   };
 }
 
