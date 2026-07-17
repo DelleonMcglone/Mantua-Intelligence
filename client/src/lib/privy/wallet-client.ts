@@ -64,29 +64,60 @@ export function hardenProvider(provider: RequestableProvider): RequestableProvid
       if (PUBLIC_RPC_METHODS.has(args.method)) {
         return (publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>)(args);
       }
-      // Pre-fill gas fields before the tx reaches the wallet. For JSON-RPC
-      // accounts viem skips fee preparation and Privy's embedded wallet then
-      // fills gas itself against a single upstream ("RPC 0x4cef52 Custom
-      // eth_gasPrice: Request is being rate limited"). Handing it a fully
-      // specified tx removes those lookups; fills come from the hardened
-      // fallback transport. Best-effort — on failure the wallet falls back
-      // to its own estimation.
+      // Take Privy's RPC out of the write path entirely. For JSON-RPC
+      // accounts viem skips fee preparation, and Privy's embedded wallet
+      // fills gas/nonce itself against a single upstream we don't control
+      // ("RPC 0x4cef52 Custom eth_gasPrice: Request is being rate
+      // limited"). So: build the FULL transaction ourselves through the
+      // hardened fallback transport (fees, gas, nonce, chainId), have the
+      // wallet only SIGN it (eth_signTransaction — supported by Privy's
+      // embedded wallet), and broadcast the raw tx through the hardened
+      // transport too. Falls back to a plain (pre-filled)
+      // eth_sendTransaction for wallets that don't expose signing.
       if (args.method === "eth_sendTransaction" && Array.isArray(args.params)) {
         const [tx, ...restParams] = args.params as [Record<string, unknown>, ...unknown[]];
         const filled = { ...tx };
+        const pub = publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>;
         try {
           if (!filled["gasPrice"] && !filled["maxFeePerGas"]) {
             filled["gasPrice"] = `0x${(await publicClient.getGasPrice()).toString(16)}`;
           }
           if (!filled["gas"]) {
-            const est = (await (
-              publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>
-            )({ method: "eth_estimateGas", params: [tx] })) as string;
+            const est = (await pub({ method: "eth_estimateGas", params: [tx] })) as string;
             // 25% headroom — estimates on hook pools can run tight.
             filled["gas"] = `0x${((BigInt(est) * 125n) / 100n).toString(16)}`;
           }
+          if (!filled["nonce"] && typeof filled["from"] === "string") {
+            filled["nonce"] = await pub({
+              method: "eth_getTransactionCount",
+              params: [filled["from"], "pending"],
+            });
+          }
+          if (!filled["chainId"]) {
+            filled["chainId"] = `0x${ACTIVE_CHAIN_ID.toString(16)}`;
+          }
+          if (!filled["value"]) filled["value"] = "0x0";
         } catch {
-          // Leave missing fields for the wallet to fill.
+          // Leave missing fields for the wallet to fill on the fallback path.
+        }
+        // Preferred path: wallet signs, we broadcast.
+        if (filled["gasPrice"] && filled["gas"] && filled["nonce"]) {
+          try {
+            const signed = await provider.request({
+              method: "eth_signTransaction",
+              params: [filled],
+            });
+            const rawTx =
+              typeof signed === "string"
+                ? signed
+                : ((signed as { raw?: string } | null)?.raw ?? null);
+            if (rawTx) {
+              return await pub({ method: "eth_sendRawTransaction", params: [rawTx] });
+            }
+          } catch {
+            // Wallet doesn't support eth_signTransaction (or declined) —
+            // fall through to the wallet's own send with pre-filled fields.
+          }
         }
         return provider.request({ ...args, params: [filled, ...restParams] });
       }
