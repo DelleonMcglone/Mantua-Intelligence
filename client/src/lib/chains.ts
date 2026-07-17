@@ -166,15 +166,22 @@ export function getRpcUrl(chainId: SupportedTestnetChainId): string {
 }
 
 /**
- * Hardened viem transport for browser-side public clients: rotates across
- * the public Arc RPC hosts when one errors or rate-limits, batches
- * concurrent JSON-RPC calls into one HTTP request, and retries transient
- * failures. A `VITE_ARC_RPC_URL` override goes first in the rotation.
+ * Hardened viem transport for browser-side public clients. The Arc hosts
+ * rate-limit PER IP — and the app's own polling (portfolio, pools, quotes)
+ * exhausts the user's browser-IP budget on all three hosts, after which
+ * rotation just cycles between three closed doors (and Privy's own gas
+ * lookups die too). So browser reads go through the same-origin `/api/rpc`
+ * proxy FIRST: calls then originate from the server's IPs with server-side
+ * rotation and hot-call caching. The public hosts remain as direct
+ * fallbacks, and a `VITE_ARC_RPC_URL` override still goes first.
  * Use this instead of `http(getRpcUrl(chainId))`.
  */
-export function getRpcTransport(chainId: SupportedTestnetChainId): FallbackTransport {
+export function getRpcTransport(_chainId: SupportedTestnetChainId): FallbackTransport {
   const override = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
-  const base = override || CHAIN_INFO[chainId].defaultRpcUrl;
-  const urls = [base, ...PUBLIC_ARC_RPC_URLS.filter((u) => u !== base)];
+  const urls = [
+    ...(override ? [override] : []),
+    ...(rpcProxyUrl ? [rpcProxyUrl] : []),
+    ...PUBLIC_ARC_RPC_URLS,
+  ];
   return fallback(urls.map((url) => http(url, { batch: true, retryCount: 1, retryDelay: 300 })));
 }
