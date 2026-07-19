@@ -261,7 +261,7 @@ const FAQS: FAQItem[] = [
             >
               Circle Faucet
             </a>{" "}
-            — USDC, EURC and cirBTC on Arc Testnet (Arc USDC also pays for gas).
+            — USDC, EURC and cirBTC on Arc Testnet (Circle USDC also pays for gas).
           </li>
         </ul>
       </>
