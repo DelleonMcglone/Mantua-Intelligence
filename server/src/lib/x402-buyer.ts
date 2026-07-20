@@ -1,3 +1,5 @@
+import { createPublicClient, erc20Abi, formatUnits, http, type Chain } from "viem";
+import { base, baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
@@ -41,6 +43,24 @@ const X402_TESTNET = "eip155:84532";
 const X402_MAINNET = "eip155:8453";
 /** Networks the buyer can sign for, in preference order. */
 const BUYER_NETWORKS = [X402_TESTNET, X402_MAINNET] as const;
+/** Settlement rails: CAIP-2 id → viem chain + native USDC for balance reads. */
+interface Rail {
+  chain: Chain;
+  usdc: `0x${string}`;
+  label: string;
+}
+const RAILS: Record<string, Rail> = {
+  [X402_MAINNET]: {
+    chain: base,
+    usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    label: "Base mainnet",
+  },
+  [X402_TESTNET]: {
+    chain: baseSepolia,
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    label: "Base Sepolia",
+  },
+};
 const USDC_DECIMALS = 6;
 const FETCH_TIMEOUT_MS = 60_000;
 /** Bazaar pages fetched per search (100 items each). */
@@ -237,7 +257,11 @@ function buildInit(method: "GET" | "POST", data: unknown): RequestInit {
   return init;
 }
 
-async function inspectPrice(url: string, method: "GET" | "POST", data: unknown): Promise<InspectResult> {
+async function inspectPrice(
+  url: string,
+  method: "GET" | "POST",
+  data: unknown,
+): Promise<InspectResult> {
   const res = await fetch(url, buildInit(method, data));
   if (res.status !== 402) {
     if (res.ok) return { priceUsd: null, freeResponse: await parseBody(res) };
@@ -265,6 +289,36 @@ async function inspectPrice(url: string, method: "GET" | "POST", data: unknown):
   const price = priceUsdFromAccept(chosen);
   if (price === null) throw new X402Error("Couldn't read a price from the payment requirements.");
   return { priceUsd: price, network: chosen.network ?? X402_TESTNET };
+}
+
+function railLabel(network: string): string {
+  return (RAILS[network] as Rail | undefined)?.label ?? network;
+}
+
+/**
+ * Pre-flight: the buyer's USDC balance on the settlement rail. Returns null
+ * when the rail is unknown or the RPC read fails — fail open, the facilitator
+ * is the source of truth; this guard exists only to turn a doomed payment
+ * into a clear error before anything is signed.
+ */
+async function buyerUsdcBalance(network: string, buyer: `0x${string}`): Promise<number | null> {
+  // `network` comes from the service's 402 challenge; widen the index result
+  // (noUncheckedIndexedAccess is off) so unknown rails are handled.
+  const rail = RAILS[network] as Rail | undefined;
+  if (!rail) return null;
+  try {
+    const client = createPublicClient({ chain: rail.chain, transport: http() });
+    const bal = await client.readContract({
+      address: rail.usdc,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [buyer],
+    });
+    return Number(formatUnits(bal, USDC_DECIMALS));
+  } catch (err) {
+    logger.warn({ err, network }, "x402: buyer balance pre-flight failed (continuing)");
+    return null;
+  }
 }
 
 // ---- budget (summed from the audit log; no migration) ----
@@ -329,6 +383,14 @@ export async function callPaidService(opts: {
     );
   }
 
+  const balance = await buyerUsdcBalance(network, account.address);
+  if (balance !== null && balance < price) {
+    const label = railLabel(network);
+    throw new X402Error(
+      `Buyer wallet ${account.address} holds only $${balance.toFixed(2)} USDC on ${label}, but this service costs $${String(price)} and settles there. Fund the wallet on ${label} (or use a service on a funded rail). Nothing was charged.`,
+    );
+  }
+
   const scheme = new ExactEvmScheme(account);
   let client = new x402Client();
   for (const net of BUYER_NETWORKS) client = client.register(net, scheme);
@@ -351,7 +413,9 @@ export async function callPaidService(opts: {
       params: { url, method, reason: `http_${String(res.status)}_after_payment` },
     });
     throw new X402Error(
-      `Payment was sent but the service returned HTTP ${String(res.status)}.`,
+      res.status === 402
+        ? `The service rejected the payment (HTTP 402 after paying) — settlement on ${railLabel(network)} likely failed, so the wallet was most likely not charged.`
+        : `Payment was sent but the service returned HTTP ${String(res.status)}.`,
       true,
     );
   }
