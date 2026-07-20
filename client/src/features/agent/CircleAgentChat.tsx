@@ -335,7 +335,11 @@ function StepCard({ step }: { step: ToolStep }) {
       </Banner>
     );
   }
-  return <div style={CARD}>{renderResult(step)}</div>;
+  // Tools without a meaningful result view render nothing — the assistant's
+  // text already narrates the outcome, so an empty "Done." card is noise.
+  const content = renderResult(step);
+  if (content === null) return null;
+  return <div style={CARD}>{content}</div>;
 }
 
 // ── Result renderers (read-only views of the server tool results) ──
@@ -576,9 +580,7 @@ function renderResult(step: ToolStep): ReactNode {
           txHash={d.txHash}
           explorerUrl={d.explorerUrl}
         />
-      ) : (
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>
-      );
+      ) : null;
     }
     case "market_research": {
       const d = step.data as {
@@ -752,7 +754,7 @@ function renderResult(step: ToolStep): ReactNode {
       );
     }
     default:
-      return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Done.</span>;
+      return null;
   }
 }
 
