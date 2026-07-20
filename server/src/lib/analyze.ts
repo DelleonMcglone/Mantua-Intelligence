@@ -1,4 +1,5 @@
 import { listBasePools, getTokenPrices, getTokenChangePercents } from "./defillama.ts";
+import { getPythPrices, PYTH_EUR_USD_FEED_ID } from "./pyth-prices.ts";
 import { getCoinbaseMarket, getCoinbaseSpot } from "./coinbase.ts";
 import { logger } from "./logger.ts";
 import { buildPoolKey } from "./pool-key.ts";
@@ -144,18 +145,43 @@ async function ethPrice(): Promise<AnalyzeResponse> {
 }
 
 async function eurcPeg(): Promise<AnalyzeResponse> {
-  // DefiLlama's price API returns USD only (no `vs_currency=eur`
-  // equivalent), so the EUR reference for peg-deviation comes from
-  // agEUR — another EUR-pegged stablecoin (`coingecko:ageur`). Cross
-  // both USD prices to get an implied EURC/EUR rate without an FX feed.
-  //   peg_ratio  = EURC_usd / agEUR_usd   (should be ≈ 1.0 on-peg)
+  // Pyth-first: EURC/USD crossed against the FX.EUR/USD feed — the same
+  // EUR reference Stable Protection and the agent signals use (peg-sync.ts,
+  // agent-signals.ts).
+  //   peg_ratio  = EURC_usd / EUR_ref_usd   (should be ≈ 1.0 on-peg)
   //   deviation% = (peg_ratio - 1) * 100
+  // When Hermes can't serve either feed, fall back to the DefiLlama agEUR
+  // cross: DefiLlama quotes USD only (no `vs_currency=eur`), so agEUR —
+  // another EUR-pegged stablecoin — stands in as the EUR reference. That
+  // makes the fallback noisier (agEUR has its own soft-peg wobble).
   // Tether-EURT was rejected as a reference (price ≈ $0.07, broken).
-  const prices = await getTokenPrices(["coingecko:euro-coin", "coingecko:ageur"]);
-  const eurcUsd = prices["coingecko:euro-coin"]?.price;
-  const eurRef = prices["coingecko:ageur"]?.price;
+  const eurcFeedId = getToken("EURC").pythFeedId;
+  let eurcUsd: number | undefined;
+  let eurRef: number | undefined;
+  let refLabel = "Pyth FX.EUR/USD";
+  let sources: AnalyzeSource[] = [
+    { name: "Pyth (EURC/USD)", url: "https://app.pyth.com/explore/crypto-eurc-usd" },
+    { name: "Pyth (FX.EUR/USD)", url: "https://app.pyth.com/explore/fx-eur-usd" },
+    { name: "Circle EURC", url: "https://www.circle.com/eurc" },
+  ];
+  if (eurcFeedId) {
+    const pyth = await getPythPrices([eurcFeedId, PYTH_EUR_USD_FEED_ID]);
+    eurcUsd = pyth[eurcFeedId];
+    eurRef = pyth[PYTH_EUR_USD_FEED_ID];
+  }
   if (eurcUsd === undefined || eurRef === undefined || eurRef === 0) {
-    throw new Error("DefiLlama: EURC or agEUR price unavailable");
+    const prices = await getTokenPrices(["coingecko:euro-coin", "coingecko:ageur"]);
+    eurcUsd = prices["coingecko:euro-coin"]?.price;
+    eurRef = prices["coingecko:ageur"]?.price;
+    refLabel = "DefiLlama agEUR fallback";
+    sources = [
+      { name: "DefiLlama (EURC)", url: "https://defillama.com/coins/coingecko:euro-coin" },
+      { name: "DefiLlama (agEUR)", url: "https://defillama.com/coins/coingecko:ageur" },
+      { name: "Circle EURC", url: "https://www.circle.com/eurc" },
+    ];
+    if (eurcUsd === undefined || eurRef === undefined || eurRef === 0) {
+      throw new Error("EURC peg: Pyth and DefiLlama price sources both unavailable");
+    }
   }
   const pegRatio = eurcUsd / eurRef;
   const dev = (pegRatio - 1) * 100;
@@ -168,22 +194,18 @@ async function eurcPeg(): Promise<AnalyzeResponse> {
     title: "EURC peg status",
     summary:
       zone === "ON_PEG"
-        ? `EURC is trading at $${eurcUsd.toFixed(4)} vs the EUR reference of $${eurRef.toFixed(4)} (agEUR). Within ±0.5% of the 1:1 EUR peg.`
+        ? `EURC is trading at $${eurcUsd.toFixed(4)} vs the EUR reference of $${eurRef.toFixed(4)} (${refLabel}). Within ±0.5% of the 1:1 EUR peg.`
         : zone === "WARN"
-          ? `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (agEUR) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Slightly outside the tight ±0.5% band.`
-          : `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (agEUR) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Outside the ±2% band; Stable Protection would flag STRESS.`,
+          ? `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (${refLabel}) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Slightly outside the tight ±0.5% band.`
+          : `EURC at $${eurcUsd.toFixed(4)} vs EUR reference $${eurRef.toFixed(4)} (${refLabel}) — peg ratio ${pegRatio.toFixed(4)} (${fmtPct(dev)} off). Outside the ±2% band; Stable Protection would flag STRESS.`,
     metrics: [
       { label: "EURC (USD)", value: `$${eurcUsd.toFixed(4)}` },
-      { label: "EUR reference (agEUR)", value: `$${eurRef.toFixed(4)}` },
+      { label: "EUR reference", value: `$${eurRef.toFixed(4)}`, hint: refLabel },
       { label: "Implied peg", value: pegRatio.toFixed(4) },
       { label: "Peg deviation", value: fmtPct(dev) },
       { label: "Zone", value: zone },
     ],
-    sources: [
-      { name: "DefiLlama (EURC)", url: "https://defillama.com/coins/coingecko:euro-coin" },
-      { name: "DefiLlama (agEUR)", url: "https://defillama.com/coins/coingecko:ageur" },
-      { name: "Circle EURC", url: "https://www.circle.com/eurc" },
-    ],
+    sources,
   };
 }
 
