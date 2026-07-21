@@ -65,7 +65,7 @@ type Msg = UserMsg | AssistantMsg;
 const SUGGESTIONS = [
   "Create and manage agent wallet",
   "Fund wallet",
-  "Query on-chain data",
+  "Daily Brief",
   "Swap Tokens",
   "Send Tokens",
 ];
