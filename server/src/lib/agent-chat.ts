@@ -83,7 +83,9 @@ import { getTrendingCoins } from "./trending.ts";
  */
 
 const MODEL = "claude-opus-4-8";
-const MAX_TOOL_ROUNDS = 8;
+// Sized for the scripted daily routine (brief → 2 swaps → create-pool
+// fallbacks → 2 LP adds → send → x402 buys); ordinary chats stop well short.
+const MAX_TOOL_ROUNDS = 16;
 const HISTORY_LIMIT = 20;
 
 export class AnthropicUnavailableError extends Error {

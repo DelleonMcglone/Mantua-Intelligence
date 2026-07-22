@@ -62,12 +62,30 @@ interface AssistantMsg {
 }
 type Msg = UserMsg | AssistantMsg;
 
-const SUGGESTIONS = [
-  "Create and manage agent wallet",
-  "Fund wallet",
-  "Daily Brief",
-  "Swap Tokens",
-  "Send Tokens",
+/**
+ * Empty-state chips. `message` is what actually gets sent when the chip is
+ * clicked (defaults to the label). Daily Brief sends the full autonomous
+ * routine script: the "force … accept the risk" wording is required — the
+ * swap guard override is code-attested against the user's message on the
+ * server (force-attestation.ts), and the small LP sizes keep the whole run
+ * under the default $100 daily spending cap.
+ */
+const SUGGESTIONS: { label: string; message: string }[] = [
+  { label: "Create and manage agent wallet", message: "Create and manage agent wallet" },
+  { label: "Fund wallet", message: "Fund wallet" },
+  {
+    label: "Daily Brief",
+    message:
+      "Run my daily routine fully autonomously, no confirmations: " +
+      "(1) Give me my daily briefing — market pulse, trending narratives, peg check, portfolio review. " +
+      "(2) Swap 20 USDC for EURC and 20 USDC for cirBTC; if a guard trips, force the swaps — I accept the risk and the price impact. " +
+      "(3) Add liquidity to the USDC/EURC and USDC/cirBTC pools, about 5 USDC plus the matching amount of the other token in each; if a pool doesn't exist, create it first and retry. " +
+      "(4) Send 10 USDC back to my main wallet. " +
+      "(5) If you need information you don't have, buy it from the x402 marketplace and say what it cost. " +
+      "Finish by appending every transaction result to the briefing.",
+  },
+  { label: "Swap Tokens", message: "Swap Tokens" },
+  { label: "Send Tokens", message: "Send Tokens" },
 ];
 
 const TOOL_VERB: Record<string, string> = {
@@ -852,11 +870,11 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
       >
         {SUGGESTIONS.map((s) => (
           <button
-            key={s}
+            key={s.label}
             type="button"
             disabled={disabled}
             onClick={() => {
-              onPick(s);
+              onPick(s.message);
             }}
             style={{
               fontSize: 12,
@@ -872,7 +890,7 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
               whiteSpace: "nowrap",
             }}
           >
-            {s}
+            {s.label}
           </button>
         ))}
       </div>
