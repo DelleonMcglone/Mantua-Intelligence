@@ -1,0 +1,20 @@
+# TEMPORARY — manual dispatch only. Triggers the one-off DynamicFee pool
+# repair endpoint (see server/src/routes/cron-fix-dynamic-fee.ts) with the
+# same CRON_SECRET the autonomy loops use. Remove together with the route
+# once the repair has run successfully.
+name: df-repair
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fix DynamicFee pools
+        run: |
+          curl -sS -f -m 290 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://test-mantua.vercel.app/api/cron/fix-dynamic-fee
