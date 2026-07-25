@@ -114,12 +114,20 @@ function humanPrice(sqrtPriceX96: bigint, d0: number, d1: number): number {
 }
 
 export async function repairDynamicFeePools(): Promise<DfRepairResult> {
-  const keyHex = env.MANTUA_ADMIN_PRIVATE_KEY;
-  if (!keyHex) throw new DfRepairUnavailableError();
-  const account = privateKeyToAccount(keyHex as `0x${string}`);
-  if (account.address.toLowerCase() !== EXPECTED_ADMIN) {
-    throw new Error(`admin key resolves to ${account.address}, expected ${EXPECTED_ADMIN}`);
+  // The funded admin EOA (0xceed…dd56) is X402_BUYER_PRIVATE_KEY in prod;
+  // MANTUA_ADMIN_PRIVATE_KEY is a different keeper EOA. Accept whichever
+  // env key resolves to the expected address.
+  const candidates = [env.X402_BUYER_PRIVATE_KEY, env.MANTUA_ADMIN_PRIVATE_KEY].filter(
+    (k): k is string => Boolean(k),
+  );
+  if (candidates.length === 0) throw new DfRepairUnavailableError();
+  const accounts = candidates.map((k) => privateKeyToAccount(k as `0x${string}`));
+  const matched = accounts.find((a) => a.address.toLowerCase() === EXPECTED_ADMIN);
+  if (!matched) {
+    const found = accounts.map((a) => a.address).join(", ");
+    throw new Error(`no configured key resolves to admin ${EXPECTED_ADMIN} (found: ${found})`);
   }
+  const account = matched;
   const wallet = createWalletClient({ account, chain: arcTestnet, transport: http() });
   const hook = getHookAddress("dynamic-fee");
   if (!hook || !DF.poolSwapTest || !DF.poolModifyLiquidityTest || !DF.stateView) {
