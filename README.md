@@ -4,7 +4,7 @@
 institutions manage stablecoin positions, deploy liquidity, and run automated rebalancing
 strategies through natural language. It combines a custom suite of **Uniswap v4 hooks**,
 autonomous **AI agents** running **Circle Developer-Controlled Wallets**, and real-time on-chain
-execution to turn user intent into automated liquidity actions a programmable liquidity layer
+execution to turn user intent into automated liquidity actions into a programmable liquidity layer
 optimized for stablecoins, RWAs, and yield-bearing dollar assets.
 
 From a single natural-language prompt you can:
