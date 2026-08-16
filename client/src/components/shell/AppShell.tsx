@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Header } from "./Header.tsx";
+import type { NavDestination } from "./MarketNav.tsx";
 
 interface AppShellProps {
   walletAddress?: string | undefined;
@@ -8,6 +9,8 @@ interface AppShellProps {
   /** Optional click handler for the logo / wordmark — used to send
    *  the user back to the landing page from inside the app shell. */
   onLogoClick?: (() => void) | undefined;
+  /** League / section nav handler, forwarded to the header. */
+  onNavigate: (destination: NavDestination) => void;
   left: ReactNode;
   right: ReactNode;
 }
@@ -23,6 +26,7 @@ export function AppShell({
   onConnect,
   onDisconnect,
   onLogoClick,
+  onNavigate,
   left,
   right,
 }: AppShellProps) {
@@ -33,6 +37,7 @@ export function AppShell({
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onLogoClick={onLogoClick}
+        onNavigate={onNavigate}
       />
       <main
         className="grid flex-1 min-h-0 items-stretch"
