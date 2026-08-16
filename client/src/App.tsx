@@ -4,6 +4,14 @@ import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, mentionsHook, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
+import { type NavDestination } from "./components/shell/MarketNav.tsx";
+import { PrivacyPage } from "./components/legal/PrivacyPage.tsx";
+import { TermsPage } from "./components/legal/TermsPage.tsx";
+import { MarketIntegrityPage } from "./components/legal/MarketIntegrityPage.tsx";
+import type { LegalDoc } from "./components/legal/LegalPage.tsx";
+import { DocsPage } from "./components/docs/DocsPage.tsx";
+import { MarketPage } from "./features/markets/MarketPage.tsx";
+import { isSportId, type SportId } from "./features/markets/sports.ts";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
 import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
@@ -32,6 +40,8 @@ type AnalyzeTopic =
 
 type Route =
   | { kind: "landing" }
+  | { kind: "legal"; doc: LegalDoc }
+  | { kind: "docs" }
   | { kind: "home" }
   | {
       kind: "swap";
@@ -48,6 +58,7 @@ type Route =
        *  identical — otherwise a repeated "swap USDC for EURC" does nothing. */
       nonce?: number;
     }
+  | { kind: "market"; sport: SportId }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
@@ -85,6 +96,7 @@ const ROUTE_STORAGE_KEY = "mantua:last-route";
 const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "home",
   "swap",
+  "market",
   "pools",
   "pool",
   "add-liquidity",
@@ -94,11 +106,11 @@ const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "agent",
 ];
 
-/** What we persist. Never store the landing page (clear instead), and never
- *  store an agent `message` — restoring it would auto-resend the command on
- *  refresh (potentially re-executing a trade). */
+/** What we persist. Never store the public pages — landing and legal —
+ *  (clear instead), and never store an agent `message`: restoring it would
+ *  auto-resend the command on refresh (potentially re-executing a trade). */
 function sanitizeRouteForStorage(route: Route): Route | null {
-  if (route.kind === "landing") return null;
+  if (route.kind === "landing" || route.kind === "legal" || route.kind === "docs") return null;
   if (route.kind === "agent") return { kind: "agent" };
   return route;
 }
@@ -107,11 +119,13 @@ function loadStoredRoute(): Route | null {
   try {
     const raw = sessionStorage.getItem(ROUTE_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { kind?: unknown };
+    const parsed = JSON.parse(raw) as { kind?: unknown; sport?: unknown };
     if (
       typeof parsed.kind === "string" &&
       (RESTORABLE_KINDS as readonly string[]).includes(parsed.kind)
     ) {
+      // A market route is only restorable with a league we still ship.
+      if (parsed.kind === "market" && !isSportId(parsed.sport)) return null;
       return parsed as Route;
     }
   } catch {
@@ -157,7 +171,7 @@ export default function App() {
   }
 
   // Landing page is the default surface — public marketing copy with
-  // no Privy auth attached. "Launch Demo" buttons hand off to the
+  // no Privy auth attached. "Launch App" buttons hand off to the
   // existing in-app shell by flipping the route to `home`.
   if (route.kind === "landing") {
     return (
@@ -165,8 +179,48 @@ export default function App() {
         onLaunch={() => {
           setRoute({ kind: "home" });
         }}
+        onNavigate={(destination) => {
+          setRoute(navDestinationToRoute(destination));
+        }}
+        onOpenLegal={(doc) => {
+          setRoute({ kind: "legal", doc });
+        }}
+        onOpenDocs={() => {
+          setRoute({ kind: "docs" });
+        }}
       />
     );
+  }
+
+  if (route.kind === "docs") {
+    return (
+      <DocsPage
+        onBack={() => {
+          setRoute({ kind: "landing" });
+        }}
+        onLaunch={() => {
+          setRoute({ kind: "home" });
+        }}
+      />
+    );
+  }
+
+  // Legal pages are public too — same standalone treatment as landing.
+  if (route.kind === "legal") {
+    const back = () => {
+      setRoute({ kind: "landing" });
+    };
+    const launch = () => {
+      setRoute({ kind: "home" });
+    };
+    switch (route.doc) {
+      case "privacy":
+        return <PrivacyPage onBack={back} onLaunch={launch} />;
+      case "terms":
+        return <TermsPage onBack={back} onLaunch={launch} />;
+      case "integrity":
+        return <MarketIntegrityPage onBack={back} onLaunch={launch} />;
+    }
   }
 
   const walletAddress = user?.wallet?.address;
@@ -186,6 +240,9 @@ export default function App() {
       onDisconnect={authenticated ? handleDisconnect : undefined}
       onLogoClick={() => {
         setRoute({ kind: "landing" });
+      }}
+      onNavigate={(destination) => {
+        setRoute(navDestinationToRoute(destination));
       }}
       left={<LeftColumn setRoute={setRoute} />}
       right={<RightColumn route={route} setRoute={setRoute} />}
@@ -294,6 +351,18 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
+    case "market":
+      return (
+        <MarketPage
+          sport={route.sport}
+          onSelectSport={(sport) => {
+            setRoute({ kind: "market", sport });
+          }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
     case "pools":
       return (
         <LiquidityListPage
@@ -379,6 +448,18 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
+  }
+}
+
+/** Where each landing-header nav item lands in the app shell. */
+function navDestinationToRoute(destination: NavDestination): Route {
+  switch (destination.kind) {
+    case "market":
+      return { kind: "market", sport: destination.sport };
+    case "agent":
+      return { kind: "agent" };
+    case "trading":
+      return { kind: "swap" };
   }
 }
 

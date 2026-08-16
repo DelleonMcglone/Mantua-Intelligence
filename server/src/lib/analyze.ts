@@ -532,7 +532,7 @@ function mantuaHooks(): AnalyzeResponse {
     topic: "mantua-hooks",
     title: "Mantua hooks",
     summary:
-      "Mantua ships two Liquidity Hooks on Uniswap v4, all on Arc Testnet: Stable Protection and Dynamic Fee. Each plugs into the pool lifecycle to add behavior vanilla pools can't. (RWA Gate and Async Limit Order hooks are built but deferred to mainnet, where RWA-grade tokens match their use cases.)",
+      "Mantua ships two Mantua hooks, all on Arc Testnet: Stable Protection and Dynamic Fee. Each plugs into the pool lifecycle to add behavior vanilla pools can't. (RWA Gate and Async Limit Order hooks are built but deferred to mainnet, where RWA-grade tokens match their use cases.)",
     bullets: [
       "Stable Protection — FX-aware peg-zone pool. Reads virtual reserves at every swap, measures deviation against a live EUR/USD reference (Pyth), classifies HEALTHY through CRITICAL, and blocks or surcharges trades during real depegs. Pair: USDC/EURC.",
       "Dynamic Fee — adjusts the per-swap fee on every trade based on a TWAP-derived volatility signal. Rewards LPs more during turbulence; cheaper for stable flow. Pairs: USDC/cirBTC and EURC/cirBTC.",
