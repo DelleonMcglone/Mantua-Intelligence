@@ -1,57 +1,95 @@
 # Mantua.AI
 
-**Mantua.AI is an agent-driven liquidity protocol for stablecoins** it lets users and
-institutions manage stablecoin positions, deploy liquidity, and run automated rebalancing
-strategies through natural language. It combines a custom suite of **Uniswap v4 hooks**,
-autonomous **AI agents** running **Circle Developer-Controlled Wallets**, and real-time on-chain
-execution to turn user intent into automated liquidity actions into a programmable liquidity layer
-optimized for stablecoins, RWAs, and yield-bearing dollar assets.
+**Mantua is an agent-driven prediction market for sports.** Bettors and market makers open
+positions, provide liquidity, and execute automated hedging strategies through natural language.
+It combines a custom suite of **Mantua hooks**, autonomous **AI agents** running **Circle
+Developer-Controlled Wallets**, and real-time on-chain execution to turn user intent into
+automated market actions a programmable liquidity layer for sports outcomes, live in-game
+markets, and USDC-settled event contracts.
 
 From a single natural-language prompt you can:
 
-- **Analyze & research** pool health, peg status, token prices, and hook explanations (free
-  data, with optional pay-per-call x402 premium sources).
+- **Take a position** on a scheduled game, priced continuously by the pool rather than by a
+  bookmaker.
+- **Provide liquidity** to market pools and to the base pairs, and manage those positions.
+- **Analyze & research** matchups, pool health, peg status, and token prices (free data, with
+  optional pay-per-call x402 premium sources).
 - **Swap** USDC, EURC, and cirBTC across the hook pools.
-- **Add / remove liquidity** to hook-protected and no-hook pools via the Uniswap v4
-  PositionManager + Permit2.
-- **Run an autonomous agent** a Circle-managed wallet that swaps, manages liquidity, and
-  auto-rebalances out of de-pegging stablecoins on a daily schedule.
+- **Run an autonomous agent** a Circle-managed wallet that researches, takes positions, manages
+  liquidity, and hedges under a spending cap.
 - **Bridge & manage treasury** move USDC cross-chain (Circle CCTP) and hold a unified,
   multi-chain USDC balance (Circle Gateway).
 
+> **Status.** The prediction market is under active construction see
+> [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md) for the build plan and what is
+> and is not live. The trading, liquidity, agent, and treasury surfaces described below ship
+> today. Market pools list once the Dynamic Market Hook is deployed.
+
 ## The problem and who it's for
 
-Managing stablecoin liquidity today is operationally manual, interface-fragmented,
-strategy-dependent, and exposed to peg risk across pools, venues, and market conditions.
-Mantua.AI lets **liquidity providers, stablecoin issuers, fintech platforms, and RWA protocols**
-deploy peg-aware liquidity, automated rebalancing, and yield-seeking routing directly from
-natural-language instructions, executed on-chain via agent-managed Uniswap v4 hook strategies.
+Prediction markets are static. Odds and liquidity sit passively while the world moves, so market
+makers get picked off the moment news breaks and bettors trade against stale depth. Mantua makes
+the market itself programmable: fees adapt to order-flow imbalance, access is enforced at
+execution, and trading halts under conditions the market defines in advance. **Bettors, market
+makers, and liquidity providers** set all of it from natural-language instructions, executed
+on-chain through agent-managed Mantua hooks.
 
 ## Why it's better
 
-Stablecoin pools today are passive. Mantua makes them **state-aware, fee-adaptive,
+Prediction markets today are passive. Mantua makes them **state-aware, fee-adaptive,
 oracle-enforced, and agent-managed** by embedding these behaviors directly into AMM execution
-logic through Uniswap v4 hooks. By letting AI agents coordinate liquidity in response to
-real-time market conditions, Mantua transforms stablecoin liquidity from static capital into an
-automated financial control system for compliant routing, treasury management, and RWA
-settlement.
+logic through Mantua hooks. By letting AI agents coordinate liquidity in response to real-time
+market conditions, Mantua transforms prediction-market liquidity from static capital into an
+automated financial control system for compliant access, market making, and event settlement.
+
+## How a market works
+
+One scheduled game produces one market. Each market mints a **YES/NO ERC-20 pair** fully
+collateralised 1:1 by USDC, and the YES token trades against USDC in a Uniswap v4 pool carrying
+the Dynamic Market Hook. A YES pays 1 USDC if the outcome happens and 0 if it does not, so its
+price **is** the market's implied probability a YES at 0.62 is a 62% chance.
+
+```
+create → seed → trade → freeze → resolve → redeem
+                                     └────→ void (postponed / cancelled)
+```
+
+- **split** 1 USDC in → 1 YES + 1 NO out. **merge** reverses it. Both are fee-free, and
+  together they are the arbitrage floor that keeps the pool price inside [0, 1].
+- **freeze** at scheduled kickoff, enforced by the hook so it holds even if the interface is
+  bypassed.
+- **resolve** from live game data, with provider disagreement flagged for review and a manual
+  override so a bad feed cannot auto-settle a market.
+- **redeem** the winning token 1:1 for USDC. A voided game returns collateral instead.
+
+Collateral held is always at least the outstanding redeemable supply. That invariant is fuzzed
+over half a million calls in `contracts/test/markets/MarketInvariant.t.sol`.
+
+Full specification: [`docs/specs/market-lifecycle.md`](docs/specs/market-lifecycle.md).
+
+## Coverage
+
+**NFL** and **WNBA** are the covered leagues. NBA, MLB, NHL, and Soccer appear in the nav and
+report as coming soon; promoting one is a single field in
+[`client/src/features/markets/sports.ts`](client/src/features/markets/sports.ts).
 
 ## The autonomous loop
 
-The agent closes the loop for stablecoin liquidity: **it buys intelligence with x402, then
-deploys capital with it.**
+Autonomous agents turn intent into action: **they buy the intelligence they need, then deploy
+capital with it.**
 
 1. The agent hits a question it can't answer → **searches Circle's x402 marketplace**.
 2. **Pays per call in USDC** capped, audited, no API keys, no accounts.
-3. **Combines paid intelligence with live on-chain signals** peg status, pool health, whale
-   flows.
-4. **Executes through Uniswap v4 hooks + a Circle Developer-Controlled Wallet** swap, LP,
-   bridge via CCTP.
-5. **Auto-exits de-pegging stablecoins** on a daily schedule signal-gated and capped.
+3. **Combines paid intelligence with live sports and on-chain signals** game state, pool
+   health, peg status, whale flows.
+4. **Executes through Mantua hooks + a Circle Developer-Controlled Wallet** take a position,
+   swap, provide liquidity, bridge via CCTP.
+5. **Manages the position** hedging strategies fire on price and game-state ticks under a
+   policy cap, and auto-disarm when a market freezes.
 
 Programmable money buying programmable intelligence, then acting on it in one autonomous loop.
 
-**Hooks for logic. Agents for action. Circle for the rails.**
+**Hooks for logic. Agents for action. AI for intelligence.**
 
 ---
 
@@ -61,10 +99,13 @@ Programmable money buying programmable intelligence, then acting on it in one au
   mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
   hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
   open Analyze.
-- **Peg-aware Uniswap v4 hooks.** Two custom hooks Stable Protection and Dynamic Fee embed
-  fee logic and circuit breakers directly into pool execution. Stable Protection is
-  **FX-aware**: its circuit breaker anchors to the live EUR/USD rate (Pyth) instead of assuming
-  1:1, so USDC/EURC trades at the true ~1.14 rate (see [Liquidity Hooks](#liquidity-hooks)).
+- **Sports markets.** Per-league pages for the covered leagues, with market pricing, position
+  entry, and settlement. Browsing is open to everyone; any on-chain transaction requires a
+  logged-in wallet.
+- **State-aware Mantua hooks.** Custom hooks embed pricing, fee logic, and circuit breakers
+  directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
+  to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
+  ~1.14 rate (see [Hooks](#hooks)).
 - **Swap · Liquidity Pools.** Manual v4 swaps with live quotes and hook selection; create
   pools and add/remove liquidity (market-priced initialization); pool detail pages with real
   pair exchange-rate charts.
@@ -122,8 +163,9 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 
 ### Uniswap v4
 
-- **Custom hooks** two production hooks, each deployed at a mined CREATE2 address (Stable
-  Protection, Dynamic Fee). Source repos linked under [Architecture](#architecture).
+- **Custom hooks** Mantua hooks, each deployed at a mined CREATE2 address. Stable Protection
+  and Dynamic Fee are live; the Dynamic Market Hook is specified but not yet built. Source repos
+  linked under [Architecture](#architecture).
 - **v4 periphery, per hook** PoolManager, PositionManager, StateView, V4Quoter, and
   PoolSwapTest. The app routes each pool's create / liquidity / swap / read to its hook's own
   stack (no-hook pools fall back to the Stable Protection stack).
@@ -199,17 +241,24 @@ token**.
 
 ---
 
-## Liquidity Hooks
+## Hooks
 
-Mantua ships two Uniswap v4 hooks. Because v4 allows **one hook per pool key**, each hook is a
-distinct contract deployed at a mined CREATE2 address, and each lives on its **own** Uniswap v4
-stack (PoolManager + PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every
-pool's create / liquidity / swap / read to the stack of that pool's hook.
+Mantua ships three hooks. Because Uniswap v4 allows **one hook per pool key**, each is a distinct
+contract deployed at a mined CREATE2 address, and each lives on its **own** v4 stack (PoolManager
 
-| Hook                  | Pairs                    | Purpose                                                              |
-| --------------------- | ------------------------ | -------------------------------------------------------------------- |
-| **Stable Protection** | USDC/EURC                | FX-aware peg-zone fees + circuit breaker (EUR/USD-anchored via Pyth) |
-| **Dynamic Fee**       | USDC/cirBTC, EURC/cirBTC | Per-swap fee scales with TWAP-derived volatility                     |
+- PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every pool's create /
+  liquidity / swap / read to the stack of that pool's hook.
+
+| Hook                    | Surface           | Purpose                                                                                     | Status       |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------- | ------------ |
+| **Dynamic Market Hook** | Prediction market | Adapts pricing, fees, liquidity, and risk parameters in real time from game state and flow  | Not deployed |
+| **Stable Protection**   | Trading           | Monitors peg deviation across five zones, scaling LP fees to severity and halting past 5%   | Live on Arc  |
+| **Dynamic Fee**         | Trading           | Nezlobin directional fees across five deviation zones, charging the toxic side of the trade | Live on Arc  |
+
+> **The Dynamic Market Hook is not built yet.** Its specification is the open decision DM-110,
+> which blocks the whole of phase B2 see
+> [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md) for what the spec
+> must answer. Market pages show an empty state until it deploys.
 
 > Two further hooks **RWA Gate** (permissioned pools via a ComplianceRegistry) and
 > **Async Limit Order** are built and were previously deployed on testnet, but are
@@ -252,9 +301,14 @@ The canonical source of truth for these addresses is
 ## Architecture
 
 ```
-client/   Vite + React + TypeScript SPA (port 5173) chat UI, swap/LP/agent panels
-server/   Express + TypeScript API (port 3001) calldata builders, quotes, agent + portfolio
-deploy/   Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
+client/      Vite + React + TypeScript SPA (port 5173) landing, docs, legal, market pages,
+             swap/LP/agent panels
+server/      Express + TypeScript API (port 3001) calldata builders, quotes, agent, portfolio,
+             market id + probability utils, Drizzle schema
+contracts/   Foundry market primitives (MarketFactory, Market, OutcomeToken, pool bootstrap)
+             and their tests
+deploy/      Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
+docs/        Architecture, specs, decision memos, task lists, legal drafts
 ```
 
 - **Per-hook routing.** `getV4StackForHook(poolKey.hooks)` resolves the PoolManager + periphery
@@ -271,6 +325,23 @@ deploy/   Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
 
 ---
 
+## Documentation
+
+| Document                                                                                             | What it covers                                                |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`docs/architecture.md`](docs/architecture.md)                                                       | Living architecture notes and the decision log                |
+| [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md)                                           | The build plan phases, priorities, and what is done           |
+| [`docs/decisions/sports-pivot-decisions.md`](docs/decisions/sports-pivot-decisions.md)               | Each decision, its reasoning, and what it rules out           |
+| [`docs/specs/market-lifecycle.md`](docs/specs/market-lifecycle.md)                                   | Market states, transitions, failure modes                     |
+| [`docs/specs/market-id.md`](docs/specs/market-id.md)                                                 | Deterministic market ids                                      |
+| [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md)                             | Blocked what the hook spec must answer                        |
+| [`docs/tasks/sports-pivot-scope-reconciliation.md`](docs/tasks/sports-pivot-scope-reconciliation.md) | What survives the pivot, what is superseded, what is deferred |
+
+An in-app documentation site covering the same ground for users is reachable from the landing
+footer.
+
+---
+
 ## Local development
 
 ```bash
@@ -282,10 +353,23 @@ npm run dev
 Requires Postgres + a `.env` (see `server/.env.example`, `client/.env.example`). Verify with:
 
 ```bash
-npm run typecheck            # both workspaces
-npm test -w @mantua/server   # 63 tests
-npm test -w @mantua/client   # 58 tests
+npm run typecheck            # all workspaces
+npm run lint                 # eslint, zero warnings tolerated
+npm test -w @mantua/server   # 100 tests
+npm test -w @mantua/client   # 75 tests
 ```
+
+### Contracts
+
+```bash
+cd contracts
+forge test --match-path "test/markets/*"   # 40 tests
+```
+
+> **Dependencies are not vendored.** `contracts/lib/` is gitignored, so a fresh checkout has no
+> forge-std, solmate, OpenZeppelin, v4-core, or v4-periphery and the Solidity will not compile
+> until they are installed. They are not yet pinned as submodules; install them into
+> `contracts/lib/` before building.
 
 Optional: the agent can pay per-call for premium data via the x402
 marketplace (off by default; set `X402_ENABLED=1` + fund the buyer wallet)
