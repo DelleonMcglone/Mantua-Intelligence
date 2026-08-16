@@ -1,0 +1,345 @@
+# Mantua — Agent-Driven Sports Prediction Market
+
+> **Build:** Pivot on top of `DelleonMcglone/Mantua-Intelligence` (everything in that repo still ships)
+> **Window:** 16 August – 16 September 2026
+> **Positioning:** Agent-driven prediction market for sports. Bettors and market makers open positions, provide liquidity, and run automated hedging through natural language. Mantua hooks + autonomous agents + real-time onchain execution turn intent into market actions. A programmable liquidity layer for sports outcomes, live in-game markets, and USDC-settled event contracts.
+> **Last updated:** 2026-08-16
+
+---
+
+## 🚦 Priority Legend
+
+| Tag       | Meaning                                     |
+| --------- | ------------------------------------------- |
+| 🔴 **P0** | Ship blocker                                |
+| 🟠 **P1** | Required for the Sept 16 definition of done |
+| 🟡 **P2** | Droppable                                   |
+| ⚪ **P3** | Post-Sept 16                                |
+
+**Sept 16 scope = P0 + P1 = 94 tasks / 31 days ≈ 3 per day sustained.**
+
+---
+
+## 📅 Week Plan
+
+| Week | Dates        | Milestone                                                             | Gate                                                       |
+| ---- | ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| W1   | Aug 17–23    | Decisions closed; market primitives underway; data layer live         | Split/merge/redeem tests green                             |
+| W2   | Aug 24–30    | Primitives complete; Dynamic Market Hook deployed; resolution working | One market opens → freezes → resolves → redeems on testnet |
+| W3   | Aug 31–Sep 6 | Home board, sport pages, chat dock, auth rework, trading page         | All three surfaces clickable end to end                    |
+| W4   | Sep 7–13     | Agent page + Circle Agent Stack; hedging strategies                   | Agent arms and executes a hedge under a policy cap         |
+| W5   | Sep 14–16    | Stabilisation, E2E, ship                                              | Definition of Done clean                                   |
+
+---
+
+## ⛔ Open Decisions
+
+| ID     | Decision                   | Proposed default                                                               | Blocks     | Status |
+| ------ | -------------------------- | ------------------------------------------------------------------------------ | ---------- | ------ |
+| DM-101 | Market mechanism           | **Closed 2026-08-16 — outcome-token AMM (YES/NO ERC-20 vs USDC in v4 pools).** | B1, B2, B7 | ✅     |
+| DM-102 | Conditional token standard | **Closed 2026-08-16 — purpose-built binary ERC-20 pair per market.**           | B1         | ✅     |
+| DM-103 | Resolution authority       | ⏸ **OPEN — needs owner sign-off on the signer arrangement.**                   | B4         | ⏸      |
+| DM-104 | Chain                      | **Closed 2026-08-16 — Arc Testnet (5042002).**                                 | Everything | ✅     |
+| DM-105 | League coverage            | **Closed 2026-08-16 — NFL and WNBA. NBA/MLB/NHL/Soccer show "Coming soon".**   | B3, B5     | ✅     |
+| DM-106 | Market types               | **Closed 2026-08-16 — moneyline at launch; totals W4 (P2).**                   | B1, B3, B5 | ✅     |
+| DM-107 | Settlement data source     | **Closed 2026-08-16 — ESPN primary; second provider W3.**                      | B3, B4     | ✅     |
+| DM-108 | Jurisdictional posture     | **Closed 2026-08-16 — testnet is implied, not surfaced in the UI.**            | B10        | ✅     |
+| DM-110 | Dynamic Market Hook spec   | ⏸ **BLOCKED — spec still not supplied; B2 cannot start.**                      | B2         | ⏸      |
+| DM-111 | Agent wallet path          | ⏸ **BLOCKED — contingent on B8-001 verification.**                             | B8, B9     | ⏸      |
+| DM-112 | Routing split              | **Closed 2026-08-16 — market pools direct; Trading API for base pairs.**       | B7         | ✅     |
+
+---
+
+## ⚠️ Risk Acknowledgments
+
+**Risk 1 — ESPN dependency.** ESPN retired its public developer API in 2014;
+`site.api.espn.com` is the undocumented JSON backend behind ESPN's own site,
+with no documentation, support, or SLA. Mitigated by the adapter interface
+(B3-001), second provider (B3-007), and manual resolver override (B4-004).
+
+**Risk 2 — Resolution centralisation.** v1 ships a trusted resolver with no
+dispute window. Disclosed in UI (B4-006).
+
+---
+
+## 🧱 PHASE B0 — Decision Gate & Specs (W1) 🔴
+
+| ID     | Task                                                                                                                                                                                                                                                                                                            | Priority | Status |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B0-001 | Close all 11 decisions; record each in `docs/architecture.md` with rationale and date — **8 of 11 closed 2026-08-16** (`docs/decisions/sports-pivot-decisions.md`); DM-103/110/111 open — **8/11 closed 2026-08-16** — `docs/decisions/sports-pivot-decisions.md` + `docs/architecture.md`. DM-103/110/111 open | 🔴 P0    | 🟡     |
+| B0-002 | `docs/specs/market-lifecycle.md`: create → seed → trade → freeze → resolve → redeem → void — ✅ `docs/specs/market-lifecycle.md`                                                                                                                                                                                | 🔴 P0    | ✅     |
+| B0-003 | `docs/specs/dynamic-market-hook.md` from the DM-110 spec — ⏸ **BLOCKED on DM-110** — `docs/specs/dynamic-market-hook.md` records required inputs only                                                                                                                                                           | 🔴 P0    | ⏸      |
+| B0-004 | Market ID scheme: deterministic hash of (provider event ID, market type, outcome index) — ✅ `docs/specs/market-id.md` + `server/src/lib/market-id.ts` (13 tests)                                                                                                                                               | 🔴 P0    | ✅     |
+| B0-005 | Postgres additions: `sports`, `leagues`, `events`, `markets`, `market_outcomes`, `market_positions`, `resolutions`, `hedge_strategies` — ✅ `server/src/db/schema/markets.ts` — 8 tables                                                                                                                        | 🔴 P0    | ✅     |
+| B0-006 | Reconcile carried-forward scope: which repo items survive, which are superseded, which are deferred — ✅ `docs/tasks/sports-pivot-scope-reconciliation.md`                                                                                                                                                      | 🔴 P0    | ✅     |
+| B0-007 | Branch + task doc per house convention; prompt history captured — ✅ branch `sports-pivot`; `docs/promptHistory/2026-08-16-sports-pivot-b0.md`                                                                                                                                                                  | 🟠 P1    | ✅     |
+
+---
+
+## 🎲 PHASE B1 — Market Primitives (W1–W2) 🔴
+
+| ID     | Task                                                                                                                                                                                       | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------ |
+| B1-001 | `MarketFactory.sol` — deploy a YES/NO ERC-20 pair per market, USDC-collateralised 1:1 — ✅ `contracts/src/markets/MarketFactory.sol` + `OutcomeToken.sol`                                  | 🔴 P0    | ✅     |
+| B1-002 | `split(usdcAmount)` — 1 USDC in → 1 YES + 1 NO out — ✅ `Market.split`                                                                                                                     | 🔴 P0    | ✅     |
+| B1-003 | `merge(setAmount)` — 1 YES + 1 NO in → 1 USDC out — ✅ `Market.merge`                                                                                                                      | 🔴 P0    | ✅     |
+| B1-004 | `redeem()` — winning token 1:1 for USDC, losing token zero — ✅ `Market.redeem` / `redeemInvalid`                                                                                          | 🔴 P0    | ✅     |
+| B1-005 | State machine `OPEN → FROZEN → RESOLVED → SETTLED`, plus `INVALID` for postponed/abandoned games — ✅ `Market.State` + freeze/resolve/void transitions                                     | 🔴 P0    | ✅     |
+| B1-006 | Outcome tokens use the shared decimals utility (Arc native USDC 18dp / ERC-20 interface 6dp) — ✅ outcome tokens inherit collateral decimals (6dp ERC-20 side)                             | 🔴 P0    | ✅     |
+| B1-007 | Foundry tests: split/merge round-trip, collateral solvency invariant, resolve-before-freeze rejection, double-redeem rejection — ✅ `test/markets/Market.t.sol` — 30 tests                 | 🔴 P0    | ✅     |
+| B1-008 | Fuzz harness: collateral can never fall below outstanding redeemable supply — ✅ `test/markets/MarketInvariant.t.sol` — 4 invariants, 512k calls                                           | 🟠 P1    | ✅     |
+| B1-009 | Pool bootstrap: open the YES/USDC v4 pool at market creation, seeded at opening implied probability — ✅ `MarketPoolBootstrap.sol` + 6 tests. Hook slot takes `address(0)` until DM-110/B2 | 🔴 P0    | ✅     |
+| B1-010 | Price ↔ probability util — one shared module for contracts-adjacent code, UI, and agent — ✅ `server/src/lib/probability.ts` — 17 tests                                                    | 🔴 P0    | ✅     |
+
+---
+
+## 🪝 PHASE B2 — Dynamic Market Hook (W2) 🔴
+
+> Gated on DM-110.
+
+| ID     | Task                                                                                        | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------- | -------- | ------ |
+| B2-001 | Implement hook against `docs/specs/dynamic-market-hook.md`                                  | 🔴 P0    | ⬜     |
+| B2-002 | Permission-flag address mining (v4 encodes callbacks in the hook address)                   | 🔴 P0    | ⬜     |
+| B2-003 | Freeze enforcement — hook rejects swaps once market is `FROZEN`                             | 🔴 P0    | ⬜     |
+| B2-004 | Fee behaviour per game state (pre-game / in-play / near-resolution) per spec                | 🔴 P0    | ⬜     |
+| B2-005 | Deploy via Foundry, verify, record in hook registry                                         | 🔴 P0    | ⬜     |
+| B2-006 | Retain Stable Protection + Dynamic Fee hooks for non-market base pools                      | 🟠 P1    | ⬜     |
+| B2-007 | Security pass using the existing Trail of Bits skills methodology; HIGH findings block ship | 🔴 P0    | ⬜     |
+| B2-008 | Invariant tests: fee never exceeds cap; hook cannot block a legitimate redeem               | 🟠 P1    | ⬜     |
+
+---
+
+## 📡 PHASE B3 — Sports Data Layer (W1–W3) 🔴
+
+| ID     | Task                                                                                                                      | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B3-001 | `SportsDataProvider` interface — ESPN is an adapter behind it, not called directly by feature code                        | 🔴 P0    | ⬜     |
+| B3-002 | ESPN adapter for the DM-105 league(s): scoreboard, event summary, team marks                                              | 🔴 P0    | ⬜     |
+| B3-003 | Resilience: retry with backoff, host fallback, cache (60s pre-game / 10s live), circuit breaker with "data delayed" state | 🔴 P0    | ⬜     |
+| B3-004 | Normalise provider event → canonical `events` row; provider-agnostic team IDs                                             | 🔴 P0    | ⬜     |
+| B3-005 | Ingest worker: slate refresh, live score polling, final capture                                                           | 🔴 P0    | ⬜     |
+| B3-006 | Market generator: new scheduled game auto-creates its market set per DM-106                                               | 🔴 P0    | ⬜     |
+| B3-007 | Second-provider adapter per DM-107                                                                                        | 🟠 P1    | ⬜     |
+| B3-008 | Disagreement detection: providers disagreeing on a final flags for manual review instead of auto-resolving                | 🟠 P1    | ⬜     |
+
+---
+
+## ⚖️ PHASE B4 — Resolution & Settlement (W2) 🔴
+
+| ID     | Task                                                                                                     | Priority | Status |
+| ------ | -------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B4-001 | `Resolver` contract — accepts outcome for a market ID, enforces signer authority, emits `MarketResolved` | 🔴 P0    | ⬜     |
+| B4-002 | Freeze trigger at scheduled start time                                                                   | 🔴 P0    | ⬜     |
+| B4-003 | Resolution service: final detected → outcome derived → submitted onchain → DB reconciled                 | 🔴 P0    | ⬜     |
+| B4-004 | Manual override on the resolver; a bad or missing feed must not auto-settle a market                     | 🔴 P0    | ⬜     |
+| B4-005 | Void path: postponed/cancelled → `INVALID` → everyone redeems at cost                                    | 🔴 P0    | ⬜     |
+| B4-006 | Public resolution log (source, timestamp, signer, tx link) + UI disclosure of resolution authority       | 🟠 P1    | ⬜     |
+| B4-007 | Resolver multisig upgrade per DM-103                                                                     | 🟡 P2    | ⬜     |
+
+---
+
+## 🏠 PHASE B5 — Landing, Board & Chat (W3) 🔴
+
+| ID     | Task                                                                                                                                                                                                | Priority | Status |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B5-001 | Landing page stays (decided 2026-08-16); behind it, home is the Polymarket-style board, scoped to covered sports only                                                                               | 🔴 P0    | ⬜     |
+| B5-002 | Header sport buttons route to that sport's live page with the current slate                                                                                                                         | 🔴 P0    | ⬜     |
+| B5-003 | Sport page: matchup cards with team marks, start time, live status, implied odds per outcome                                                                                                        | 🔴 P0    | ⬜     |
+| B5-004 | Matchup click → analyst view renders inline; readable logged out                                                                                                                                    | 🟠 P1    | ⬜     |
+| B5-005 | Chat dock persistent at page bottom                                                                                                                                                                 | 🔴 P0    | ⬜     |
+| B5-006 | Output placement: responses render below the last matchup content and above the chat dock, aligned to the same content column; scroll anchors so new output lands in view without jumping the board | 🟠 P1    | ⬜     |
+| B5-007 | Auth gating: browse, analysis and chat open; every action (position, liquidity, hedge, agent) prompts login                                                                                         | 🔴 P0    | ⬜     |
+| B5-008 | Rate limiting + abuse controls on logged-out chat                                                                                                                                                   | 🔴 P0    | ⬜     |
+| B5-009 | Empty / off-season state per sport                                                                                                                                                                  | 🟠 P1    | ⬜     |
+| B5-010 | Mobile layout for board + chat dock                                                                                                                                                                 | 🟡 P2    | ⬜     |
+
+---
+
+## 🔐 PHASE B6 — Privy Auth, Profile & Portfolio (W3) 🔴
+
+| ID     | Task                                                                                                          | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B6-001 | Login methods → Google, email, wallet; remove Apple and passkey from current config                           | 🔴 P0    | ⬜     |
+| B6-002 | Distinct Log in and Sign up entry points (Privy exposes one flow; the split is presentational)                | 🔴 P0    | ⬜     |
+| B6-003 | Embedded wallet on signup for users without one                                                               | 🔴 P0    | ⬜     |
+| B6-004 | Chain restriction updated to the DM-104 target                                                                | 🔴 P0    | ⬜     |
+| B6-005 | Return-to-intent: user who clicked a matchup action lands back on that market                                 | 🟠 P1    | ⬜     |
+| B6-006 | Server-side token verification retained on protected routes                                                   | 🔴 P0    | ⬜     |
+| B6-007 | Header auth control swaps state on login: Log in / Sign up becomes the profile button                         | 🔴 P0    | ⬜     |
+| B6-008 | Profile button routes to the portfolio; portfolio lives inside the user profile, not as a standalone nav item | 🔴 P0    | ⬜     |
+| B6-009 | Portfolio: open market positions with entry price, current implied odds, unrealised P/L, and market status    | 🔴 P0    | ⬜     |
+| B6-010 | Portfolio: LP positions with hook badges, token balances, and transaction history with explorer links         | 🔴 P0    | ⬜     |
+| B6-011 | Portfolio: agent wallet view and armed hedging strategies (wires to B8, B9)                                   | 🟠 P1    | ⬜     |
+| B6-012 | Profile menu: settings, spending cap controls, log out                                                        | 🟠 P1    | ⬜     |
+
+---
+
+## 📊 PHASE B7 — Trading Page (W3) 🔴
+
+| ID     | Task                                                                           | Priority | Status |
+| ------ | ------------------------------------------------------------------------------ | -------- | ------ |
+| B7-001 | Split-screen: Swap modal left, Liquidity modal right, above the fold           | 🔴 P0    | ⬜     |
+| B7-002 | Pool list full width directly beneath the split                                | 🔴 P0    | ⬜     |
+| B7-003 | Swap handles market outcome tokens and base tokens (USDC / EURC / cirBTC)      | 🔴 P0    | ⬜     |
+| B7-004 | Liquidity add/remove on market pools and base pools                            | 🔴 P0    | ⬜     |
+| B7-005 | Routing split per DM-112                                                       | 🔴 P0    | ⬜     |
+| B7-006 | Pool list columns: pair, hook badge, TVL, 24h volume, fee tier, market status  | 🟠 P1    | ⬜     |
+| B7-007 | Filter/sort by sport, league, market status, TVL; responsive vertical collapse | 🟡 P2    | ⬜     |
+
+---
+
+## 🤖 PHASE B8 — Agent & Circle Agent Stack (W4) 🟠
+
+> Circle Agent Stack includes Agent Wallets, Agent Marketplace, Circle CLI,
+> Nanopayments via Circle Gateway, and Circle Skills. Agent Wallets are
+> programmable USDC wallets with global limits, per-service caps, contract or
+> chain allowlists, and time-bounded sessions.
+
+| ID     | Task                                                                                                                        | Priority | Status |
+| ------ | --------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B8-001 | Verify Circle Agent Wallets support the DM-104 chain before migration work starts                                           | 🔴 P0    | ⬜     |
+| B8-002 | Agent page: header "Agent" routes here; mode selection; funding UI; live activity log                                       | 🔴 P0    | ⬜     |
+| B8-003 | Intent parser extension: `open_position`, `close_position`, `provide_liquidity`, `hedge`, `analyze_matchup`, `query_market` | 🔴 P0    | ⬜     |
+| B8-004 | Structured preview card before every confirmation modal                                                                     | 🔴 P0    | ⬜     |
+| B8-005 | Agent actions: open position, close position, add/remove market liquidity, portfolio summary                                | 🔴 P0    | ⬜     |
+| B8-006 | Contract allowlist restricted to Mantua market contracts and pools                                                          | 🔴 P0    | ⬜     |
+| B8-007 | Agent never holds signing rights over the user's Privy wallet                                                               | 🔴 P0    | ⬜     |
+| B8-008 | Prompt-injection hardening: matchup and market text entering LLM context is data, not instruction                           | 🟠 P1    | ⬜     |
+| B8-009 | Provision agent wallet via Circle Agent Stack; verify onchain                                                               | 🟠 P1    | ⬜     |
+| B8-010 | Map Circle policies (global limit, per-service cap, contract allowlist, session TTL) onto the existing cap model            | 🟠 P1    | ⬜     |
+| B8-011 | Migration or coexistence plan vs. the existing path per DM-111; document in `docs/architecture.md`                          | 🟠 P1    | ⬜     |
+
+---
+
+## 🛡️ PHASE B9 — Automated Hedging (W4) 🟠
+
+| ID     | Task                                                                                                    | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B9-001 | Strategy schema: trigger, action, size, cap, expiry, kill condition                                     | 🟠 P1    | ⬜     |
+| B9-002 | Strategy 1 — take-profit / stop: close a position when implied probability crosses a threshold          | 🟠 P1    | ⬜     |
+| B9-003 | Strategy 2 — delta hedge: keep net exposure across correlated markets within a user-set band            | 🟠 P1    | ⬜     |
+| B9-004 | Natural-language → strategy config, with structured preview before arming                               | 🟠 P1    | ⬜     |
+| B9-005 | Execution engine: evaluate on price and game-state ticks, execute inside the agent wallet's policy caps | 🟠 P1    | ⬜     |
+| B9-006 | Strategy dashboard: armed / triggered / executed / expired, full audit trail                            | 🟠 P1    | ⬜     |
+| B9-007 | Kill switch per strategy and globally; strategies auto-disarm on market freeze                          | 🔴 P0    | ⬜     |
+| B9-008 | Market-maker mode with inventory skew                                                                   | ⚪ P3    | ⬜     |
+
+---
+
+## ✅ PHASE B10 — E2E & Ship (W5) 🔴
+
+| ID      | Task                                                                                                                                   | Priority | Status |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B10-001 | Safety rails re-verified on new surfaces: spending caps, slippage, confirmation modal, kill switch, rate limits, audit log             | 🔴 P0    | ⬜     |
+| B10-002 | Full-lifecycle E2E: create → seed → positions both sides → add liquidity → price moves → freeze → resolve → redeem → balances verified | 🔴 P0    | ⬜     |
+| B10-003 | Void E2E: postponed game → `INVALID` → all collateral returned                                                                         | 🔴 P0    | ⬜     |
+| B10-004 | Data-outage E2E: provider down mid-game → market freezes, does not mis-resolve                                                         | 🔴 P0    | ⬜     |
+| B10-005 | Agent E2E: natural language → parse → preview → confirm → execute → audit entry                                                        | 🔴 P0    | ⬜     |
+| B10-006 | Hedging E2E: arm strategy → trigger fires → executes under cap → disarms on freeze                                                     | 🟠 P1    | ⬜     |
+| B10-007 | Security sign-off — zero HIGH findings open, MEDIUM accepted in writing (`docs/security/sign-off.md`)                                  | 🔴 P0    | ⬜     |
+| B10-008 | Testnet posture verified end to end (DM-108). No testnet notice in the UI per the DM-108 close                                         | 🔴 P0    | ⬜     |
+| B10-009 | Incident runbook: kill-switch activation, mis-resolution recovery, provider failover, user comms                                       | 🟠 P1    | ⬜     |
+| B10-010 | Ship                                                                                                                                   | 🔴 P0    | ⬜     |
+
+---
+
+## 📊 Task Count
+
+| Phase                              | 🔴 P0  | 🟠 P1  | 🟡 P2 | ⚪ P3 | Total  |
+| ---------------------------------- | ------ | ------ | ----- | ----- | ------ |
+| B0 Decision Gate & Specs           | 6      | 1      | 0     | 0     | 7      |
+| B1 Market Primitives               | 9      | 1      | 0     | 0     | 10     |
+| B2 Dynamic Market Hook             | 6      | 2      | 0     | 0     | 8      |
+| B3 Sports Data Layer               | 6      | 2      | 0     | 0     | 8      |
+| B4 Resolution & Settlement         | 5      | 1      | 1     | 0     | 7      |
+| B5 Landing, Board & Chat           | 5      | 4      | 1     | 0     | 10     |
+| B6 Privy Auth, Profile & Portfolio | 9      | 3      | 0     | 0     | 12     |
+| B7 Trading Page                    | 5      | 1      | 1     | 0     | 7      |
+| B8 Agent & Circle Stack            | 7      | 4      | 0     | 0     | 11     |
+| B9 Automated Hedging               | 1      | 6      | 0     | 1     | 8      |
+| B10 E2E & Ship                     | 7      | 3      | 0     | 0     | 10     |
+| **Total**                          | **66** | **28** | **3** | **1** | **98** |
+
+---
+
+## 🗓️ Deferred Past Sept 16
+
+| Item                                                | Target |
+| --------------------------------------------------- | ------ |
+| Live in-game props                                  | Sep W4 |
+| Spreads                                             | Sep W4 |
+| Additional leagues beyond DM-105                    | Sep W4 |
+| Dispute window + resolver committee                 | Oct W1 |
+| Market-maker mode, cross-market correlation hedging | Oct    |
+| Mainnet posture                                     | Oct+   |
+| Circle Agent Marketplace listing                    | Oct    |
+
+---
+
+## ✅ Definition of Done — Sept 16
+
+- [ ] All 11 decisions closed and documented
+- [ ] Browse sports, read analysis, and use chat without logging in
+- [ ] Log in or sign up with Google, email, or wallet
+- [ ] Header auth control becomes the profile button on login; profile opens the portfolio
+- [ ] Portfolio shows market positions, LP positions, balances, and history
+- [ ] Logged-in user opens a position on a real scheduled game
+- [ ] Logged-in user provides liquidity to a market pool
+- [ ] A market freezes at start, resolves from live data, and pays out correctly onchain
+- [ ] A void game returns all collateral
+- [ ] Agent executes a market action from natural language with preview + confirmation
+- [ ] A user arms a hedging strategy in natural language and watches it execute under a cap
+- [ ] Trading page split-screen live with pool list beneath
+- [ ] Security sign-off, zero HIGH findings
+- [x] ~~Testnet posture explicit in the UI~~ — dropped 2026-08-16; testnet is implied, not marketed
+
+---
+
+## 🔗 References
+
+| Resource                     | URL                                            |
+| ---------------------------- | ---------------------------------------------- |
+| Circle Agent Stack           | https://agents.circle.com/                     |
+| Circle Agent Stack overview  | https://www.circle.com/agent-stack             |
+| Circle developer platform    | https://developers.circle.com/                 |
+| Uniswap v4 hooks             | https://docs.uniswap.org/contracts/v4/overview |
+| Uniswap Trading API          | https://docs.uniswap.org/api/trading/overview  |
+| Privy React docs             | https://docs.privy.io/basics/react/quickstart  |
+| ESPN endpoint community docs | https://github.com/pseudo-r/Public-ESPN-API    |
+| Foundry book                 | https://book.getfoundry.sh/                    |
+
+---
+
+## Site copy built ahead of this plan (Aug 16)
+
+The marketing surface was rewritten for the sports positioning before this plan
+landed. It is live and consistent with the positioning, but several pieces
+encode assumptions this plan revises — see B0-006. Files:
+
+- `client/src/components/landing/LandingPage.tsx` — hero, league nav, feature
+  cards, FAQ, footer
+- `client/src/components/legal/` — Privacy, Terms of Use, Market Integrity
+- `client/src/components/docs/` — documentation site
+- `client/src/features/markets/` — per-league market page (empty state) and the
+  sport catalog
+
+Known conflicts to resolve when the relevant task runs:
+
+| Site copy today                                                  | Conflicts with                         | Action                                    |
+| ---------------------------------------------------------------- | -------------------------------------- | ----------------------------------------- |
+| Docs + Privacy say sign-in supports passkeys                     | B6-001 (remove Apple and passkey)      | Update both when the Privy config changes |
+| Terms/Privacy describe trading and LPing, not resolution or void | B4-006 (disclose resolution authority) | Extend Terms with resolution + void terms |
+
+Resolved 2026-08-16:
+
+- **League coverage (DM-105).** NFL and WNBA are the covered set and lead the
+  nav; NBA, MLB, NHL, and Soccer stay in the nav carrying a `Soon` chip, and
+  their market pages show a coming-soon state that routes to the covered
+  leagues. Driven by `coverage` in `features/markets/sports.ts`.
+- **Testnet posture (DM-108).** Testnet is implied, not surfaced. No banner or
+  notice in the UI; B10-008 keeps the verification, drops the disclosure. The
+  docs still name Arc Testnet and the Circle faucet because users need them to
+  obtain funds — that is instruction, not posture marketing.
+- **Landing page (B5-001).** The landing page stays as the public marketing
+  surface. The board is the logged-in home behind it.
