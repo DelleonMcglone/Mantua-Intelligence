@@ -17,7 +17,9 @@ function dbHost(): string {
   }
 }
 
-healthRouter.get("/health", async (_req, res) => {
+// Mounted at both paths: locally everything reaches express, but the
+// production rewrite only sends /api/* to the function.
+healthRouter.get(["/health", "/api/health"], async (_req, res) => {
   let sportsSchema = false;
   let dbError: string | null = null;
   try {
