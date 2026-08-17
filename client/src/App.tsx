@@ -19,6 +19,8 @@ import { InputBar } from "./components/shell/InputBar.tsx";
 import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
+import { ProfilePage } from "./features/portfolio/ProfilePage.tsx";
+import { Board } from "./features/markets/Board.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
@@ -59,6 +61,8 @@ type Route =
       nonce?: number;
     }
   | { kind: "market"; sport: SportId }
+  | { kind: "profile" }
+  | { kind: "trading" }
   | { kind: "pools" }
   | { kind: "pool"; id: string }
   | { kind: "add-liquidity"; ctx?: PoolKeyContext }
@@ -97,6 +101,8 @@ const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "home",
   "swap",
   "market",
+  "profile",
+  "trading",
   "pools",
   "pool",
   "add-liquidity",
@@ -236,33 +242,84 @@ export default function App() {
   return (
     <AppShell
       walletAddress={walletAddress}
-      onConnect={authenticated ? undefined : handleConnect}
+      onLogin={authenticated ? undefined : handleConnect}
+      onSignup={authenticated ? undefined : handleConnect}
       onDisconnect={authenticated ? handleDisconnect : undefined}
+      onOpenProfile={() => {
+        setRoute({ kind: "profile" });
+      }}
+      onOpenAgent={() => {
+        setRoute({ kind: "agent" });
+      }}
       onLogoClick={() => {
         setRoute({ kind: "landing" });
       }}
       onNavigate={(destination) => {
         setRoute(navDestinationToRoute(destination));
       }}
-      left={<LeftColumn setRoute={setRoute} />}
+      left={<LeftColumn route={route} setRoute={setRoute} />}
       right={<RightColumn route={route} setRoute={setRoute} />}
     />
   );
 }
 
-function LeftColumn({ setRoute }: { setRoute: (r: Route) => void }) {
+function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
+  // B6-008 — the portfolio lives inside the profile, not as standalone nav:
+  // opening Profile swaps the left column to balances + assets. Position and
+  // asset drill-downs keep it too, since they read from it.
+  if (
+    route.kind === "profile" ||
+    route.kind === "positions" ||
+    route.kind === "asset" ||
+    route.kind === "pool"
+  ) {
+    return (
+      <>
+        <PortfolioCard />
+        <AssetsCard
+          onSelectPool={(id) => {
+            setRoute({ kind: "pool", id });
+          }}
+          onSelectAsset={(symbol) => {
+            setRoute({ kind: "asset", symbol });
+          }}
+        />
+      </>
+    );
+  }
+  // B7-001 — Trading is a split screen: swap on the left, liquidity on the
+  // right column, pool list beneath the swap (B7-002).
+  if (route.kind === "trading") {
+    return (
+      <>
+        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
+          <SwapPanel />
+        </Card>
+        <Card className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ padding: 0 }}>
+          <LiquidityListPage
+            onSelectPool={(id) => {
+              setRoute({ kind: "pool", id });
+            }}
+            onCreate={() => {
+              setRoute({ kind: "add-liquidity" });
+            }}
+          />
+        </Card>
+      </>
+    );
+  }
+  // B5-001 — everywhere else, the left column is the board: today's games
+  // across the covered leagues, with the chat/panel column alongside
+  // (B5-006). Browsing needs no login (B5-007).
   return (
-    <>
-      <PortfolioCard />
-      <AssetsCard
-        onSelectPool={(id) => {
-          setRoute({ kind: "pool", id });
-        }}
-        onSelectAsset={(symbol) => {
-          setRoute({ kind: "asset", symbol });
-        }}
-      />
-    </>
+    <Board
+      onAnalyze={(question) => {
+        setRoute({ kind: "analyze", question });
+      }}
+      onOpenLeague={(sport) => {
+        setRoute({ kind: "market", sport: sport.id });
+      }}
+    />
   );
 }
 
@@ -358,6 +415,24 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onSelectSport={(sport) => {
             setRoute({ kind: "market", sport });
           }}
+          onAnalyze={(question) => {
+            setRoute({ kind: "analyze", question });
+          }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "profile":
+      return <ProfileRoute setRoute={setRoute} />;
+    case "trading":
+      // Right half of the trading split screen (B7-001): the liquidity form.
+      return (
+        <AddLiquidityForm
+          key={`trading-${String(chainId)}`}
+          onBack={() => {
+            setRoute({ kind: "pools" });
+          }}
           onClose={() => {
             setRoute({ kind: "home" });
           }}
@@ -451,6 +526,29 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
   }
 }
 
+/** Profile panel wrapper — owns the Privy handles the page needs. */
+function ProfileRoute({ setRoute }: { setRoute: (r: Route) => void }) {
+  const { user, logout } = usePrivy();
+  return (
+    <ProfilePage
+      walletAddress={user?.wallet?.address}
+      onViewPositions={() => {
+        setRoute({ kind: "positions" });
+      }}
+      onOpenAgent={() => {
+        setRoute({ kind: "agent" });
+      }}
+      onLogout={() => {
+        void logout();
+        setRoute({ kind: "home" });
+      }}
+      onClose={() => {
+        setRoute({ kind: "home" });
+      }}
+    />
+  );
+}
+
 /** Where each landing-header nav item lands in the app shell. */
 function navDestinationToRoute(destination: NavDestination): Route {
   switch (destination.kind) {
@@ -459,7 +557,7 @@ function navDestinationToRoute(destination: NavDestination): Route {
     case "agent":
       return { kind: "agent" };
     case "trading":
-      return { kind: "swap" };
+      return { kind: "trading" };
   }
 }
 
@@ -544,7 +642,14 @@ function intentToRoute(intent: Intent): Route {
     case "agent":
       return { kind: "agent", ...(intent.message ? { message: intent.message } : {}) };
     case "portfolio":
-      return { kind: "home" };
+      return { kind: "profile" };
+    case "market":
+      return { kind: "market", sport: intent.sport };
+    case "position":
+      // B8-004/B8-005 — position execution is gated until the market
+      // contracts deploy. Land on the league's market page (NFL when no
+      // league was named), which says honestly what's open.
+      return { kind: "market", sport: intent.sport ?? "nfl" };
     case "analyze":
       return {
         kind: "analyze",

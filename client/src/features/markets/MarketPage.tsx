@@ -3,25 +3,29 @@ import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { SPORTS, getSport, type SportId } from "./sports.ts";
+import { SlateList } from "./SlateList.tsx";
+import { useSlate } from "./use-slate.ts";
 
 interface Props {
   sport: SportId;
   onSelectSport: (id: SportId) => void;
+  /** Matchup click — open the analyst on the game (B5-004). */
+  onAnalyze?: (question: string) => void;
   onClose?: () => void;
 }
 
 /**
  * Per-league market page — the landing header's league nav lands here.
  *
- * The market list itself isn't built yet: the Dynamic Market Hook has to
- * be deployed and its games indexed before there's anything to price. So
- * this renders the league's identity, a league switcher, and the trading
- * gate, and says plainly that markets aren't open. Swap the empty state
- * for the real list when the hook goes live; the route, nav, and gate
- * around it stay as they are.
+ * Covered leagues show the live slate as matchup cards (B5-002/003); the
+ * tradeable market list itself waits on the Dynamic Market Hook deploy, and
+ * the page says so plainly rather than pretending. Swap the notice for the
+ * real list when the hook goes live; the route, nav, slate, and gate around
+ * it stay as they are.
  */
-export function MarketPage({ sport, onSelectSport, onClose }: Props) {
+export function MarketPage({ sport, onSelectSport, onAnalyze, onClose }: Props) {
   const { authenticated, login } = usePrivy();
+  const { slates, loading } = useSlate();
   const active = getSport(sport);
   const Icon = active.icon;
   const isCovered = active.coverage === "launch";
@@ -75,6 +79,21 @@ export function MarketPage({ sport, onSelectSport, onClose }: Props) {
       </nav>
 
       <div className="flex-1 overflow-auto px-5 pb-6">
+        {isCovered && (
+          <div className="mb-4">
+            <SlateList
+              sport={active}
+              slate={slates[active.id]}
+              loading={loading}
+              onAnalyze={(event, s) => {
+                onAnalyze?.(
+                  `Analyze the ${s.label} matchup: ${event.away.name} at ${event.home.name}. ` +
+                    `Who is favored to win, and what should a prediction-market trader watch?`,
+                );
+              }}
+            />
+          </div>
+        )}
         <div className="rounded-md border border-border-soft bg-panel-solid px-5 py-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
             <Icon className="h-6 w-6" />

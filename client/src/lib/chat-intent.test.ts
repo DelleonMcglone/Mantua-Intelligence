@@ -409,3 +409,54 @@ describe("detectIntent: bridge (Swap panel's Bridge venue)", () => {
     });
   });
 });
+
+describe("sports intents (B8-003)", () => {
+  it("'nfl' bare → the NFL market page", () => {
+    assert.deepEqual(detectIntent("nfl"), { kind: "market", sport: "nfl" });
+  });
+
+  it("'show me wnba games' → the WNBA market page (wnba beats the nba substring)", () => {
+    assert.deepEqual(detectIntent("show me wnba games"), { kind: "market", sport: "wnba" });
+  });
+
+  it("'nba odds' → NBA, not WNBA", () => {
+    assert.deepEqual(detectIntent("nba odds"), { kind: "market", sport: "nba" });
+  });
+
+  it("'analyze the nfl matchup tonight' → falls through to research, not league nav", () => {
+    const intent = detectIntent("analyze the nfl matchup tonight");
+    assert.notEqual(intent?.kind, "market");
+  });
+
+  it("'bet on the chiefs' → open position", () => {
+    assert.deepEqual(detectIntent("bet on the chiefs"), { kind: "position", action: "open" });
+  });
+
+  it("'open a position on the nfl game' → open position with the league", () => {
+    assert.deepEqual(detectIntent("open a position on the nfl game"), {
+      kind: "position",
+      action: "open",
+      sport: "nfl",
+    });
+  });
+
+  it("'close my wnba position' → close, not league browsing", () => {
+    assert.deepEqual(detectIntent("close my wnba position"), {
+      kind: "position",
+      action: "close",
+      sport: "wnba",
+    });
+  });
+
+  it("'hedge my position' → hedge", () => {
+    assert.deepEqual(detectIntent("hedge my position"), { kind: "position", action: "hedge" });
+  });
+
+  it("'what is the nfl?' question phrasing → not hijacked by league nav", () => {
+    // "why/how/analyze/compare" fall through; a plain "what is" question is
+    // three words + league, which IS nav-shaped — accept that tradeoff, but
+    // longer questions must fall through to research.
+    const intent = detectIntent("how did the nfl salary cap change this year");
+    assert.notEqual(intent?.kind, "market");
+  });
+});

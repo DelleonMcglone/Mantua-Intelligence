@@ -12,7 +12,7 @@ interface Props {
 const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
   {
     id: "analyze",
-    title: "Analyze and research your favorite stablecoin assets on Arc",
+    title: "Analyze today's games, matchups, and markets",
     icon: BarChart3,
   },
   { id: "pool", title: "Create / Add Liquidity with Stable protection", icon: Droplet },

@@ -4,7 +4,8 @@ import { cleanEnv } from "../env.ts";
 
 /**
  * Privy app configuration.
- *  - D-005 ACCEPTED: email + Google + Apple + passkey + external wallet
+ *  - B6-001 (supersedes D-005): Google + email + external wallet only.
+ *    Apple and passkey are dropped per the sports-pivot plan.
  *  - D-006 ACCEPTED: createOnLogin = 'users-without-wallets'
  *  - D-007 ACCEPTED: WalletConnect enabled with project ID
  *  - Mantua's entire app surface (swaps, pools, liquidity) runs on Arc
@@ -16,7 +17,7 @@ const SUPPORTED_CHAINS = [arcTestnet];
 
 export const privyConfig: PrivyClientConfig = {
   appearance: { theme: "dark", accentColor: "#8b6cf0" },
-  loginMethods: ["email", "google", "apple", "passkey", "wallet"],
+  loginMethods: ["google", "email", "wallet"],
   embeddedWallets: {
     ethereum: { createOnLogin: "users-without-wallets" },
   },

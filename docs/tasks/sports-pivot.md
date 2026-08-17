@@ -45,7 +45,7 @@
 | DM-107 | Settlement data source     | **Closed 2026-08-16 — ESPN primary; second provider W3.**                                      | B3, B4     | ✅     |
 | DM-108 | Jurisdictional posture     | **Closed 2026-08-16 — testnet is implied, not surfaced in the UI.**                            | B10        | ✅     |
 | DM-110 | Dynamic Market Hook spec   | **Closed 2026-08-17 — spec supplied and authoritative (`docs/specs/dynamic-market-hook.md`).** | B2         | ✅     |
-| DM-111 | Agent wallet path          | ⏸ **BLOCKED — contingent on B8-001 verification.**                                             | B8, B9     | ⏸      |
+| DM-111 | Agent wallet path          | ✅ **CLOSED 2026-08-17** — keep the existing Circle DCW path; Arc fully supported (B8-001)     | B8, B9     | ✅     |
 | DM-112 | Routing split              | **Closed 2026-08-16 — market pools direct; Trading API for base pairs.**                       | B7         | ✅     |
 
 ---
@@ -141,51 +141,51 @@ dispute window. Disclosed in UI (B4-006).
 
 ## 🏠 PHASE B5 — Landing, Board & Chat (W3) 🔴
 
-| ID     | Task                                                                                                                                                                                                | Priority | Status |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B5-001 | Landing page stays (decided 2026-08-16); behind it, home is the Polymarket-style board, scoped to covered sports only                                                                               | 🔴 P0    | ⬜     |
-| B5-002 | Header sport buttons route to that sport's live page with the current slate                                                                                                                         | 🔴 P0    | ⬜     |
-| B5-003 | Sport page: matchup cards with team marks, start time, live status, implied odds per outcome                                                                                                        | 🔴 P0    | ⬜     |
-| B5-004 | Matchup click → analyst view renders inline; readable logged out                                                                                                                                    | 🟠 P1    | ⬜     |
-| B5-005 | Chat dock persistent at page bottom                                                                                                                                                                 | 🔴 P0    | ⬜     |
-| B5-006 | Output placement: responses render below the last matchup content and above the chat dock, aligned to the same content column; scroll anchors so new output lands in view without jumping the board | 🟠 P1    | ⬜     |
-| B5-007 | Auth gating: browse, analysis and chat open; every action (position, liquidity, hedge, agent) prompts login                                                                                         | 🔴 P0    | ⬜     |
-| B5-008 | Rate limiting + abuse controls on logged-out chat                                                                                                                                                   | 🔴 P0    | ⬜     |
-| B5-009 | Empty / off-season state per sport                                                                                                                                                                  | 🟠 P1    | ⬜     |
-| B5-010 | Mobile layout for board + chat dock                                                                                                                                                                 | 🟡 P2    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                                                                                                                         | Priority | Status |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B5-001 | Landing page stays (decided 2026-08-16); behind it, home is the Polymarket-style board, scoped to covered sports only — ✅ home's left column is the board (`Board.tsx`): covered leagues' games as matchup cards, chat/panel column alongside                                                                                                                               | 🔴 P0    | ✅     |
+| B5-002 | Header sport buttons route to that sport's live page with the current slate — ✅ `/api/sports/slate` (public, sanitized whitelist) + `MarketPage` renders the league's live slate                                                                                                                                                                                            | 🔴 P0    | ✅     |
+| B5-003 | Sport page: matchup cards with team marks, start time, live status, implied odds per outcome — ✅ `SlateList.tsx` — team marks, kickoff time, Live/Final/Postponed chips, implied win % from provider bps, winner bolding; scores hidden pre-game                                                                                                                            | 🔴 P0    | ✅     |
+| B5-004 | Matchup click → analyst view renders inline; readable logged out — ✅ card click seeds the analyst thread; new `get_sports_slate` tool grounds answers in the real slate; works logged out (verified in browser)                                                                                                                                                             | 🟠 P1    | ✅     |
+| B5-005 | Chat dock persistent at page bottom — ✅ the InputBar command dock persists at the bottom of the chat column on every route                                                                                                                                                                                                                                                  | 🔴 P0    | ✅     |
+| B5-006 | Output placement: responses render below the last matchup content and above the chat dock, aligned to the same content column; scroll anchors so new output lands in view without jumping the board — ✅ adapted to the two-column shell: analysis renders in the right column beside the board, above the dock (deviation from single-column Polymarket layout, deliberate) | 🟠 P1    | ✅     |
+| B5-007 | Auth gating: browse, analysis and chat open; every action (position, liquidity, hedge, agent) prompts login — ✅ board/slate/analyst all public; trading gate on the market page; every write route requires auth                                                                                                                                                            | 🔴 P0    | ✅     |
+| B5-008 | Rate limiting + abuse controls on logged-out chat — ✅ `/api/analyze/chat` was already IP-rate-limited (`walletRateLimiter` falls back to IP) + global `ipRateLimiter`                                                                                                                                                                                                       | 🔴 P0    | ✅     |
+| B5-009 | Empty / off-season state per sport — ✅ per-league off-season empty state, distinct from the error state; delayed-data banner on degraded slates                                                                                                                                                                                                                             | 🟠 P1    | ✅     |
+| B5-010 | Mobile layout for board + chat dock — ✅ shell stacks below 1024px; board verified at ~700px viewport                                                                                                                                                                                                                                                                        | 🟡 P2    | ✅     |
 
 ---
 
 ## 🔐 PHASE B6 — Privy Auth, Profile & Portfolio (W3) 🔴
 
-| ID     | Task                                                                                                          | Priority | Status |
-| ------ | ------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B6-001 | Login methods → Google, email, wallet; remove Apple and passkey from current config                           | 🔴 P0    | ⬜     |
-| B6-002 | Distinct Log in and Sign up entry points (Privy exposes one flow; the split is presentational)                | 🔴 P0    | ⬜     |
-| B6-003 | Embedded wallet on signup for users without one                                                               | 🔴 P0    | ⬜     |
-| B6-004 | Chain restriction updated to the DM-104 target                                                                | 🔴 P0    | ⬜     |
-| B6-005 | Return-to-intent: user who clicked a matchup action lands back on that market                                 | 🟠 P1    | ⬜     |
-| B6-006 | Server-side token verification retained on protected routes                                                   | 🔴 P0    | ⬜     |
-| B6-007 | Header auth control swaps state on login: Log in / Sign up becomes the profile button                         | 🔴 P0    | ⬜     |
-| B6-008 | Profile button routes to the portfolio; portfolio lives inside the user profile, not as a standalone nav item | 🔴 P0    | ⬜     |
-| B6-009 | Portfolio: open market positions with entry price, current implied odds, unrealised P/L, and market status    | 🔴 P0    | ⬜     |
-| B6-010 | Portfolio: LP positions with hook badges, token balances, and transaction history with explorer links         | 🔴 P0    | ⬜     |
-| B6-011 | Portfolio: agent wallet view and armed hedging strategies (wires to B8, B9)                                   | 🟠 P1    | ⬜     |
-| B6-012 | Profile menu: settings, spending cap controls, log out                                                        | 🟠 P1    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                              | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B6-001 | Login methods → Google, email, wallet; remove Apple and passkey from current config — ✅ `privy/config.ts` → `["google", "email", "wallet"]`                                                                                                      | 🔴 P0    | ✅     |
+| B6-002 | Distinct Log in and Sign up entry points (Privy exposes one flow; the split is presentational) — ✅ header shows Log in (ghost) + Sign up (primary); both open the Privy modal                                                                    | 🔴 P0    | ✅     |
+| B6-003 | Embedded wallet on signup for users without one — ✅ already configured (`createOnLogin: "users-without-wallets"`, D-006)                                                                                                                         | 🔴 P0    | ✅     |
+| B6-004 | Chain restriction updated to the DM-104 target — ✅ already Arc-only (`supportedChains: [arcTestnet]`)                                                                                                                                            | 🔴 P0    | ✅     |
+| B6-005 | Return-to-intent: user who clicked a matchup action lands back on that market — ✅ by construction — the Privy modal overlays the current route, so login from a market page resumes on that market                                               | 🟠 P1    | ✅     |
+| B6-006 | Server-side token verification retained on protected routes — ✅ unchanged — `attachAuth` global, `requireAuth` on write routes                                                                                                                   | 🔴 P0    | ✅     |
+| B6-007 | Header auth control swaps state on login: Log in / Sign up becomes the profile button — ✅ logged in, the buttons become the profile pill (`WalletMenu`)                                                                                          | 🔴 P0    | ✅     |
+| B6-008 | Profile button routes to the portfolio; portfolio lives inside the user profile, not as a standalone nav item — ✅ `ProfilePage.tsx`; while it's open the left column swaps to the portfolio stack (balances + assets)                            | 🔴 P0    | ✅     |
+| B6-009 | Portfolio: open market positions with entry price, current implied odds, unrealised P/L, and market status — ⏸ UI slot ships with an honest empty state — live positions need deployed markets (B2-005); entry/implied/P&L wiring lands with them | 🔴 P0    | ⏸      |
+| B6-010 | Portfolio: LP positions with hook badges, token balances, and transaction history with explorer links — ✅ via the existing `PositionsList` (hook badges + history), linked from the profile                                                      | 🔴 P0    | ✅     |
+| B6-011 | Portfolio: agent wallet view and armed hedging strategies (wires to B8, B9) — ⏸ agent-wallet section links to the Agent panel; armed strategies join when B9 exists                                                                               | 🟠 P1    | ⏸      |
+| B6-012 | Profile menu: settings, spending cap controls, log out — ✅ profile menu: Profile & portfolio, copy address, explorer, faucet, refresh, Agent & spending cap, Log out                                                                             | 🟠 P1    | ✅     |
 
 ---
 
 ## 📊 PHASE B7 — Trading Page (W3) 🔴
 
-| ID     | Task                                                                           | Priority | Status |
-| ------ | ------------------------------------------------------------------------------ | -------- | ------ |
-| B7-001 | Split-screen: Swap modal left, Liquidity modal right, above the fold           | 🔴 P0    | ⬜     |
-| B7-002 | Pool list full width directly beneath the split                                | 🔴 P0    | ⬜     |
-| B7-003 | Swap handles market outcome tokens and base tokens (USDC / EURC / cirBTC)      | 🔴 P0    | ⬜     |
-| B7-004 | Liquidity add/remove on market pools and base pools                            | 🔴 P0    | ⬜     |
-| B7-005 | Routing split per DM-112                                                       | 🔴 P0    | ⬜     |
-| B7-006 | Pool list columns: pair, hook badge, TVL, 24h volume, fee tier, market status  | 🟠 P1    | ⬜     |
-| B7-007 | Filter/sort by sport, league, market status, TVL; responsive vertical collapse | 🟡 P2    | ⬜     |
+| ID     | Task                                                                                                                                                                               | Priority | Status |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B7-001 | Split-screen: Swap modal left, Liquidity modal right, above the fold — ✅ `trading` route: swap left column, liquidity form right column (side-by-side ≥1024px)                    | 🔴 P0    | ✅     |
+| B7-002 | Pool list full width directly beneath the split — ✅ pool list renders beneath the swap panel                                                                                      | 🔴 P0    | ✅     |
+| B7-003 | Swap handles market outcome tokens and base tokens (USDC / EURC / cirBTC) — ⏸ base tokens live; outcome tokens join the token list when markets deploy (B2-005)                    | 🔴 P0    | ⏸      |
+| B7-004 | Liquidity add/remove on market pools and base pools — ⏸ base-pool add/remove live (existing flows); market pools gated on deploy                                                   | 🔴 P0    | ⏸      |
+| B7-005 | Routing split per DM-112 — ⏸ per-hook stack routing live (`getV4StackForHook`); the direct market-pool leg activates with the deploy (DM-112)                                      | 🔴 P0    | ⏸      |
+| B7-006 | Pool list columns: pair, hook badge, TVL, 24h volume, fee tier, market status — ⏸ pair, hook badge, TVL, volume, fee tier shown; the market-status column joins when markets exist | 🟠 P1    | ⏸      |
+| B7-007 | Filter/sort by sport, league, market status, TVL; responsive vertical collapse — ⬜ P2 — deferred                                                                                  | 🟡 P2    | ⬜     |
 
 ---
 
@@ -196,19 +196,19 @@ dispute window. Disclosed in UI (B4-006).
 > programmable USDC wallets with global limits, per-service caps, contract or
 > chain allowlists, and time-bounded sessions.
 
-| ID     | Task                                                                                                                        | Priority | Status |
-| ------ | --------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B8-001 | Verify Circle Agent Wallets support the DM-104 chain before migration work starts                                           | 🔴 P0    | ⬜     |
-| B8-002 | Agent page: header "Agent" routes here; mode selection; funding UI; live activity log                                       | 🔴 P0    | ⬜     |
-| B8-003 | Intent parser extension: `open_position`, `close_position`, `provide_liquidity`, `hedge`, `analyze_matchup`, `query_market` | 🔴 P0    | ⬜     |
-| B8-004 | Structured preview card before every confirmation modal                                                                     | 🔴 P0    | ⬜     |
-| B8-005 | Agent actions: open position, close position, add/remove market liquidity, portfolio summary                                | 🔴 P0    | ⬜     |
-| B8-006 | Contract allowlist restricted to Mantua market contracts and pools                                                          | 🔴 P0    | ⬜     |
-| B8-007 | Agent never holds signing rights over the user's Privy wallet                                                               | 🔴 P0    | ⬜     |
-| B8-008 | Prompt-injection hardening: matchup and market text entering LLM context is data, not instruction                           | 🟠 P1    | ⬜     |
-| B8-009 | Provision agent wallet via Circle Agent Stack; verify onchain                                                               | 🟠 P1    | ⬜     |
-| B8-010 | Map Circle policies (global limit, per-service cap, contract allowlist, session TTL) onto the existing cap model            | 🟠 P1    | ⬜     |
-| B8-011 | Migration or coexistence plan vs. the existing path per DM-111; document in `docs/architecture.md`                          | 🟠 P1    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                                                               | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------ |
+| B8-001 | Verify Circle Agent Wallets support the DM-104 chain before migration work starts — ✅ verified 2026-08-17 against Circle docs: `ARC-TESTNET` supports wallets, transfers, contract execution, signing, Gas Station; DM-111 closed                                                                                 | 🔴 P0    | ✅     |
+| B8-002 | Agent page: header "Agent" routes here; mode selection; funding UI; live activity log — ✅ existing Agent panel: header route, funding UI, activity; carried through the pivot                                                                                                                                     | 🔴 P0    | ✅     |
+| B8-003 | Intent parser extension: `open_position`, `close_position`, `provide_liquidity`, `hedge`, `analyze_matchup`, `query_market` — ✅ `chat-intent.ts`: league nav (`market`) + `position` open/close/hedge intents, WNBA/NBA disambiguation, analysis phrasing falls through to research; 9 new tests                  | 🔴 P0    | ✅     |
+| B8-004 | Structured preview card before every confirmation modal — ⏸ existing confirm flow covers swap/LP; market-action preview cards land with executable markets                                                                                                                                                         | 🔴 P0    | ⏸      |
+| B8-005 | Agent actions: open position, close position, add/remove market liquidity, portfolio summary — ⏸ gated on deploy — position intents route to the league page, which states what's open                                                                                                                             | 🔴 P0    | ⏸      |
+| B8-006 | Contract allowlist restricted to Mantua market contracts and pools — ✅ `circle/allowed-targets.ts` enforced inside both Circle execution paths — tokens, v4 stacks, Permit2, commerce registry; market contracts join the list at deploy                                                                          | 🔴 P0    | ✅     |
+| B8-007 | Agent never holds signing rights over the user's Privy wallet — ✅ by architecture — the agent signs only with its own Circle developer-controlled wallet; Privy keys never leave the user's client                                                                                                                | 🔴 P0    | ✅     |
+| B8-008 | Prompt-injection hardening: matchup and market text entering LLM context is data, not instruction — ✅ provider strings sanitized once at the serializer (`public-slate.ts`: control chars, angle brackets, length caps, https-only logos); analyst system prompt frames slate strings as data, never instructions | 🟠 P1    | ✅     |
+| B8-009 | Provision agent wallet via Circle Agent Stack; verify onchain — ✅ existing `getOrCreateAgentWallet` provisions a Circle DCW on Arc and verifies on-chain — already the Circle stack per DM-111                                                                                                                    | 🟠 P1    | ✅     |
+| B8-010 | Map Circle policies (global limit, per-service cap, contract allowlist, session TTL) onto the existing cap model — ⏸ global cap + contract allowlist mapped; per-service caps and session TTLs not yet — tracked here                                                                                              | 🟠 P1    | ⏸      |
+| B8-011 | Migration or coexistence plan vs. the existing path per DM-111; document in `docs/architecture.md` — ✅ documented in `docs/architecture.md` — coexistence: the current path IS Circle's wallet stack on Arc; no migration                                                                                         | 🟠 P1    | ✅     |
 
 ---
 

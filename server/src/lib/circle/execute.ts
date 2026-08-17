@@ -1,4 +1,5 @@
 import { getCircleClient } from "./client.ts";
+import { assertAllowedTarget } from "./allowed-targets.ts";
 
 /**
  * Circle Developer-Controlled Wallets execution layer for Arc.
@@ -52,6 +53,9 @@ export async function executeAgentCalldata(args: {
   callData: `0x${string}`;
   value?: string;
 }): Promise<CircleExecResult> {
+  // B8-006 — single choke point: the agent's wallet only calls contracts
+  // the server explicitly trusts, no matter what upstream produced `to`.
+  assertAllowedTarget(args.to);
   const created = await (
     await getCircleClient()
   ).createContractExecutionTransaction({
@@ -77,6 +81,8 @@ export async function executeAgentAbiCall(args: {
   abiFunctionSignature: string;
   abiParameters: (string | number | boolean | string[])[];
 }): Promise<CircleExecResult> {
+  // B8-006 — same gate as the calldata path.
+  assertAllowedTarget(args.to);
   const created = await (
     await getCircleClient()
   ).createContractExecutionTransaction({

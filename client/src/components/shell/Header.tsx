@@ -7,8 +7,15 @@ import { MarketNav, type NavDestination } from "./MarketNav.tsx";
 
 interface HeaderProps {
   walletAddress?: string | undefined;
-  onConnect?: (() => void) | undefined;
+  /** Logged-out entry points (B6-002). Both open the Privy modal — the
+   *  labels advertise the two paths, the modal handles either flow. */
+  onLogin?: (() => void) | undefined;
+  onSignup?: (() => void) | undefined;
   onDisconnect?: (() => void) | undefined;
+  /** Profile button target — the profile/portfolio page (B6-008). */
+  onOpenProfile?: (() => void) | undefined;
+  /** Agent panel target, for the spending-cap menu item (B6-012). */
+  onOpenAgent?: (() => void) | undefined;
   /** Click handler for the logo / wordmark group. Used to send the
    *  user back to the landing page from the in-app shell. */
   onLogoClick?: (() => void) | undefined;
@@ -25,8 +32,11 @@ interface HeaderProps {
  */
 export function Header({
   walletAddress,
-  onConnect,
+  onLogin,
+  onSignup,
   onDisconnect,
+  onOpenProfile,
+  onOpenAgent,
   onLogoClick,
   onNavigate,
 }: HeaderProps) {
@@ -52,11 +62,21 @@ export function Header({
             <Icon className="h-[18px] w-[18px]" />
           </Button>
           {walletAddress && onDisconnect ? (
-            <WalletMenu walletAddress={walletAddress} onDisconnect={onDisconnect} />
+            <WalletMenu
+              walletAddress={walletAddress}
+              onDisconnect={onDisconnect}
+              onOpenProfile={onOpenProfile}
+              onOpenAgent={onOpenAgent}
+            />
           ) : (
-            <Button variant="primary" onClick={onConnect}>
-              Connect Wallet
-            </Button>
+            <>
+              <Button variant="ghost" onClick={onLogin}>
+                Log in
+              </Button>
+              <Button variant="primary" onClick={onSignup}>
+                Sign up
+              </Button>
+            </>
           )}
         </div>
       </div>

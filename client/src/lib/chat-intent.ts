@@ -56,12 +56,39 @@ export type Intent =
   | { kind: "send"; tokenIn?: TokenSymbol; to?: `0x${string}` }
   | { kind: "portfolio" }
   | { kind: "agent"; message?: string }
+  /** B8-003 — league nav: "nfl markets", "show wnba games", bare "nfl". */
+  | { kind: "market"; sport: SportLeague }
+  /** B8-003 — position verbs: open / close / hedge a sports position.
+   *  Execution is gated until markets deploy; the route lands on the
+   *  league's market page, which states what's open honestly. */
+  | { kind: "position"; action: "open" | "close" | "hedge"; sport?: SportLeague }
   | {
       kind: "analyze";
       topic?: AnalyzeTopic;
       question?: string;
       symbol?: string;
     };
+
+/**
+ * Duplicated string-literal union of `SportId` (features/markets/sports.ts).
+ * Deliberately not imported as a value: this module must stay importable
+ * from the Node test runner, and the sports catalog pulls in React icon
+ * components. A type-only mirror keeps the boundary clean; TypeScript
+ * checks the two unions against each other at the App.tsx seam.
+ */
+export type SportLeague = "nba" | "wnba" | "nfl" | "mlb" | "nhl" | "soccer";
+
+const LEAGUE_WORDS: readonly SportLeague[] = ["nba", "wnba", "nfl", "mlb", "nhl", "soccer"];
+
+/** First league named in the text, if any. WNBA is checked before NBA so
+ *  the substring overlap can't misroute ("wnba" contains "nba"). */
+export function extractLeague(text: string): SportLeague | null {
+  const t = text.toLowerCase();
+  for (const league of ["wnba", ...LEAGUE_WORDS.filter((l) => l !== "wnba")] as SportLeague[]) {
+    if (new RegExp(`\\b${league}\\b`).test(t)) return league;
+  }
+  return null;
+}
 
 const WALLET_TOKEN_ALIASES: { sym: TokenSymbol; aliases: string[] }[] = [
   {
@@ -213,6 +240,40 @@ export function detectIntent(text: string): Intent | null {
     /\bagent'?s?\s+(wallet|balance|cap|caps|positions?|portfolio|status|address|funds?)\b/.test(t);
   if ((agentRef && agentCue) || agentNoun) {
     return { kind: "agent", message: text };
+  }
+
+  // ── Sports (B8-003) ────────────────────────────────────────────────────
+  // Position verbs first: "bet on the Chiefs", "open a position on KC",
+  // "close my position", "hedge my NFL exposure". Matched before league nav
+  // so "close my wnba position" is a position command, not league browsing.
+  const positionNoun = /\b(position|bet|wager|exposure|stake)\b/.test(t);
+  if (positionNoun && /\b(close|exit|sell|unwind)\b/.test(t)) {
+    const sport = extractLeague(text);
+    return { kind: "position", action: "close", ...(sport ? { sport } : {}) };
+  }
+  if (positionNoun && /\bhedge\b/.test(t)) {
+    const sport = extractLeague(text);
+    return { kind: "position", action: "hedge", ...(sport ? { sport } : {}) };
+  }
+  if (
+    (positionNoun && /\b(open|take|place|buy|put)\b/.test(t)) ||
+    /\bbet\s+(on|against)\b/.test(t)
+  ) {
+    const sport = extractLeague(text);
+    return { kind: "position", action: "open", ...(sport ? { sport } : {}) };
+  }
+
+  // League nav: a league name plus a browsing cue — or the bare league name —
+  // opens that league's market page. Analysis phrasing falls through to the
+  // research path instead ("analyze the NFL matchup…" belongs to the analyst).
+  const league = extractLeague(text);
+  if (league && !/\b(analy[sz]e|research|explain|why|how|compare)\b/.test(t)) {
+    const browseCue =
+      /\b(market|markets|game|games|matchup|matchups|odds|scores?|slate|schedule|open|show|view|go\s+to)\b/.test(
+        t,
+      );
+    const bareNav = t.trim().split(/\s+/).length <= 3;
+    if (browseCue || bareNav) return { kind: "market", sport: league };
   }
 
   // Pre-flight: when an action verb is paired with two recognized tokens,

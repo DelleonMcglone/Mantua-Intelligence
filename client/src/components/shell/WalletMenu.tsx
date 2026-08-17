@@ -6,6 +6,10 @@ import { CHAIN_INFO } from "@/lib/chains.ts";
 interface WalletMenuProps {
   walletAddress: string;
   onDisconnect: () => void;
+  /** Routes to the profile/portfolio page (B6-008). */
+  onOpenProfile?: (() => void) | undefined;
+  /** Routes to the agent panel, where the spending cap lives (B6-012). */
+  onOpenAgent?: (() => void) | undefined;
 }
 
 const ARC_FAUCET_URL = "https://faucet.circle.com/";
@@ -16,7 +20,12 @@ const ARC_FAUCET_URL = "https://faucet.circle.com/";
  * balances / Disconnect. Refresh dispatches `mantua:refresh-portfolio`
  * on the window — the portfolio hooks listen and re-poll immediately.
  */
-export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
+export function WalletMenu({
+  walletAddress,
+  onDisconnect,
+  onOpenProfile,
+  onOpenAgent,
+}: WalletMenuProps) {
   const chainId = useCurrentChainId();
   const { explorerUrl, explorerName } = CHAIN_INFO[chainId];
   const [open, setOpen] = useState(false);
@@ -76,6 +85,16 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
           role="menu"
           className="absolute top-[calc(100%+6px)] right-0 z-30 bg-panel-solid border border-border rounded-sm p-1 min-w-[220px] shadow-lg"
         >
+          {onOpenProfile && (
+            <MenuItem
+              onClick={() => {
+                setOpen(false);
+                onOpenProfile();
+              }}
+            >
+              Profile &amp; portfolio
+            </MenuItem>
+          )}
           <MenuItem onClick={handleCopy}>{copied ? "Copied!" : "Copy address"}</MenuItem>
           <MenuLink href={`${explorerUrl}/address/${walletAddress}`}>
             View on {explorerName}
@@ -86,13 +105,23 @@ export function WalletMenu({ walletAddress, onDisconnect }: WalletMenuProps) {
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
           <MenuItem onClick={handleRefresh}>Refresh balances</MenuItem>
+          {onOpenAgent && (
+            <MenuItem
+              onClick={() => {
+                setOpen(false);
+                onOpenAgent();
+              }}
+            >
+              Agent &amp; spending cap
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               setOpen(false);
               onDisconnect();
             }}
           >
-            Disconnect
+            Log out
           </MenuItem>
         </div>
       )}

@@ -18,7 +18,7 @@ reasoning, and what was rejected. `✅ CLOSED` is binding on downstream phases;
 | DM-107 | Settlement data source     | ✅ CLOSED | ESPN primary, second provider in W3 for disagreement detection                 |
 | DM-108 | Jurisdictional posture     | ✅ CLOSED | Testnet, implied not marketed — no testnet notice in the UI                    |
 | DM-110 | Dynamic Market Hook spec   | ⏸ BLOCKED | Spec not supplied; B2 (6 × P0) cannot start                                    |
-| DM-111 | Agent wallet path          | ⏸ BLOCKED | Contingent on B8-001 chain-support verification                                |
+| DM-111 | Agent wallet path          | ✅ CLOSED | Keep the existing Circle DCW path — Arc fully supported, no migration needed   |
 | DM-112 | Routing split              | ✅ CLOSED | Market pools direct to PoolManager/PositionManager; Trading API for base pairs |
 
 ---
@@ -177,15 +177,24 @@ every league page stays empty until this hook is deployed.
 
 ---
 
-## DM-111 — Agent wallet path ⏸ BLOCKED
+## DM-111 — Agent wallet path ✅ CLOSED 2026-08-17
 
-**Blocker.** B8-001 must verify that Circle Agent Wallets support Arc Testnet
-before any migration work starts. Until that answer exists the decision cannot
-be made, only guessed.
+**Decision.** Keep the existing Circle Developer-Controlled Wallet path — it
+IS the Circle wallet stack on Arc, and no migration is needed.
 
-**Fallback.** The existing agent path (Circle Developer-Controlled Wallet plus
-the current cap model) already works on Arc and ships regardless. Treat Circle
-Agent Wallets as an upgrade contingent on B8-001, not as a dependency.
+**B8-001 verification (2026-08-17, Circle docs).** `ARC-TESTNET` is fully
+supported by Circle Wallets: wallet create/list, EOA + SCA account types,
+transfers, contract execution (+ fee estimation), sign message / typed data,
+Gas Station sponsorship, and (since 2025-11-25) the Contracts product. Source:
+developers.circle.com/w3s/supported-blockchains-and-currencies and the
+2025-10-27 / 2025-11-25 W3S release notes.
+
+**Consequence.** The current agent stack (developer-controlled wallet per
+user, USDC gas via Gas Station, server-side spending cap) carries into the
+sports pivot unchanged. Two Circle-policy gaps remain tracked under B8-010:
+per-service caps and time-bounded sessions are not yet mapped onto the cap
+model; the contract allowlist half landed as B8-006 (server-side
+`allowed-targets.ts` at the Circle execution choke point).
 
 ---
 

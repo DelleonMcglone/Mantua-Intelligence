@@ -4,8 +4,11 @@ import type { NavDestination } from "./MarketNav.tsx";
 
 interface AppShellProps {
   walletAddress?: string | undefined;
-  onConnect?: (() => void) | undefined;
+  onLogin?: (() => void) | undefined;
+  onSignup?: (() => void) | undefined;
   onDisconnect?: (() => void) | undefined;
+  onOpenProfile?: (() => void) | undefined;
+  onOpenAgent?: (() => void) | undefined;
   /** Optional click handler for the logo / wordmark — used to send
    *  the user back to the landing page from inside the app shell. */
   onLogoClick?: (() => void) | undefined;
@@ -23,8 +26,11 @@ interface AppShellProps {
  */
 export function AppShell({
   walletAddress,
-  onConnect,
+  onLogin,
+  onSignup,
   onDisconnect,
+  onOpenProfile,
+  onOpenAgent,
   onLogoClick,
   onNavigate,
   left,
@@ -34,8 +40,11 @@ export function AppShell({
     <div className="min-h-screen flex flex-col bg-bg text-text">
       <Header
         walletAddress={walletAddress}
-        onConnect={onConnect}
+        onLogin={onLogin}
+        onSignup={onSignup}
         onDisconnect={onDisconnect}
+        onOpenProfile={onOpenProfile}
+        onOpenAgent={onOpenAgent}
         onLogoClick={onLogoClick}
         onNavigate={onNavigate}
       />
