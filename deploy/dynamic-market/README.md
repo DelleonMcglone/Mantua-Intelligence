@@ -128,24 +128,24 @@ than at the first pool initialize.
 Broadcast 2026-08-17 by the project operator from the `mantua-deployer`
 encrypted keystore. Total cost 0.1237 USDC (blocks 57496929–57496930).
 
-| Field                | Value                                                                    |
-| -------------------- | ------------------------------------------------------------------------ |
-| Chain                | Arc Testnet                                                              |
-| Chain ID             | `5042002`                                                                |
-| RPC                  | `https://rpc.testnet.arc.network`                                        |
-| Explorer             | <https://testnet.arcscan.app>                                            |
-| PoolManager          | `0xee196B3F83Fe6f57E074C399DBdeFe07e1407636` (tx `0x8eed1a30…4881ec5`)   |
-| PositionManager      | _not deployed — periphery is the next step_                              |
-| StateView            | _not deployed_                                                           |
-| V4Quoter             | _not deployed_                                                           |
-| PoolSwapTest         | _not deployed_                                                           |
-| MarketStateRegistry  | `0xEA8c2f329E7eBD9a67FA7E502CEcc938bE3ec7a6` (tx `0xf526161c…4cf92dd`)   |
-| DynamicMarketHook    | `0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0` (tx `0xd25badda…8bd258ad`)  |
-| Deployment salt      | `0x…6e13`                                                                |
-| Hook permission bits | `0x28C0` ✅ (asserted in-tx and re-derived from the address post-deploy) |
-| Operator             | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3`                             |
-| Keeper               | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3` (same key, spec §0.1)       |
-| Verification status  | all three verified on ArcScan (Blockscout), 2026-08-17                   |
+| Field                | Value                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chain                | Arc Testnet                                                                                                                                      |
+| Chain ID             | `5042002`                                                                                                                                        |
+| RPC                  | `https://rpc.testnet.arc.network`                                                                                                                |
+| Explorer             | <https://testnet.arcscan.app>                                                                                                                    |
+| PoolManager          | `0xee196B3F83Fe6f57E074C399DBdeFe07e1407636` (tx `0x8eed1a30…4881ec5`)                                                                           |
+| PositionManager      | `0xd288EE632fb58101211C7c87b3FCF44328C6866d` (periphery broadcast 2026-08-17; + PositionDescriptor `0x52e8c370Ff772408b925f8524f49BFd1B96Beb93`) |
+| StateView            | `0x17a69A23F3c0F7F0dCA6391f967C020BaC0906da`                                                                                                     |
+| V4Quoter             | `0x448E16702C19fF0b0AF7b51D675Cc40f1b2D5281`                                                                                                     |
+| PoolSwapTest         | `0x1791972C76a8Bcb9da83E50B9435612590a0102f` (+ PoolModifyLiquidityTest `0x6A8Ce701aB14a2909F22a18063426fEE016A36da`)                            |
+| MarketStateRegistry  | `0xEA8c2f329E7eBD9a67FA7E502CEcc938bE3ec7a6` (tx `0xf526161c…4cf92dd`)                                                                           |
+| DynamicMarketHook    | `0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0` (tx `0xd25badda…8bd258ad`)                                                                          |
+| Deployment salt      | `0x…6e13`                                                                                                                                        |
+| Hook permission bits | `0x28C0` ✅ (asserted in-tx and re-derived from the address post-deploy)                                                                         |
+| Operator             | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3`                                                                                                     |
+| Keeper               | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3` (same key, spec §0.1)                                                                               |
+| Verification status  | all three verified on ArcScan (Blockscout), 2026-08-17                                                                                           |
 
 > **Receipt-label caveat.** Foundry's console receipts printed the
 > PoolManager/registry names swapped; the broadcast JSON `contractName` fields
