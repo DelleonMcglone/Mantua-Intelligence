@@ -246,3 +246,37 @@ void describe("executeResolution", () => {
     assert.equal(summary.frozen, 2);
   });
 });
+
+void describe("B10-004 — provider outage mid-game", () => {
+  // The outage scenario: the game kicked off, then the data provider went
+  // down. The resilience layer stale-serves the last slate flagged
+  // `delayed`. The correct behaviour is asymmetric: the freeze (safety)
+  // still happens — it is timestamp-driven and cannot be wrong — while
+  // settlement (irreversible) waits for fresh data, even if the stale
+  // cache happens to contain a "final".
+  void it("still freezes on delayed data, but never settles from it", () => {
+    const outage = slate(
+      [
+        event({ providerEventId: "live-game", status: "in_progress", startsAt: NOW - 1800 }),
+        // Stale cache captured a final just before the outage.
+        event({ providerEventId: "finished-game", startsAt: NOW - 4 * 3600 }),
+      ],
+      true, // delayed — served from a stale cache or open breaker
+    );
+    const plan = planResolution(outage, null, NOW);
+
+    // Freeze: yes — the in-play game's markets stop trading.
+    assert.equal(plan.freezes.length, 2, "both markets of the live game freeze");
+    // Settle: no — the cached final is held, loudly, until data is fresh.
+    assert.equal(plan.submissions.length, 0, "nothing settles on delayed data");
+    assert.equal(plan.held.length, 1);
+    assert.equal(plan.held[0].providerEventId, "finished-game");
+  });
+
+  void it("recovery: the same slate served fresh settles normally", () => {
+    const recovered = slate([event({ providerEventId: "finished-game" })], false);
+    const plan = planResolution(recovered, null, NOW);
+    assert.equal(plan.submissions.length, 2, "fresh data resolves both markets");
+    assert.equal(plan.held.length, 0);
+  });
+});

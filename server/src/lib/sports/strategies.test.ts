@@ -174,3 +174,26 @@ void describe("delta hedge evaluation (B9-003)", () => {
     assert.deepEqual(d, { kind: "disarm", reason: "market-frozen" });
   });
 });
+
+void describe("B10-006 — hedging lifecycle scenario", () => {
+  // One strategy across a game day: pre-game drift (hold), a line move
+  // (trigger, sized under cap), and kickoff (disarm). The execution leg —
+  // turning the trigger into a swap — is gated on the periphery deploy;
+  // the decision layer this covers is what will drive it.
+  void it("holds through drift, fires on the cross, disarms at kickoff", () => {
+    const strategy = armed(tpStop, { capUsd: 50 });
+
+    // Morning: 62% — inside thresholds.
+    assert.equal(evaluateStrategy(strategy, [tick({ impliedProbBps: 6200 })], NOW).kind, "hold");
+    // Afternoon line move: 81% — take-profit fires.
+    const fired = evaluateStrategy(strategy, [tick({ impliedProbBps: 8100 })], NOW + 3600);
+    assert.equal(fired.kind, "trigger");
+    // Kickoff: even at 90%, the freeze wins.
+    const atKickoff = evaluateStrategy(
+      strategy,
+      [tick({ impliedProbBps: 9000, frozen: true })],
+      NOW + 7200,
+    );
+    assert.deepEqual(atKickoff, { kind: "disarm", reason: "market-frozen" });
+  });
+});
