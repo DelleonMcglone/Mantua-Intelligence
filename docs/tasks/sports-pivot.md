@@ -34,19 +34,19 @@
 
 ## ⛔ Open Decisions
 
-| ID     | Decision                   | Proposed default                                                               | Blocks     | Status |
-| ------ | -------------------------- | ------------------------------------------------------------------------------ | ---------- | ------ |
-| DM-101 | Market mechanism           | **Closed 2026-08-16 — outcome-token AMM (YES/NO ERC-20 vs USDC in v4 pools).** | B1, B2, B7 | ✅     |
-| DM-102 | Conditional token standard | **Closed 2026-08-16 — purpose-built binary ERC-20 pair per market.**           | B1         | ✅     |
-| DM-103 | Resolution authority       | ⏸ **OPEN — needs owner sign-off on the signer arrangement.**                   | B4         | ⏸      |
-| DM-104 | Chain                      | **Closed 2026-08-16 — Arc Testnet (5042002).**                                 | Everything | ✅     |
-| DM-105 | League coverage            | **Closed 2026-08-16 — NFL and WNBA. NBA/MLB/NHL/Soccer show "Coming soon".**   | B3, B5     | ✅     |
-| DM-106 | Market types               | **Closed 2026-08-16 — moneyline at launch; totals W4 (P2).**                   | B1, B3, B5 | ✅     |
-| DM-107 | Settlement data source     | **Closed 2026-08-16 — ESPN primary; second provider W3.**                      | B3, B4     | ✅     |
-| DM-108 | Jurisdictional posture     | **Closed 2026-08-16 — testnet is implied, not surfaced in the UI.**            | B10        | ✅     |
-| DM-110 | Dynamic Market Hook spec   | ⏸ **BLOCKED — spec still not supplied; B2 cannot start.**                      | B2         | ⏸      |
-| DM-111 | Agent wallet path          | ⏸ **BLOCKED — contingent on B8-001 verification.**                             | B8, B9     | ⏸      |
-| DM-112 | Routing split              | **Closed 2026-08-16 — market pools direct; Trading API for base pairs.**       | B7         | ✅     |
+| ID     | Decision                   | Proposed default                                                                               | Blocks     | Status |
+| ------ | -------------------------- | ---------------------------------------------------------------------------------------------- | ---------- | ------ |
+| DM-101 | Market mechanism           | **Closed 2026-08-16 — outcome-token AMM (YES/NO ERC-20 vs USDC in v4 pools).**                 | B1, B2, B7 | ✅     |
+| DM-102 | Conditional token standard | **Closed 2026-08-16 — purpose-built binary ERC-20 pair per market.**                           | B1         | ✅     |
+| DM-103 | Resolution authority       | ⏸ **OPEN — needs owner sign-off on the signer arrangement.**                                   | B4         | ⏸      |
+| DM-104 | Chain                      | **Closed 2026-08-16 — Arc Testnet (5042002).**                                                 | Everything | ✅     |
+| DM-105 | League coverage            | **Closed 2026-08-16 — NFL and WNBA. NBA/MLB/NHL/Soccer show "Coming soon".**                   | B3, B5     | ✅     |
+| DM-106 | Market types               | **Closed 2026-08-16 — moneyline at launch; totals W4 (P2).**                                   | B1, B3, B5 | ✅     |
+| DM-107 | Settlement data source     | **Closed 2026-08-16 — ESPN primary; second provider W3.**                                      | B3, B4     | ✅     |
+| DM-108 | Jurisdictional posture     | **Closed 2026-08-16 — testnet is implied, not surfaced in the UI.**                            | B10        | ✅     |
+| DM-110 | Dynamic Market Hook spec   | **Closed 2026-08-17 — spec supplied and authoritative (`docs/specs/dynamic-market-hook.md`).** | B2         | ✅     |
+| DM-111 | Agent wallet path          | ⏸ **BLOCKED — contingent on B8-001 verification.**                                             | B8, B9     | ⏸      |
+| DM-112 | Routing split              | **Closed 2026-08-16 — market pools direct; Trading API for base pairs.**                       | B7         | ✅     |
 
 ---
 
@@ -68,7 +68,7 @@ dispute window. Disclosed in UI (B4-006).
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
 | B0-001 | Close all 11 decisions; record each in `docs/architecture.md` with rationale and date — **8 of 11 closed 2026-08-16** (`docs/decisions/sports-pivot-decisions.md`); DM-103/110/111 open — **8/11 closed 2026-08-16** — `docs/decisions/sports-pivot-decisions.md` + `docs/architecture.md`. DM-103/110/111 open | 🔴 P0    | 🟡     |
 | B0-002 | `docs/specs/market-lifecycle.md`: create → seed → trade → freeze → resolve → redeem → void — ✅ `docs/specs/market-lifecycle.md`                                                                                                                                                                                | 🔴 P0    | ✅     |
-| B0-003 | `docs/specs/dynamic-market-hook.md` from the DM-110 spec — ⏸ **BLOCKED on DM-110** — `docs/specs/dynamic-market-hook.md` records required inputs only                                                                                                                                                           | 🔴 P0    | ⏸      |
+| B0-003 | `docs/specs/dynamic-market-hook.md` from the DM-110 spec — ✅ **spec supplied and saved 2026-08-17** (§0–§46)                                                                                                                                                                                                   | 🔴 P0    | ✅     |
 | B0-004 | Market ID scheme: deterministic hash of (provider event ID, market type, outcome index) — ✅ `docs/specs/market-id.md` + `server/src/lib/market-id.ts` (13 tests)                                                                                                                                               | 🔴 P0    | ✅     |
 | B0-005 | Postgres additions: `sports`, `leagues`, `events`, `markets`, `market_outcomes`, `market_positions`, `resolutions`, `hedge_strategies` — ✅ `server/src/db/schema/markets.ts` — 8 tables                                                                                                                        | 🔴 P0    | ✅     |
 | B0-006 | Reconcile carried-forward scope: which repo items survive, which are superseded, which are deferred — ✅ `docs/tasks/sports-pivot-scope-reconciliation.md`                                                                                                                                                      | 🔴 P0    | ✅     |
@@ -97,16 +97,16 @@ dispute window. Disclosed in UI (B4-006).
 
 > Gated on DM-110.
 
-| ID     | Task                                                                                        | Priority | Status |
-| ------ | ------------------------------------------------------------------------------------------- | -------- | ------ |
-| B2-001 | Implement hook against `docs/specs/dynamic-market-hook.md`                                  | 🔴 P0    | ⬜     |
-| B2-002 | Permission-flag address mining (v4 encodes callbacks in the hook address)                   | 🔴 P0    | ⬜     |
-| B2-003 | Freeze enforcement — hook rejects swaps once market is `FROZEN`                             | 🔴 P0    | ⬜     |
-| B2-004 | Fee behaviour per game state (pre-game / in-play / near-resolution) per spec                | 🔴 P0    | ⬜     |
-| B2-005 | Deploy via Foundry, verify, record in hook registry                                         | 🔴 P0    | ⬜     |
-| B2-006 | Retain Stable Protection + Dynamic Fee hooks for non-market base pools                      | 🟠 P1    | ⬜     |
-| B2-007 | Security pass using the existing Trail of Bits skills methodology; HIGH findings block ship | 🔴 P0    | ⬜     |
-| B2-008 | Invariant tests: fee never exceeds cap; hook cannot block a legitimate redeem               | 🟠 P1    | ⬜     |
+| ID     | Task                                                                                                                                                                          | Priority | Status |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B2-001 | Implement hook against `docs/specs/dynamic-market-hook.md` — pre-flight done (decimals 6, keeper = resolver key); `RiskPolicy` blocked on the six risk parameters (spec §0.3) | 🔴 P0    | ⬜     |
+| B2-002 | Permission-flag address mining (v4 encodes callbacks in the hook address)                                                                                                     | 🔴 P0    | ⬜     |
+| B2-003 | Freeze enforcement — hook rejects swaps once market is `FROZEN`                                                                                                               | 🔴 P0    | ⬜     |
+| B2-004 | Fee behaviour per game state (pre-game / in-play / near-resolution) per spec                                                                                                  | 🔴 P0    | ⬜     |
+| B2-005 | Deploy via Foundry, verify, record in hook registry                                                                                                                           | 🔴 P0    | ⬜     |
+| B2-006 | Retain Stable Protection + Dynamic Fee hooks for non-market base pools                                                                                                        | 🟠 P1    | ⬜     |
+| B2-007 | Security pass using the existing Trail of Bits skills methodology; HIGH findings block ship                                                                                   | 🔴 P0    | ⬜     |
+| B2-008 | Invariant tests: fee never exceeds cap; hook cannot block a legitimate redeem                                                                                                 | 🟠 P1    | ⬜     |
 
 ---
 
