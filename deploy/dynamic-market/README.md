@@ -125,26 +125,38 @@ than at the first pool initialize.
 
 ## Deployment record
 
-Fill in after a successful broadcast. Spec §42 requires every row.
+Broadcast 2026-08-17 by the project operator from the `mantua-deployer`
+encrypted keystore. Total cost 0.1237 USDC (blocks 57496929–57496930).
 
-| Field                | Value                             |
-| -------------------- | --------------------------------- |
-| Chain                | Arc Testnet                       |
-| Chain ID             | `5042002`                         |
-| RPC                  | `https://rpc.testnet.arc.network` |
-| Explorer             | <https://testnet.arcscan.app>     |
-| PoolManager          | _not deployed_                    |
-| PositionManager      | _not deployed_                    |
-| StateView            | _not deployed_                    |
-| V4Quoter             | _not deployed_                    |
-| PoolSwapTest         | _not deployed_                    |
-| MarketStateRegistry  | _not deployed_                    |
-| DynamicMarketHook    | _not deployed_                    |
-| Deployment salt      | _mined at deploy time_            |
-| Hook permission bits | must equal `0x28C0`               |
-| Operator             | _`MARKET_OPERATOR`_               |
-| Keeper               | _`MARKET_RESOLVER`_ (spec §0.1)   |
-| Verification status  | _pending_                         |
+| Field                | Value                                                                    |
+| -------------------- | ------------------------------------------------------------------------ |
+| Chain                | Arc Testnet                                                              |
+| Chain ID             | `5042002`                                                                |
+| RPC                  | `https://rpc.testnet.arc.network`                                        |
+| Explorer             | <https://testnet.arcscan.app>                                            |
+| PoolManager          | `0xee196B3F83Fe6f57E074C399DBdeFe07e1407636` (tx `0x8eed1a30…4881ec5`)   |
+| PositionManager      | _not deployed — periphery is the next step_                              |
+| StateView            | _not deployed_                                                           |
+| V4Quoter             | _not deployed_                                                           |
+| PoolSwapTest         | _not deployed_                                                           |
+| MarketStateRegistry  | `0xEA8c2f329E7eBD9a67FA7E502CEcc938bE3ec7a6` (tx `0xf526161c…4cf92dd`)   |
+| DynamicMarketHook    | `0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0` (tx `0xd25badda…8bd258ad`)  |
+| Deployment salt      | `0x…6e13`                                                                |
+| Hook permission bits | `0x28C0` ✅ (asserted in-tx and re-derived from the address post-deploy) |
+| Operator             | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3`                             |
+| Keeper               | `0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3` (same key, spec §0.1)       |
+| Verification status  | all three verified on ArcScan (Blockscout), 2026-08-17                   |
+
+> **Receipt-label caveat.** Foundry's console receipts printed the
+> PoolManager/registry names swapped; the broadcast JSON `contractName` fields
+> and on-chain probes (`hook.poolManager()`, `hook.registry()`, code sizes)
+> confirm the addresses above. Trust the script's own logs, not the receipt
+> banner.
+>
+> **Verification gotcha.** The repo's `[etherscan]` config block references
+> `${BASESCAN_API_KEY}`, which fails config parsing when unset — export any
+> dummy value (`BASESCAN_API_KEY=unused`) before `forge verify-contract`
+> against Blockscout.
 
 > **Periphery is a second step.** This script deploys the `PoolManager` only.
 > `PositionManager`, `StateView`, `V4Quoter`, and `PoolSwapTest` follow the same

@@ -7,6 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  DYNAMIC_MARKET_ARC,
   DYNAMIC_FEE_FLAG,
   HOOK_DEPLOYMENTS_ARC,
   HOOK_NAMES,
@@ -131,5 +132,22 @@ describe("B2-006: base-pool hooks survive the Dynamic Market Hook", () => {
     // would let getV4StackForHook route live pool operations at a stack that
     // is not there — worse than the lookup simply not matching (spec §41).
     assert.equal(Object.keys(HOOK_DEPLOYMENTS_ARC).includes("dynamic-market"), false);
+  });
+
+  // B2-005 deployed 2026-08-17. The stack lives in its own constant, not in
+  // HOOK_DEPLOYMENTS_ARC — market pools have no fixed token pair and route
+  // directly (DM-112) — so the absence above stays correct BY DESIGN even
+  // now that the contracts exist.
+  void it("DYNAMIC_MARKET_ARC records the deployed stack with valid hook bits", () => {
+    const bits = BigInt(DYNAMIC_MARKET_ARC.hook) & 0x3fffn;
+    assert.equal(bits, 0x28c0n, "hook address must encode the four required callbacks");
+    // Its PoolManager is its own deployment, distinct from every hook stack.
+    for (const [name, stack] of Object.entries(HOOK_DEPLOYMENTS_ARC)) {
+      assert.notEqual(
+        DYNAMIC_MARKET_ARC.poolManager.toLowerCase(),
+        stack.poolManager.toLowerCase(),
+        name,
+      );
+    }
   });
 });

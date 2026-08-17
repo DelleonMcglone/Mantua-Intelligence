@@ -631,3 +631,34 @@ export const ERC20_ABI = [
     outputs: [{ type: "bool" }],
   },
 ] as const;
+
+// ─── Dynamic Market Hook stack (B2-005) ─────────────────────────────────────
+
+/**
+ * The sports-market v4 stack, deployed 2026-08-17 and verified on ArcScan
+ * (record: deploy/dynamic-market/README.md).
+ *
+ * Deliberately NOT an entry in `HOOK_DEPLOYMENTS_ARC`: that registry
+ * describes one fixed token0/token1 pool per hook and feeds the swap-venue
+ * routing. Market pools don't work that way — each Market mints its own
+ * YES/NO pair and initializes its own pool on this PoolManager, and market
+ * pools route directly rather than through the venue picker (DM-112). The
+ * v4-contracts tests assert the absence stays deliberate.
+ */
+export interface DynamicMarketDeployment {
+  readonly poolManager: `0x${string}`;
+  readonly registry: `0x${string}`;
+  readonly hook: `0x${string}`;
+  /** Registry operator — registers pools, pauses, rotates roles. */
+  readonly operator: `0x${string}`;
+  /** Keeper = the market resolver key (spec §0.1). */
+  readonly keeper: `0x${string}`;
+}
+
+export const DYNAMIC_MARKET_ARC: DynamicMarketDeployment = {
+  poolManager: "0xee196B3F83Fe6f57E074C399DBdeFe07e1407636",
+  registry: "0xEA8c2f329E7eBD9a67FA7E502CEcc938bE3ec7a6",
+  hook: "0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0",
+  operator: "0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3",
+  keeper: "0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3",
+};
