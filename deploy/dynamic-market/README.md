@@ -68,7 +68,22 @@ asserts the deployed address equals the mined one and carries the right bits.
 - An Arc Testnet deployer funded with USDC — Arc uses **USDC as the native gas
   token**, so there is no separate ETH to acquire. Top up at
   <https://faucet.circle.com>.
-- Environment:
+
+- **The deployer key in an encrypted keystore, not a plaintext variable.**
+  `--interactive` prompts for the key so it never lands in shell history, a
+  dotfile, or a repo file:
+
+  ```bash
+  cast wallet import mantua-deployer --interactive
+  cast wallet address --account mantua-deployer   # fund this
+  ```
+
+  > Do not put a private key in `PRIVATE_KEY=`, in a command line, in a chat, or
+  > anywhere it is stored as text. A key that has been pasted somewhere is spent:
+  > rotate it and move the funds rather than hoping. Only the two **public**
+  > addresses below belong in environment variables.
+
+- Environment — public addresses only:
   ```bash
   export MARKET_OPERATOR=0x...   # registers pools, pauses, rotates roles
   export MARKET_RESOLVER=0x...   # the keeper — same key as the market resolver (spec §0.1)
@@ -81,10 +96,16 @@ asserts the deployed address equals the mined one and carries the right bits.
 ```bash
 forge script deploy/dynamic-market/DeployDynamicMarket.s.sol \
   --rpc-url https://rpc.testnet.arc.network \
+  --account mantua-deployer \
+  --sender "$(cast wallet address --account mantua-deployer)" \
   --broadcast --via-ir --optimizer-runs 200 \
   --verify --verifier blockscout \
   --verifier-url https://testnet.arcscan.app/api
 ```
+
+`--account` reads the encrypted keystore and prompts for its password; the key is
+never passed as an argument. `--sender` is required alongside it so the script
+simulates against the right address.
 
 `--via-ir --optimizer-runs 200` matches the rest of the repo (spec §39).
 Blockscout verification needs no API key (spec §40).
