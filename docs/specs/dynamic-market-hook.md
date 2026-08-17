@@ -60,20 +60,24 @@ Checked against the v4-core installed in `contracts/lib/`, not from memory:
 The §7 constraint `uint160(address(hook)) & 0x3FFF == 0x28C0` is correct for
 exactly those four permissions.
 
-### 0.3 BLOCKING — risk parameters are unset
+### 0.3 Risk parameters (owner decision, 2026-08-17)
 
-**`RiskPolicy.sol` cannot be written.** It is item 1 of the §46 contract
-checklist and every clamp in §16, §18, §21, and §22 resolves against it, but no
-values are supplied for:
+The spec deliberately supplied no numbers. These were chosen by the owner and
+fill the §27 bounds. All are immutable after deployment; §44 makes it a failure
+condition if any path can raise `MAX_FEE` or `ABS_MAX_TRADE`.
 
-```
-BASE_FEE          MAX_FEE           ABS_MAX_TRADE
-MIN_TRADE_CAP     STALE_AFTER       kickoff freeze interval
-```
+| Constant        | Value      | Meaning           | Why                                                                                                                                                                                                                                 |
+| --------------- | ---------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BASE_FEE`      | `3_000`    | 0.30%             | Conventional v4 mid tier. The §16 floor and the §18 directional minimum                                                                                                                                                             |
+| `MAX_FEE`       | `50_000`   | 5.00%             | Leaves 4.70% of headroom across five premiums plus the directional adjustment. §22 clamps a stale market here — punitive without being prohibitive                                                                                  |
+| `ABS_MAX_TRADE` | `10_000e6` | $10,000 USDC      | Large enough not to bind in normal testnet flow, small enough that the §35 "above cap → reverts" test is reachable                                                                                                                  |
+| `MIN_TRADE_CAP` | `100e6`    | $100 USDC         | The §21 floor, and where §22 clamps a stale market                                                                                                                                                                                  |
+| `STALE_AFTER`   | `900`      | 15 minutes        | Keeper cadence tolerance before §22 fail-closed behaviour engages                                                                                                                                                                   |
+| `FREEZE_LEAD`   | `0`        | freeze at kickoff | **Zero deliberately.** `Market.freeze()` fires exactly at `startsAt`; any non-zero lead would have the hook halt trading before the market contract considers itself frozen, so the two would disagree about when the market closed |
 
-These are immutable after deployment (§27) and no path may raise `MAX_FEE` or
-`ABS_MAX_TRADE` (§44). They are the highest-consequence numbers in the build
-and are not being guessed. Awaiting owner values.
+Fees are in v4 pips — `1_000_000` = 100%, so `3_000` = 0.30%. Note this differs
+from the basis-point convention used for probability and confidence (§10, §12),
+where `10_000` = 100%. `MarketMath` must not mix the two.
 
 ### 0.4 Task-record section references are stale
 
@@ -685,7 +689,7 @@ kickoff freeze configuration
 Risk checks should be pure where possible. No external caller may increase
 `MAX_FEE` or `ABS_MAX_TRADE` after deployment.
 
-> **Values are unset — see §0.3. This blocks implementation.**
+> **Values set — see §0.3.**
 
 ## 28. Security Model
 
