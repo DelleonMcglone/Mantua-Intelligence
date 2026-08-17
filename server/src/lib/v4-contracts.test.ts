@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   DYNAMIC_FEE_FLAG,
   HOOK_DEPLOYMENTS_ARC,
+  HOOK_NAMES,
   HOOK_REQUIRES_DYNAMIC_FEE,
   effectivePoolFee,
   getV4StackForHook,
@@ -101,5 +102,34 @@ describe("effectivePoolFee", () => {
     // Dynamic Fee pool would silently mismatch on-chain.
     assert.equal(DYNAMIC_FEE_FLAG, 0x800000);
     assert.equal(DYNAMIC_FEE_FLAG, 8388608);
+  });
+});
+
+/**
+ * B2-006 — the Dynamic Market Hook must not disturb the two hooks already
+ * serving the base pools. These are regression guards: they fail if a future
+ * change repoints Stable Protection or Dynamic Fee, or silently registers the
+ * new hook before it exists on chain.
+ */
+describe("B2-006: base-pool hooks survive the Dynamic Market Hook", () => {
+  it("still ships exactly the two live hooks", () => {
+    assert.deepEqual([...HOOK_NAMES], ["stable-protection", "dynamic-fee"]);
+  });
+
+  it("keeps each hook on its own PoolManager", () => {
+    const sp = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["stable-protection"].hook);
+    const df = getV4StackForHook(HOOK_DEPLOYMENTS_ARC["dynamic-fee"].hook);
+    assert.notEqual(
+      sp.poolManager,
+      df.poolManager,
+      "sharing one PoolManager would mis-route swaps between hooks",
+    );
+  });
+
+  it("does not yet know the Dynamic Market Hook", () => {
+    // No address exists until B2-005 deploys it. Registering a placeholder
+    // would let getV4StackForHook route live pool operations at a stack that
+    // is not there — worse than the lookup simply not matching (spec §41).
+    assert.equal(Object.keys(HOOK_DEPLOYMENTS_ARC).includes("dynamic-market"), false);
   });
 });

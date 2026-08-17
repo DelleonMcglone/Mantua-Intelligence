@@ -200,6 +200,76 @@ any other asset is rejected with a clear error.
 
 See `docs/decisions/v2-open-decisions.md` for the per-decision reasoning and `docs/tasks/v2-roadmap.md` for the locked task list.
 
+### Dynamic Market Hook (spec §43)
+
+Spec: `docs/specs/dynamic-market-hook.md`. Code:
+`contracts/src/hooks/dynamic-market/`. Review:
+`docs/security/dynamic-market-hook-review.md`. Deploy:
+`deploy/dynamic-market/`.
+
+The eight questions §43 requires answering:
+
+1. **One hook instance across many markets.** v4 allows one hook per pool key,
+   but nothing requires one hook _contract_ per pool. Every prediction market
+   needs identical logic, so a per-market deployment would mean mining a fresh
+   CREATE2 salt and verifying a fresh contract for every game — hundreds a
+   season — with no behavioural difference. One instance, state keyed by
+   `PoolId`, is the same code path for all of them.
+
+2. **State keyed by `PoolId`.** It is the value v4 already derives from the pool
+   key and passes to every callback, so no lookup table or reverse mapping is
+   needed. Using the market id instead would require the hook to translate
+   pool → market on every swap.
+
+3. **The keeper cannot control pricing.** It writes exactly three fields —
+   model probability, confidence, event state — and every other input is derived
+   on-chain from the pool and the block. Probability comes from `sqrtPriceX96`,
+   not from the keeper. This is the "agent proposes, protocol enforces" split
+   (§2.1): the model's opinion enters as a _risk premium_ weighted by its own
+   stated confidence, never as the price.
+
+4. **Risk bounds are immutable.** `BASE_FEE`, `MAX_FEE`, `ABS_MAX_TRADE`,
+   `MIN_TRADE_CAP` are `constant` in a library, not storage, so there is no
+   setter to protect and no governance path to compromise. An attacker holding
+   every key still cannot charge 50% or lift the size cap. Storage plus an
+   owner check would have made those the same class of risk as the keys.
+
+5. **Kickoff protection is timestamp-driven.** The freeze reads the timestamp
+   stored at registration and compares it to `block.timestamp`. A keeper-driven
+   freeze would fail exactly when it matters most — a crashed or lagging keeper
+   at kickoff would leave a started game tradeable against people who can see
+   the field. Registration is once-only and there is no kickoff setter, so
+   nobody can push the deadline out either.
+
+6. **Stale keeper state fails closed, not shut.** Past `STALE_AFTER` the fee
+   clamps to `MAX_FEE` and the cap to `MIN_TRADE_CAP`, and the model-deviation
+   premium drops out. Reverting instead would let keeper downtime brick a live
+   market, turning an availability problem into a total loss of access;
+   ignoring staleness would price against numbers nobody is maintaining.
+   Expensive-but-open is the middle, and LPs are compensated for the
+   uncertainty while it lasts.
+
+7. **LP removal stays open during a halt.** The hook has no
+   `BEFORE_REMOVE_LIQUIDITY` permission, so the callback does not exist. A halt
+   is a statement about _trading_, not about custody: trapping LP capital
+   because a game was postponed would make providing liquidity a strictly worse
+   bet, and there is no risk it mitigates — an exiting LP takes no directional
+   position.
+
+8. **Fee, size cap, halt — and nothing else.** These three need no changes to
+   the AMM curve, no custody of funds, and no new accounting, so they are
+   auditable in isolation. Curve modification, liquidity provisioning, and LP
+   incentives all touch value flow directly and would each need their own
+   invariants; bundling them into the first deployment would have meant shipping
+   an unreviewable surface for a market that has not traded yet.
+
+**Deviations from spec §30:** eight files rather than seven — `MarketFlow.sol`
+was extracted to keep every file inside the 150-line limit. The Nezlobin
+directional _shape_ is reused from the dynamic-fee hook, but not its code: that
+library keys off an oracle-deviation zone, and a prediction market has no
+external reference price to deviate from, so the analogue is the pool's own
+imbalance.
+
 ### Sports pivot (DM-101 … DM-112)
 
 Reasoning and rejected alternatives: `docs/decisions/sports-pivot-decisions.md`.

@@ -97,16 +97,16 @@ dispute window. Disclosed in UI (B4-006).
 
 > Gated on DM-110.
 
-| ID     | Task                                                                                                                                                                          | Priority | Status |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B2-001 | Implement hook against `docs/specs/dynamic-market-hook.md` — pre-flight done (decimals 6, keeper = resolver key); `RiskPolicy` blocked on the six risk parameters (spec §0.3) | 🔴 P0    | ⬜     |
-| B2-002 | Permission-flag address mining (v4 encodes callbacks in the hook address)                                                                                                     | 🔴 P0    | ⬜     |
-| B2-003 | Freeze enforcement — hook rejects swaps once market is `FROZEN`                                                                                                               | 🔴 P0    | ⬜     |
-| B2-004 | Fee behaviour per game state (pre-game / in-play / near-resolution) per spec                                                                                                  | 🔴 P0    | ⬜     |
-| B2-005 | Deploy via Foundry, verify, record in hook registry                                                                                                                           | 🔴 P0    | ⬜     |
-| B2-006 | Retain Stable Protection + Dynamic Fee hooks for non-market base pools                                                                                                        | 🟠 P1    | ⬜     |
-| B2-007 | Security pass using the existing Trail of Bits skills methodology; HIGH findings block ship                                                                                   | 🔴 P0    | ⬜     |
-| B2-008 | Invariant tests: fee never exceeds cap; hook cannot block a legitimate redeem                                                                                                 | 🟠 P1    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                  | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| B2-001 | Implement hook against `docs/specs/dynamic-market-hook.md` — pre-flight done (decimals 6, keeper = resolver key); `RiskPolicy` blocked on the six risk parameters (spec §0.3) — ✅ 8 modules in `contracts/src/hooks/dynamic-market/` | 🔴 P0    | ✅     |
+| B2-002 | Permission-flag address mining (v4 encodes callbacks in the hook address) — ✅ `SaltMine.t.sol` mines a real salt, deploys via CREATE2 proxy, asserts `& 0x3FFF == 0x28C0`                                                            | 🔴 P0    | ✅     |
+| B2-003 | Freeze enforcement — hook rejects swaps once market is `FROZEN` — ✅ timestamp-driven; proven to fire with no keeper write ever made                                                                                                  | 🔴 P0    | ✅     |
+| B2-004 | Fee behaviour per game state (pre-game / in-play / near-resolution) per spec — ✅ five-premium stack + directional adjustment, per event state                                                                                        | 🔴 P0    | ✅     |
+| B2-005 | Deploy via Foundry, verify, record in hook registry — ⏸ script + README + salt mine written and tested; **broadcast needs a funded Arc key**                                                                                          | 🔴 P0    | ⏸      |
+| B2-006 | Retain Stable Protection + Dynamic Fee hooks for non-market base pools — ✅ untouched; regression guards in `server/src/lib/v4-contracts.test.ts`                                                                                     | 🟠 P1    | ✅     |
+| B2-007 | Security pass using the existing Trail of Bits skills methodology; HIGH findings block ship — ✅ `docs/security/dynamic-market-hook-review.md` — 0 HIGH, 1 MEDIUM found and fixed                                                     | 🔴 P0    | ✅     |
+| B2-008 | Invariant tests: fee never exceeds cap; hook cannot block a legitimate redeem — ✅ 128k-call campaign, 0 reverts, + 100k deterministic sweep                                                                                          | 🟠 P1    | ✅     |
 
 ---
 
