@@ -16,7 +16,16 @@ import { arcTestnet } from "viem/chains";
 import { env } from "../../env.ts";
 import { logger } from "../logger.ts";
 import { baseRpcClient } from "../rpc-client.ts";
-import { MARKETS_ARC, MARKET_FACTORY_ABI, RESOLVER_CONTRACT_ABI } from "../markets-contracts.ts";
+import {
+  MARKETS_ARC,
+  MARKET_ABI,
+  MARKET_FACTORY_ABI,
+  POOL_MANAGER_INIT_ABI,
+  REGISTRY_ABI,
+  RESOLVER_CONTRACT_ABI,
+} from "../markets-contracts.ts";
+import { DYNAMIC_MARKET_ARC } from "../v4-contracts.ts";
+import { planMarketPool } from "./market-pool.ts";
 import type { PlannedMarket } from "./ingest.ts";
 import type { ResolutionPlan, ResolutionSubmitter } from "./resolution.ts";
 
@@ -45,7 +54,81 @@ export interface MarketCreationSummary {
   created: number;
   existed: number;
   skippedPastKickoff: number;
+  poolsOpened: number;
   failures: { marketId: string; error: string }[];
+}
+
+/** Four-hour window mirrors the test harness; resolution can run later —
+ *  the registry timestamp only drives the hook's near-resolution premium. */
+const RESOLUTION_WINDOW_SECONDS = 4 * 3600;
+
+/**
+ * B1-009 — open the market's YES/USDC pool at the provider's implied
+ * probability. Idempotent: an already-registered pool is skipped, an
+ * already-initialized pool surfaces as a simulate revert and is treated as
+ * done. Register-then-initialize order matters — the hook's beforeInitialize
+ * consults the registry.
+ */
+async function bootstrapMarketPool(
+  wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
+  marketAddress: `0x${string}`,
+  m: PlannedMarket,
+): Promise<boolean> {
+  const yesToken = await baseRpcClient.readContract({
+    address: marketAddress,
+    abi: MARKET_ABI,
+    functionName: "yesToken",
+  });
+  const plan = planMarketPool(
+    yesToken,
+    MARKETS_ARC.collateral,
+    DYNAMIC_MARKET_ARC.hook,
+    m.openingProbability,
+  );
+
+  const registered = await baseRpcClient.readContract({
+    address: DYNAMIC_MARKET_ARC.registry,
+    abi: REGISTRY_ABI,
+    functionName: "isRegistered",
+    args: [plan.poolId],
+  });
+  if (!registered) {
+    const { request } = await baseRpcClient.simulateContract({
+      account: wallet.account,
+      address: DYNAMIC_MARKET_ARC.registry,
+      abi: REGISTRY_ABI,
+      functionName: "registerPool",
+      args: [
+        plan.poolId,
+        BigInt(m.kickoffTimestamp),
+        BigInt(m.kickoffTimestamp + RESOLUTION_WINDOW_SECONDS),
+        plan.yesIsToken0,
+        6,
+      ],
+    });
+    const tx = await wallet.writeContract(request);
+    await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+  }
+
+  try {
+    const { request } = await baseRpcClient.simulateContract({
+      account: wallet.account,
+      address: DYNAMIC_MARKET_ARC.poolManager,
+      abi: POOL_MANAGER_INIT_ABI,
+      functionName: "initialize",
+      args: [plan.key, plan.sqrtPriceX96],
+    });
+    const tx = await wallet.writeContract(request);
+    await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+    logger.info(
+      { marketId: m.marketId, poolId: plan.poolId, probability: m.openingProbability },
+      "markets: pool opened at implied probability",
+    );
+    return true;
+  } catch {
+    // Already initialized — a previous half-completed run; done is done.
+    return false;
+  }
 }
 
 /**
@@ -66,33 +149,43 @@ export async function createMarketsOnChain(
     created: 0,
     existed: 0,
     skippedPastKickoff: planned.length - todo.length,
+    poolsOpened: 0,
     failures: [],
   };
 
   for (const m of todo) {
     try {
-      const existing = await baseRpcClient.readContract({
+      let marketAddress = await baseRpcClient.readContract({
         address: MARKETS_ARC.factory,
         abi: MARKET_FACTORY_ABI,
         functionName: "marketOf",
         args: [m.marketId],
       });
-      if (existing !== "0x0000000000000000000000000000000000000000") {
+      if (marketAddress !== "0x0000000000000000000000000000000000000000") {
         summary.existed += 1;
-        continue;
+      } else {
+        const { request } = await baseRpcClient.simulateContract({
+          account: wallet.account,
+          address: MARKETS_ARC.factory,
+          abi: MARKET_FACTORY_ABI,
+          functionName: "createMarketIfAbsent",
+          args: [m.marketId, BigInt(m.kickoffTimestamp), m.label],
+        });
+        const txHash = await wallet.writeContract(request);
+        await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
+        marketAddress = await baseRpcClient.readContract({
+          address: MARKETS_ARC.factory,
+          abi: MARKET_FACTORY_ABI,
+          functionName: "marketOf",
+          args: [m.marketId],
+        });
+        summary.submitted += 1;
+        summary.created += 1;
+        logger.info({ marketId: m.marketId, label: m.label, txHash }, "markets: created on-chain");
       }
-      const { request } = await baseRpcClient.simulateContract({
-        account: wallet.account,
-        address: MARKETS_ARC.factory,
-        abi: MARKET_FACTORY_ABI,
-        functionName: "createMarketIfAbsent",
-        args: [m.marketId, BigInt(m.kickoffTimestamp), m.label],
-      });
-      const txHash = await wallet.writeContract(request);
-      await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
-      summary.submitted += 1;
-      summary.created += 1;
-      logger.info({ marketId: m.marketId, label: m.label, txHash }, "markets: created on-chain");
+      // Pool bootstrap runs for existing markets too — a half-completed
+      // earlier sweep (market yes, pool no) heals on the next tick.
+      if (await bootstrapMarketPool(wallet, marketAddress, m)) summary.poolsOpened += 1;
     } catch (err) {
       summary.failures.push({
         marketId: m.marketId,

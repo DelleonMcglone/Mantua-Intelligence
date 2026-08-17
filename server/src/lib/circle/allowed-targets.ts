@@ -21,7 +21,7 @@
  */
 
 import { env } from "../../env.ts";
-import { MARKETS_ARC } from "../markets-contracts.ts";
+import { MARKETS_ARC, MARKETS_PERIPHERY_ARC } from "../markets-contracts.ts";
 import { TOKENS } from "../tokens.ts";
 import { HOOK_DEPLOYMENTS_ARC, PERMIT2, V4_POOL_MANAGER } from "../v4-contracts.ts";
 
@@ -67,6 +67,7 @@ function buildAllowlist(): Set<string> {
   add(MARKETS_ARC.factory);
   add(MARKETS_ARC.resolver);
   add(MARKETS_ARC.collateral);
+  for (const addr of Object.values(MARKETS_PERIPHERY_ARC)) add(addr);
 
   return targets;
 }
