@@ -214,16 +214,16 @@ dispute window. Disclosed in UI (B4-006).
 
 ## 🛡️ PHASE B9 — Automated Hedging (W4) 🟠
 
-| ID     | Task                                                                                                    | Priority | Status |
-| ------ | ------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B9-001 | Strategy schema: trigger, action, size, cap, expiry, kill condition                                     | 🟠 P1    | ⬜     |
-| B9-002 | Strategy 1 — take-profit / stop: close a position when implied probability crosses a threshold          | 🟠 P1    | ⬜     |
-| B9-003 | Strategy 2 — delta hedge: keep net exposure across correlated markets within a user-set band            | 🟠 P1    | ⬜     |
-| B9-004 | Natural-language → strategy config, with structured preview before arming                               | 🟠 P1    | ⬜     |
-| B9-005 | Execution engine: evaluate on price and game-state ticks, execute inside the agent wallet's policy caps | 🟠 P1    | ⬜     |
-| B9-006 | Strategy dashboard: armed / triggered / executed / expired, full audit trail                            | 🟠 P1    | ⬜     |
-| B9-007 | Kill switch per strategy and globally; strategies auto-disarm on market freeze                          | 🔴 P0    | ⬜     |
-| B9-008 | Market-maker mode with inventory skew                                                                   | ⚪ P3    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                                                                                       | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------ |
+| B9-001 | Strategy schema: trigger, action, size, cap, expiry, kill condition — ✅ zod `strategyConfigSchema` (take-profit-stop / delta-hedge) + per-strategy USDC cap + expiry + disarm reasons; matches the B1 `hedge_strategies` table                                                                                                            | 🟠 P1    | ✅     |
+| B9-002 | Strategy 1 — take-profit / stop: close a position when implied probability crosses a threshold — ✅ pure `evaluateStrategy` — thresholds speak the YES side's probability in one vocabulary; triggers close-position with the reason recorded                                                                                              | 🟠 P1    | ✅     |
+| B9-003 | Strategy 2 — delta hedge: keep net exposure across correlated markets within a user-set band — ✅ band-around-target over summed exposures; ANY unknown exposure holds (hedging a partial picture can double exposure); rebalance sized and capped by the strategy cap                                                                     | 🟠 P1    | ✅     |
+| B9-004 | Natural-language → strategy config, with structured preview before arming — ✅ `parseStrategyDraft` (conservative — null over guessed numbers) + preview lines + team→market candidate resolution against live slates; structured confirm required, prose never arms                                                                       | 🟠 P1    | ✅     |
+| B9-005 | Execution engine: evaluate on price and game-state ticks, execute inside the agent wallet's policy caps — ⏸ evaluation LIVE (`/api/cron/strategies` — ticks from non-delayed slates, provider implied prob as price ref); EXECUTION held pending the periphery deploy — triggers persist as `triggered` with full audit, no venue guessing | 🟠 P1    | ⏸      |
+| B9-006 | Strategy dashboard: armed / triggered / executed / expired, full audit trail — ✅ profile dashboard (`StrategiesSection`): status chips, disarm, arm via preview→confirm; every transition writes a `mantua_audit_log` row                                                                                                                 | 🟠 P1    | ✅     |
+| B9-007 | Kill switch per strategy and globally; strategies auto-disarm on market freeze — ✅ P0 — precedence proven by test: kickoff freeze disarms on the very tick that would have fired; per-strategy disarm endpoint + `STRATEGIES_KILL_SWITCH` global; unparseable stored config auto-disarms (verified live)                                  | 🔴 P0    | ✅     |
+| B9-008 | Market-maker mode with inventory skew — ⬜ P3 — deferred                                                                                                                                                                                                                                                                                   | ⚪ P3    | ⬜     |
 
 ---
 

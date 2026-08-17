@@ -46,6 +46,13 @@ const schema = z.object({
     .union([z.literal("0"), z.literal("1")])
     .default("0")
     .transform((v) => v === "1"),
+  /** B9-007 — strategies-only global kill: every armed hedging strategy
+   *  disarms on the next engine tick and nothing new fires. Narrower than
+   *  MANTUA_KILL_SWITCH (which blocks all writes app-wide). */
+  STRATEGIES_KILL_SWITCH: z
+    .union([z.literal("0"), z.literal("1")])
+    .default("0")
+    .transform((v) => v === "1"),
   MANTUA_FEE_BPS: z.coerce.number().int().min(0).max(25).default(10),
   MANTUA_FEE_RECIPIENT: z
     .string()
