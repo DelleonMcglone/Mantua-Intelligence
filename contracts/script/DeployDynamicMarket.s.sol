@@ -5,10 +5,10 @@ import {Script, console2} from "forge-std/Script.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {HookMiner} from "../../contracts/src/lib/HookMiner.sol";
-import {DynamicMarketHook} from "../../contracts/src/hooks/dynamic-market/DynamicMarketHook.sol";
-import {MarketStateRegistry} from "../../contracts/src/hooks/dynamic-market/MarketStateRegistry.sol";
-import {IMarketStateRegistry} from "../../contracts/src/hooks/dynamic-market/IMarketStateRegistry.sol";
+import {HookMiner} from "../src/lib/HookMiner.sol";
+import {DynamicMarketHook} from "../src/hooks/dynamic-market/DynamicMarketHook.sol";
+import {MarketStateRegistry} from "../src/hooks/dynamic-market/MarketStateRegistry.sol";
+import {IMarketStateRegistry} from "../src/hooks/dynamic-market/IMarketStateRegistry.sol";
 
 /// @title  DeployDynamicMarket
 /// @notice Deploys the Dynamic Market Hook stack to Arc Testnet (chain 5042002):

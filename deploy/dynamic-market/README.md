@@ -93,15 +93,22 @@ asserts the deployed address equals the mined one and carries the right bits.
 
 ## Run
 
+From the repo root (the script lives inside the Foundry project at
+`contracts/script/`; running it from anywhere else can't resolve the
+remappings — verified by dry run 2026-08-17, ~0.33 USDC gas at 41 gwei):
+
 ```bash
-forge script deploy/dynamic-market/DeployDynamicMarket.s.sol \
+cd contracts && forge script script/DeployDynamicMarket.s.sol \
   --rpc-url https://rpc.testnet.arc.network \
   --account mantua-deployer \
   --sender "$(cast wallet address --account mantua-deployer)" \
-  --broadcast --via-ir --optimizer-runs 200 \
+  --broadcast \
   --verify --verifier blockscout \
   --verifier-url https://testnet.arcscan.app/api
 ```
+
+(`--via-ir --optimizer-runs 200` are already the project defaults in
+`contracts/foundry.toml`, so they're not repeated on the command line.)
 
 `--account` reads the encrypted keystore and prompts for its password; the key is
 never passed as an argument. `--sender` is required alongside it so the script
