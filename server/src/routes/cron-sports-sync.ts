@@ -4,6 +4,7 @@ import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { refreshSlate } from "../lib/sports/ingest.ts";
 import { upsertEvents } from "../lib/sports/store.ts";
+import { createMarketsOnChain } from "../lib/sports/markets-onchain.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
 
@@ -22,11 +23,11 @@ const LEAGUES: readonly LeagueSlug[] = ["nfl", "wnba"];
  *
  * GET because Vercel Cron uses GET; guarded by the shared cron secret.
  *
- * **This route plans markets; it does not create them.** On-chain creation
- * needs the deployed MarketFactory (B2-005 is still awaiting a funded deployer
- * key), and keeping the worker signature-free means a parsing bug can never
- * mint a market. The `marketsPlanned` counts in the response are what the
- * creation step will act on once the factory exists.
+ * **Market creation is now live** (factory deployed 2026-08-17): when
+ * `MARKET_SIGNER_PRIVATE_KEY` is configured, each planned market gets an
+ * idempotent `createMarketIfAbsent` — re-runs cannot duplicate, and games
+ * already at kickoff are skipped (the factory reverts StartInPast). Without
+ * the signer the route degrades to planning only, exactly as before.
  *
  * Failure isolation is per league: NFL being down must not stop WNBA syncing,
  * so each league catches independently and reports its own error.
@@ -43,6 +44,8 @@ cronSportsSyncRouter.get(
         const refresh = await refreshSlate(espn, league);
         const persisted = await upsertEvents(db, refresh.provider, league, refresh.events);
 
+        const creation = await createMarketsOnChain(refresh.marketsPlanned);
+
         results[league] = {
           provider: refresh.provider,
           delayed: refresh.delayed,
@@ -51,6 +54,7 @@ cronSportsSyncRouter.get(
           updated: persisted.updated,
           sideConflicts: persisted.sideConflicts,
           marketsPlanned: refresh.marketsPlanned.length,
+          marketsOnChain: creation ?? "disabled (no MARKET_SIGNER_PRIVATE_KEY)",
         };
       } catch (err) {
         failures += 1;

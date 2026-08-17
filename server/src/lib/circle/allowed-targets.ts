@@ -9,11 +9,11 @@
  * agent's wallet at an arbitrary contract.
  *
  * The list is assembled from the registries the server already trusts:
- * the token catalog, every per-hook v4 stack, Permit2, and the agentic
- * commerce registry from env. When the market contracts deploy
- * (MarketFactory / Markets / Resolver, B2-005), their addresses join via
- * `HOOK_DEPLOYMENTS_ARC` + the market registry the same way — extend the
- * builder, never bypass the check.
+ * the token catalog, every per-hook v4 stack, Permit2, the agentic
+ * commerce registry from env, and the deployed sports-market settlement
+ * layer (MARKETS_ARC). Per-market contract addresses are dynamic and join
+ * via the builder as those agent flows land — extend the builder, never
+ * bypass the check.
  *
  * Plain USDC transfers (createTransferTransaction) are deliberately NOT
  * gated here: sends go to user-chosen recipients under the spending cap,
@@ -21,6 +21,7 @@
  */
 
 import { env } from "../../env.ts";
+import { MARKETS_ARC } from "../markets-contracts.ts";
 import { TOKENS } from "../tokens.ts";
 import { HOOK_DEPLOYMENTS_ARC, PERMIT2, V4_POOL_MANAGER } from "../v4-contracts.ts";
 
@@ -58,6 +59,14 @@ function buildAllowlist(): Set<string> {
 
   // ERC-8004/8183 agentic-commerce registry, when configured.
   add(env.AGENTIC_COMMERCE_ADDRESS);
+
+  // Sports-market settlement layer (B4, deployed 2026-08-17). Individual
+  // Market/outcome-token addresses are dynamic — agent flows that touch
+  // them will extend this via the markets registry, still through this
+  // single builder.
+  add(MARKETS_ARC.factory);
+  add(MARKETS_ARC.resolver);
+  add(MARKETS_ARC.collateral);
 
   return targets;
 }

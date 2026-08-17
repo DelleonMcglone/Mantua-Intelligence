@@ -110,6 +110,16 @@ const schema = z.object({
     .string()
     .regex(/^0x[a-fA-F0-9]{64}$/)
     .optional(),
+
+  /** Settlement signer — the Resolver contract's authorised `signer` key
+   *  (B4). Signs market creation (`createMarketIfAbsent`), freeze sweeps,
+   *  and resolve/void submissions. Absent → market creation is skipped and
+   *  /api/cron/resolution stays a 503 dry run. Holds no user funds; fund
+   *  with USDC for Arc gas. */
+  MARKET_SIGNER_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{64}$/)
+    .optional(),
 });
 
 export type Env = z.infer<typeof schema>;
