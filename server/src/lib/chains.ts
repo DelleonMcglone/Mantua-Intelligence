@@ -47,9 +47,6 @@ export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: strin
   return `${CHAIN_INFO[chainId].explorerUrl}/tx/${txHash}`;
 }
 
-export function getExplorerAddressUrl(
-  chainId: SupportedTestnetChainId,
-  address: string,
-): string {
+export function getExplorerAddressUrl(chainId: SupportedTestnetChainId, address: string): string {
   return `${CHAIN_INFO[chainId].explorerUrl}/address/${address}`;
 }

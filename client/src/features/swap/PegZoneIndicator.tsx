@@ -27,13 +27,17 @@ export function PegZoneIndicator({ zone, deviationBps }: PegZoneIndicatorProps) 
             {meta.label.toUpperCase()}
           </span>
           {deviationBps !== undefined && (
-            <span className="text-text-dim font-mono">
-              · {(deviationBps / 100).toFixed(2)}%
-            </span>
+            <span className="text-text-dim font-mono">· {(deviationBps / 100).toFixed(2)}%</span>
           )}
         </div>
       </div>
-      <div className="flex gap-1" role="progressbar" aria-valuenow={activeIdx + 1} aria-valuemin={1} aria-valuemax={5}>
+      <div
+        className="flex gap-1"
+        role="progressbar"
+        aria-valuenow={activeIdx + 1}
+        aria-valuemin={1}
+        aria-valuemax={5}
+      >
         {PEG_ZONES.map((z, i) => {
           const m = PEG_ZONE_META[z];
           const isActive = i === activeIdx;

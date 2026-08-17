@@ -102,6 +102,21 @@ export function TermsPage({ onBack, onLaunch }: Props) {
           such as a postponed or cancelled game or a failed data source, can delay or affect
           resolution.
         </p>
+        <p>
+          <strong className="text-text">Resolution authority.</strong> Outcomes are determined by a
+          Mantua-operated resolver that reads live sports data and submits results on-chain, with a
+          manual override held by Mantua for cases where automated data is missing, delayed, or
+          contradictory. There is currently no dispute window or independent arbiter: once a market
+          resolves on-chain, that resolution is final and cannot be reversed by anyone, including
+          us. Every resolution is publicly recorded with its data source, signer, and transaction.
+        </p>
+        <p>
+          <strong className="text-text">Voided markets.</strong> A postponed, cancelled, or
+          abandoned game — or a tie, where the market offers no tie outcome — voids the market.
+          Voided markets settle at 0.50 USDC per outcome token, so a full YES/NO set returns exactly
+          the collateral it was minted with; tokens bought individually settle at that fixed rate
+          regardless of the price paid.
+        </p>
       </Section>
 
       <Section title="Fees and costs">

@@ -127,15 +127,15 @@ dispute window. Disclosed in UI (B4-006).
 
 ## ⚖️ PHASE B4 — Resolution & Settlement (W2) 🔴
 
-| ID     | Task                                                                                                     | Priority | Status |
-| ------ | -------------------------------------------------------------------------------------------------------- | -------- | ------ |
-| B4-001 | `Resolver` contract — accepts outcome for a market ID, enforces signer authority, emits `MarketResolved` | 🔴 P0    | ⬜     |
-| B4-002 | Freeze trigger at scheduled start time                                                                   | 🔴 P0    | ⬜     |
-| B4-003 | Resolution service: final detected → outcome derived → submitted onchain → DB reconciled                 | 🔴 P0    | ⬜     |
-| B4-004 | Manual override on the resolver; a bad or missing feed must not auto-settle a market                     | 🔴 P0    | ⬜     |
-| B4-005 | Void path: postponed/cancelled → `INVALID` → everyone redeems at cost                                    | 🔴 P0    | ⬜     |
-| B4-006 | Public resolution log (source, timestamp, signer, tx link) + UI disclosure of resolution authority       | 🟠 P1    | ⬜     |
-| B4-007 | Resolver multisig upgrade per DM-103                                                                     | 🟡 P2    | ⬜     |
+| ID     | Task                                                                                                                                                                                                                                                                     | Priority | Status |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------ |
+| B4-001 | `Resolver` contract — accepts outcome for a market ID, enforces signer authority, emits `MarketResolved` — ✅ `contracts/src/markets/Resolver.sol` — by market id, signer + operator authority, 16 tests                                                                 | 🔴 P0    | ✅     |
+| B4-002 | Freeze trigger at scheduled start time — ✅ three layers: `Market.freeze` (permissionless, time-based), the hook's timestamp check, and the service's freeze sweep in `planResolution`                                                                                   | 🔴 P0    | ✅     |
+| B4-003 | Resolution service: final detected → outcome derived → submitted onchain → DB reconciled — ✅ `resolution.ts` plan/execute over ports + `resolution-store.ts` + `/api/cron/resolution` (503 dry-run until the Resolver deploys)                                          | 🔴 P0    | ✅     |
+| B4-004 | Manual override on the resolver; a bad or missing feed must not auto-settle a market — ✅ operator override on the Resolver; service holds on delayed, missing, unknown, or contradictory data — waiting is the default, settling is the exception                       | 🔴 P0    | ✅     |
+| B4-005 | Void path: postponed/cancelled → `INVALID` → everyone redeems at cost — ✅ contract void (B1) + service mapping (postponed/cancelled/tie → both markets void) + 0.50 disclosure in Terms/docs                                                                            | 🔴 P0    | ✅     |
+| B4-006 | Public resolution log (source, timestamp, signer, tx link) + UI disclosure of resolution authority — ✅ `resolutions` rows written only with a tx hash; `MarketResolved`/`MarketVoided` events carry the caller; authority disclosed in Terms, docs, and the market page | 🟠 P1    | ✅     |
+| B4-007 | Resolver multisig upgrade per DM-103 — ⏸ P2 — blocked on DM-103 (single key vs multisig). The Resolver's operator seat already rotates two-step, so the swap is a role change, not a redeploy                                                                            | 🟡 P2    | ⏸      |
 
 ---
 

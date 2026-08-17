@@ -29,7 +29,9 @@ quoteRouter.post(
   async (req: Request, res: Response) => {
     const parsed = quoteRequestSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
+      res
+        .status(400)
+        .json({ error: "Invalid request", code: "BAD_REQUEST", details: parsed.error.issues });
       return;
     }
     const ctx = getRequestContext(req);
@@ -54,8 +56,7 @@ quoteRouter.post(
 
       const tokenInAddr = getToken(tokenIn).native ? ZERO_ADDRESS : getToken(tokenIn).address;
       const tokenOutAddr = getToken(tokenOut).native ? ZERO_ADDRESS : getToken(tokenOut).address;
-      const slippageTolerance =
-        slippageBps !== undefined ? slippageBps / 100 : undefined;
+      const slippageTolerance = slippageBps !== undefined ? slippageBps / 100 : undefined;
 
       const quote = await fetchQuote({
         chainId: ACTIVE_CHAIN_ID,
@@ -74,7 +75,13 @@ quoteRouter.post(
           ...ctx,
           action: "swap",
           outcome: err.code === "slippage_too_high" ? "rejected_slippage" : "rejected_cap",
-          params: { tokenIn, tokenOut, amountRaw, type, ...(slippageBps !== undefined ? { slippageBps } : {}) },
+          params: {
+            tokenIn,
+            tokenOut,
+            amountRaw,
+            type,
+            ...(slippageBps !== undefined ? { slippageBps } : {}),
+          },
           reason: err.message,
         });
         res.status(400).json({ error: err.message, code: err.code, details: err.details });
@@ -85,10 +92,18 @@ quoteRouter.post(
         ...ctx,
         action: "swap",
         outcome: "rejected_other",
-        params: { tokenIn, tokenOut, amountRaw, type, ...(slippageBps !== undefined ? { slippageBps } : {}) },
+        params: {
+          tokenIn,
+          tokenOut,
+          amountRaw,
+          type,
+          ...(slippageBps !== undefined ? { slippageBps } : {}),
+        },
         reason: message,
       });
-      res.status(502).json({ error: "Upstream quote failed", code: "UPSTREAM_QUOTE", details: message });
+      res
+        .status(502)
+        .json({ error: "Upstream quote failed", code: "UPSTREAM_QUOTE", details: message });
     }
   },
 );

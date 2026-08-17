@@ -12,7 +12,9 @@ import {
 import { users } from "./users.ts";
 
 export const pools = pgTable("pools", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   /** Chain the pool lives on. Legacy rows (no chainId column before
    *  PR #101) default to Base Sepolia (84532). */
   chainId: integer("chain_id").notNull().default(84532),
@@ -24,15 +26,15 @@ export const pools = pgTable("pools", {
   hookAddress: varchar("hook_address", { length: 42 }),
   hookType: varchar("hook_type", { length: 32 }),
   createdTx: varchar("created_tx", { length: 66 }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const positions = pgTable(
   "positions",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -46,12 +48,8 @@ export const positions = pgTable(
     status: varchar("status", { length: 16 }).notNull().default("open"),
     openedTx: varchar("opened_tx", { length: 66 }),
     closedTx: varchar("closed_tx", { length: 66 }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("positions_user_idx").on(t.userId, t.status)],
 );
@@ -59,7 +57,9 @@ export const positions = pgTable(
 export const portfolioTransactions = pgTable(
   "portfolio_transactions",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -70,9 +70,7 @@ export const portfolioTransactions = pgTable(
     params: jsonb("params").notNull(),
     outcome: varchar("outcome", { length: 16 }).notNull(),
     usdValue: numeric("usd_value", { precision: 20, scale: 2 }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("portfolio_tx_user_idx").on(t.userId, t.createdAt),

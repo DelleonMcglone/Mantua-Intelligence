@@ -33,9 +33,7 @@ export function FeeTierPicker({ value, onChange }: Props) {
             <div className="text-[10px] text-text-mute uppercase tracking-wider mt-1">
               {FEE_TIER_HINTS[f]}
             </div>
-            <div className="text-[10px] text-text-mute mt-0.5">
-              tick {TICK_SPACING_BY_FEE[f]}
-            </div>
+            <div className="text-[10px] text-text-mute mt-0.5">tick {TICK_SPACING_BY_FEE[f]}</div>
           </button>
         );
       })}

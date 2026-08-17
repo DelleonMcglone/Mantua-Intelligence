@@ -32,11 +32,7 @@ export function PairCell({
           }}
           className="border-0 bg-transparent text-lg font-mono p-0 h-auto"
         />
-        <TokenSelector
-          value={symbol}
-          onChange={onSymbolChange}
-          disabledSymbol={disabledSymbol}
-        />
+        <TokenSelector value={symbol} onChange={onSymbolChange} disabledSymbol={disabledSymbol} />
       </div>
     </div>
   );

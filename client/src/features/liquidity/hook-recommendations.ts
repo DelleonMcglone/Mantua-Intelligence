@@ -16,7 +16,8 @@ export const HOOK_ADDRESS: Record<HookName, `0x${string}`> = {
 };
 
 export const HOOK_DESCRIPTIONS: Record<HookName, string> = {
-  "stable-protection": "FX-aware peg protection — anchors USDC/EURC to the live EUR/USD rate and blocks trades during real depegs.",
+  "stable-protection":
+    "FX-aware peg protection — anchors USDC/EURC to the live EUR/USD rate and blocks trades during real depegs.",
   "dynamic-fee": "Per-swap fee scales with live volatility — LPs earn more in turbulence.",
 };
 

@@ -16,7 +16,9 @@ export const poolStateRouter = Router();
 poolStateRouter.get("/api/pool-state", async (req: Request, res: Response) => {
   const parsed = slot0QuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid query", code: "BAD_REQUEST", details: parsed.error.issues });
+    res
+      .status(400)
+      .json({ error: "Invalid query", code: "BAD_REQUEST", details: parsed.error.issues });
     return;
   }
   if (parsed.data.tokenA === parsed.data.tokenB) {

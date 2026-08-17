@@ -3,8 +3,7 @@ import { V4_POSITION_MANAGER } from "@/lib/tokens.ts";
 
 const ZERO_ADDRESS_TOPIC = "0x0000000000000000000000000000000000000000000000000000000000000000";
 // keccak256("Transfer(address,address,uint256)")
-const TRANSFER_TOPIC =
-  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 /**
  * Find the PositionManager `Transfer(0x0, owner, tokenId)` event in the

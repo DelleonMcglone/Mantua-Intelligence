@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
-import {
-  getTokens,
-  getUserFacingTokenSymbols,
-  type TokenSymbol,
-} from "@/lib/tokens.ts";
+import { getTokens, getUserFacingTokenSymbols, type TokenSymbol } from "@/lib/tokens.ts";
 import { TokenIcon } from "./TokenIcon.tsx";
 
 interface TokenSelectorProps {
@@ -69,16 +65,12 @@ export function TokenSelector({ value, onChange, disabledSymbol }: TokenSelector
                 className={`flex items-center gap-2 w-full px-2.5 py-2 rounded-xs text-left text-[13px] ${
                   sym === value ? "bg-chip" : ""
                 } ${
-                  disabled
-                    ? "opacity-40 cursor-not-allowed"
-                    : "hover:bg-row-hover cursor-pointer"
+                  disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-row-hover cursor-pointer"
                 }`}
               >
                 <TokenIcon symbol={sym} size={18} />
                 <span className="flex-1">{tk.symbol}</span>
-                {tk.native && (
-                  <span className="text-[10px] text-text-mute uppercase">Native</span>
-                )}
+                {tk.native && <span className="text-[10px] text-text-mute uppercase">Native</span>}
               </button>
             );
           })}

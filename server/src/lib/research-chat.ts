@@ -68,7 +68,10 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Protocol or chain name, e.g. 'uniswap', 'aave', 'base'." },
+        query: {
+          type: "string",
+          description: "Protocol or chain name, e.g. 'uniswap', 'aave', 'base'.",
+        },
       },
       required: ["query"],
     },
@@ -93,7 +96,10 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         url: { type: "string", description: "The service URL from search_paid_services." },
-        data: { type: "object", description: "Optional request payload matching the service's schema." },
+        data: {
+          type: "object",
+          description: "Optional request payload matching the service's schema.",
+        },
         method: {
           type: "string",
           enum: ["GET", "POST"],

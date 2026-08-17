@@ -1,9 +1,5 @@
 import { db } from "../db/client.ts";
-import {
-  type AuditAction,
-  type AuditOutcome,
-  mantuaAuditLog,
-} from "../db/schema/safety.ts";
+import { type AuditAction, type AuditOutcome, mantuaAuditLog } from "../db/schema/safety.ts";
 import { ACTIVE_CHAIN_ID } from "./constants.ts";
 import { logger } from "./logger.ts";
 

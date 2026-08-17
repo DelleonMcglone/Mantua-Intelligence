@@ -86,6 +86,11 @@ export function MarketPage({ sport, onSelectSport, onClose }: Props) {
                 The Dynamic Market Hook adapts pricing, fees, liquidity, and risk parameters in real
                 time as conditions move. {active.label} games will list here as markets open.
               </p>
+              <p className="mx-auto mt-3 max-w-sm text-[11px] leading-relaxed text-text-mute">
+                Markets resolve from live game data via a Mantua-operated resolver with manual
+                override; resolutions are final and publicly logged. Postponed, cancelled, or tied
+                games void and settle at 0.50 per token. See the docs and Terms for details.
+              </p>
             </>
           ) : (
             <>

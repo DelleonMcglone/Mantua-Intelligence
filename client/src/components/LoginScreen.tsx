@@ -32,16 +32,14 @@ export function LoginScreen({ onLogin, loading }: LoginScreenProps) {
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">Welcome to Mantua.AI</h1>
           <p className="text-sm text-text-dim leading-relaxed">
-            A liquidity copilot that researches, routes, and executes with you — or on its
-            own — on Base.
+            A liquidity copilot that researches, routes, and executes with you — or on its own — on
+            Base.
           </p>
         </div>
         <Button variant="primary" size="lg" className="w-full" onClick={onLogin}>
           Continue
         </Button>
-        <p className="text-xs text-text-mute">
-          Email · Google · Apple · Passkey · External wallet
-        </p>
+        <p className="text-xs text-text-mute">Email · Google · Apple · Passkey · External wallet</p>
       </div>
     </main>
   );

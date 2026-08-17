@@ -244,6 +244,19 @@ export const DOCS_GROUPS: DocsGroup[] = [
               them before taking a position. Settlement follows those terms and the contract logic.
               Postponed or cancelled events, and failures at a data source, can delay resolution.
             </P>
+            <P>
+              Outcomes are submitted on-chain by a <B>Mantua-operated resolver</B> reading live
+              sports data, with a manual override for cases where the data is missing, delayed, or
+              contradictory — two independent sources disagreeing on a result stops automatic
+              settlement and escalates to review rather than picking a side. There is currently no
+              dispute window: a resolution, once on-chain, is final. Every resolution is publicly
+              recorded with its data source, signer, and transaction.
+            </P>
+            <Note tone="warn">
+              A tie, a postponed game, or a cancelled game voids the market. Voided markets settle
+              at 0.50 USDC per outcome token — a full YES/NO set returns exactly what it was minted
+              with.
+            </Note>
 
             <Note>
               Everything settles on a public blockchain. Once a transaction is confirmed it cannot

@@ -40,12 +40,10 @@ agentChatRouter.post(
       return;
     }
     if (!env.ANTHROPIC_API_KEY) {
-      res
-        .status(503)
-        .json({
-          error: "Agent is unavailable (ANTHROPIC_API_KEY not configured).",
-          code: "ANTHROPIC_UNAVAILABLE",
-        });
+      res.status(503).json({
+        error: "Agent is unavailable (ANTHROPIC_API_KEY not configured).",
+        code: "ANTHROPIC_UNAVAILABLE",
+      });
       return;
     }
 

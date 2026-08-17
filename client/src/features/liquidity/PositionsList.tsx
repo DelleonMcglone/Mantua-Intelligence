@@ -34,9 +34,7 @@ export function PositionsList({ onClose }: Props = {}) {
   // while the fetch is in flight. Mainnet: the DB/subgraph-backed API list.
   const data: Position[] = IS_MAINNET
     ? (apiPositions.data ?? [])
-    : mergeWithFreshBreadcrumbs(onchain.data, getUserLocalPositions()).map(
-        localPositionToPosition,
-      );
+    : mergeWithFreshBreadcrumbs(onchain.data, getUserLocalPositions()).map(localPositionToPosition);
   const loading = IS_MAINNET ? apiPositions.loading : onchain.loading && onchain.data === null;
   const error = IS_MAINNET ? apiPositions.error : null;
   const reload = IS_MAINNET ? apiPositions.reload : onchain.refetch;

@@ -18,8 +18,7 @@ const Q192 = 1n << 192n;
 export const SQRT_PRICE_X96_1_1 = Q96;
 
 const MIN_SQRT_PRICE_X96 = 4_295_128_739n; // v4 TickMath.MIN_SQRT_PRICE
-const MAX_SQRT_PRICE_X96 =
-  1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n; // MAX_SQRT_PRICE
+const MAX_SQRT_PRICE_X96 = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n; // MAX_SQRT_PRICE
 
 /**
  * Integer square root via Newton's method. Returns floor(sqrt(n)).

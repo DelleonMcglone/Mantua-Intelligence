@@ -37,15 +37,16 @@ export function usePoolState(
   tokenB: TokenSymbol | null,
   fee: FeeTier | null,
 ): State {
-  const currentKey =
-    tokenA && tokenB && fee !== null ? `${tokenA}|${tokenB}|${String(fee)}` : null;
+  const currentKey = tokenA && tokenB && fee !== null ? `${tokenA}|${tokenB}|${String(fee)}` : null;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 
   useEffect(() => {
     if (!currentKey) return;
     let cancelled = false;
     void api
-      .get<ApiRes>(`/api/pool-state?tokenA=${tokenA ?? ""}&tokenB=${tokenB ?? ""}&fee=${String(fee)}`)
+      .get<ApiRes>(
+        `/api/pool-state?tokenA=${tokenA ?? ""}&tokenB=${tokenB ?? ""}&fee=${String(fee)}`,
+      )
       .then((res) => {
         if (cancelled) return;
         setSnapshot({

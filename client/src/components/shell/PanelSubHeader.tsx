@@ -32,9 +32,7 @@ export function PanelSubHeader({ title, subtitle, onBack, onClose, right }: Prop
           )}
           <div className="min-w-0">
             <div className="text-[18px] font-semibold">{title}</div>
-            {subtitle && (
-              <div className="text-[13px] text-text-dim mt-0.5">{subtitle}</div>
-            )}
+            {subtitle && <div className="text-[13px] text-text-dim mt-0.5">{subtitle}</div>}
           </div>
         </div>
         <div className="flex items-center gap-2">

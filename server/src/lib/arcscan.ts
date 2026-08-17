@@ -35,7 +35,7 @@ async function getJson(path: string): Promise<unknown> {
       logger.warn({ status: res.status, path }, "arcscan fetch failed");
       return null;
     }
-    return (await res.json());
+    return await res.json();
   } catch (err) {
     logger.warn({ err, path }, "arcscan request errored");
     return null;
@@ -92,7 +92,7 @@ export async function getAddressInfo(address: string): Promise<ArcAddressInfo | 
       address,
       nativeBalance: formatUnits(BigInt(coin || "0"), 18),
       isContract: d["is_contract"] === true || typeof d["creator_address_hash"] === "string",
-      label: typeof d["name"] === "string" && d["name"] ? (d["name"]) : null,
+      label: typeof d["name"] === "string" && d["name"] ? d["name"] : null,
       hasTokenTransfers: d["has_token_transfers"] === true,
       arcscanUrl: `${ARCSCAN_WEB}/address/${address}`,
     };
@@ -162,9 +162,8 @@ export async function getAddressTokenTransfers(
       const toH = addrHash(i["to"]);
       const incoming = toH.toLowerCase() === self;
       out.push({
-        token: typeof token?.["symbol"] === "string" ? (token["symbol"]) : "?",
-        tokenAddress:
-          typeof token?.["address_hash"] === "string" ? (token["address_hash"]) : "",
+        token: typeof token?.["symbol"] === "string" ? token["symbol"] : "?",
+        tokenAddress: typeof token?.["address_hash"] === "string" ? token["address_hash"] : "",
         direction: incoming ? "in" : "out",
         amount: formatUnits(BigInt(rawVal || "0"), Number.isFinite(decimals) ? decimals : 18),
         counterparty: incoming ? fromH : toH,
@@ -281,10 +280,7 @@ export async function getTransactionInfo(hash: string): Promise<ArcTxDetail | nu
       from: addrHash(d["from"]),
       to: addrHash(d["to"]),
       valueNative: formatUnits(BigInt(typeof d["value"] === "string" ? d["value"] : "0"), 18),
-      feeNative: formatUnits(
-        BigInt(typeof fee?.["value"] === "string" ? (fee["value"]) : "0"),
-        18,
-      ),
+      feeNative: formatUnits(BigInt(typeof fee?.["value"] === "string" ? fee["value"] : "0"), 18),
       timestamp: typeof d["timestamp"] === "string" ? d["timestamp"] : "",
       blockNumber: typeof d["block_number"] === "number" ? d["block_number"] : 0,
       tokenMovements: transfers.slice(0, 12).map((t) => {
@@ -296,11 +292,11 @@ export async function getTransactionInfo(hash: string): Promise<ArcTxDetail | nu
             "18",
         );
         return {
-          token: typeof token?.["symbol"] === "string" ? (token["symbol"]) : "?",
+          token: typeof token?.["symbol"] === "string" ? token["symbol"] : "?",
           from: addrHash(t["from"]),
           to: addrHash(t["to"]),
           amount: formatUnits(
-            BigInt(typeof total?.["value"] === "string" ? (total["value"]) : "0"),
+            BigInt(typeof total?.["value"] === "string" ? total["value"] : "0"),
             Number.isFinite(decimals) ? decimals : 18,
           ),
         };
@@ -343,7 +339,8 @@ export function summarizeWhaleSignals(transfers: ArcTokenTransfer[]): WhaleSigna
   const stablesIn = netFlows.some((n) => STABLES.has(n.token) && n.net > 0);
   const tokensOut = netFlows.some((n) => !STABLES.has(n.token) && n.net < 0);
   if (stablesOut && tokensIn) notes.push("Rotating stables into tokens (risk-on).");
-  if (tokensOut && stablesIn) notes.push("Rotating tokens into stables (risk-off / taking profit).");
+  if (tokensOut && stablesIn)
+    notes.push("Rotating tokens into stables (risk-off / taking profit).");
   for (const n of netFlows) {
     if (n.net > 0 && n.in > 0 && n.out === 0) notes.push(`Accumulating ${n.token}.`);
     if (n.net < 0 && n.out > 0 && n.in === 0) notes.push(`Distributing/selling ${n.token}.`);

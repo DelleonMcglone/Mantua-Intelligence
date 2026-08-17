@@ -344,11 +344,12 @@ export async function getTokenHistoricalPrices(
   // DefiLlama accepts `period` as a human duration string; format the
   // computed seconds into the smallest valid unit so the API returns
   // ~`points` samples.
-  const period = periodSec >= 86400
-    ? `${String(Math.max(1, Math.floor(periodSec / 86400)))}d`
-    : periodSec >= 3600
-      ? `${String(Math.max(1, Math.floor(periodSec / 3600)))}h`
-      : `${String(Math.max(1, Math.floor(periodSec / 60)))}m`;
+  const period =
+    periodSec >= 86400
+      ? `${String(Math.max(1, Math.floor(periodSec / 86400)))}d`
+      : periodSec >= 3600
+        ? `${String(Math.max(1, Math.floor(periodSec / 3600)))}h`
+        : `${String(Math.max(1, Math.floor(periodSec / 60)))}m`;
   const cacheKeyStr = `chart:${sorted.join(",")}:d=${String(daysBack)}:n=${String(points)}`;
   return cached(cacheKeyStr, async () => {
     const url = `${COINS_BASE}/chart/${sorted.join(",")}?start=${String(startSec)}&span=${String(points)}&period=${period}`;
@@ -443,7 +444,7 @@ export async function getTvlMovers(minTvlUsd = 50_000_000, limit = 8): Promise<T
 const NARRATIVE_BASKETS: Record<string, string[]> = {
   Bitcoin: ["bitcoin"],
   "L1s (ETH/SOL/AVAX)": ["ethereum", "solana", "avalanche-2"],
-  "L2s": ["arbitrum", "optimism"],
+  L2s: ["arbitrum", "optimism"],
   DeFi: ["uniswap", "aave", "lido-dao"],
   AI: ["render-token", "fetch-ai", "bittensor"],
   RWA: ["ondo-finance", "centrifuge"],

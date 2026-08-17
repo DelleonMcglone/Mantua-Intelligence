@@ -6,11 +6,7 @@ import { cn } from "@/lib/utils.ts";
  * border-soft, 16px radius, density-scaled padding). Used for Portfolio,
  * Assets, and the right-column route panels.
  */
-export function Card({
-  className,
-  style,
-  ...props
-}: HTMLAttributes<HTMLDivElement>) {
+export function Card({ className, style, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(

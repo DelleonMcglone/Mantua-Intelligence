@@ -2,10 +2,7 @@ import { encodeAbiParameters, encodeFunctionData } from "viem";
 import { getAmountsForLiquidity } from "./amounts-for-liquidity.ts";
 import { getSqrtRatioAtTick } from "./tick-math.ts";
 import { Action, encodeActions, encodeSweep, encodeUnlockData } from "./v4-actions.ts";
-import {
-  POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI,
-  getV4StackForHook,
-} from "./v4-contracts.ts";
+import { POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI, getV4StackForHook } from "./v4-contracts.ts";
 
 const SLIPPAGE_DENOM = 10_000n;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -57,11 +54,7 @@ function encodeDecrease(
 }
 
 /** BURN_POSITION params: (tokenId, amount0Min, amount1Min, hookData) */
-function encodeBurn(
-  tokenId: bigint,
-  amount0Min: bigint,
-  amount1Min: bigint,
-): `0x${string}` {
+function encodeBurn(tokenId: bigint, amount0Min: bigint, amount1Min: bigint): `0x${string}` {
   return encodeAbiParameters(
     [{ type: "uint256" }, { type: "uint128" }, { type: "uint128" }, { type: "bytes" }],
     [tokenId, amount0Min, amount1Min, "0x"],
@@ -110,7 +103,11 @@ export function buildRemoveLiquidityCalldata(
   // Add SWEEP for native-ETH side so dust gets refunded.
   const nativeSide = args.currency0 === ZERO ? "0" : args.currency1 === ZERO ? "1" : null;
   const ids = nativeSide
-    ? [isFullExit ? Action.BURN_POSITION : Action.DECREASE_LIQUIDITY, Action.TAKE_PAIR, Action.SWEEP]
+    ? [
+        isFullExit ? Action.BURN_POSITION : Action.DECREASE_LIQUIDITY,
+        Action.TAKE_PAIR,
+        Action.SWEEP,
+      ]
     : [isFullExit ? Action.BURN_POSITION : Action.DECREASE_LIQUIDITY, Action.TAKE_PAIR];
 
   const params: `0x${string}`[] = [decreaseOrBurn, takePair];

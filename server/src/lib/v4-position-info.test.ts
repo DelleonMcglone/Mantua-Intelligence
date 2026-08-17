@@ -8,11 +8,7 @@ import { decodePositionInfo } from "./v4-position-info.ts";
  *   bits  8..31   tickLower (int24, sign-extended)
  *   bits 32..55   tickUpper (int24, sign-extended)
  */
-function pack(opts: {
-  hasSubscriber?: boolean;
-  tickLower: number;
-  tickUpper: number;
-}): bigint {
+function pack(opts: { hasSubscriber?: boolean; tickLower: number; tickUpper: number }): bigint {
   const MASK_24 = 0xffffffn;
   const lower = BigInt(opts.tickLower) & MASK_24;
   const upper = BigInt(opts.tickUpper) & MASK_24;

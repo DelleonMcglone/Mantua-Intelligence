@@ -1,8 +1,5 @@
 import { encodeFunctionData, keccak256, toHex } from "viem";
-import {
-  DEFAULT_CHAIN_ID,
-  type SupportedTestnetChainId,
-} from "./chains.ts";
+import { DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { getLiquidityForAmounts } from "./liquidity-math.ts";
 import { buildPoolKey } from "./pool-key.ts";
 import { getMaxUsableTick, getMinUsableTick, getSqrtRatioAtTick } from "./tick-math.ts";
@@ -102,11 +99,9 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
     // to pick a fee tier whose pool hasn't been initialized yet, so
     // the next create-call seeds it at the user's chosen price.
     const MIN_SQRT = 4_295_128_739n;
-    const MAX_SQRT =
-      1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n;
+    const MAX_SQRT = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342n;
     const nearExtreme =
-      args.sqrtPriceX96 - MIN_SQRT < 1_000_000n ||
-      MAX_SQRT - args.sqrtPriceX96 < 1_000_000n;
+      args.sqrtPriceX96 - MIN_SQRT < 1_000_000n || MAX_SQRT - args.sqrtPriceX96 < 1_000_000n;
     if (nearExtreme) {
       throw new Error(
         "This pool was initialized at an unusable price. Pick a different fee tier (e.g. 0.05%, 0.30%, or 1.00%) — those pools haven't been initialized yet and will seed at your supplied price.",
