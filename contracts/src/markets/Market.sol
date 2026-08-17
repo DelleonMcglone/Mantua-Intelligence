@@ -59,7 +59,7 @@ contract Market {
 
     event Split(address indexed account, uint256 amount);
     event Merge(address indexed account, uint256 amount);
-    event Frozen(uint64 at);
+    event Frozen(uint64 frozenAt);
     event Resolved(uint8 winningOutcome);
     event Voided();
     event Redeemed(address indexed account, uint256 tokensBurned, uint256 payout);
