@@ -16,7 +16,24 @@ const DEFAULT_CHAIN = arcTestnet;
 const SUPPORTED_CHAINS = [arcTestnet];
 
 export const privyConfig: PrivyClientConfig = {
-  appearance: { theme: "dark", accentColor: "#8b6cf0" },
+  appearance: {
+    theme: "dark",
+    accentColor: "#8b6cf0",
+    // Socials + email above the wallet section (B6-002's intended order).
+    showWalletLoginFirst: false,
+    // A fuller wallet grid than Privy's detected-only default.
+    walletList: [
+      "metamask",
+      "coinbase_wallet",
+      "rainbow",
+      "rabby_wallet",
+      "okx_wallet",
+      "wallet_connect",
+    ],
+  },
+  // NOTE: Privy offers the INTERSECTION of this list and what the Privy
+  // dashboard enables — Google and Email must also be toggled on there,
+  // or the modal silently degrades to wallet-only.
   loginMethods: ["google", "email", "wallet"],
   embeddedWallets: {
     ethereum: { createOnLogin: "users-without-wallets" },
