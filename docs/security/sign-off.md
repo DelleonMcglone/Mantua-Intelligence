@@ -1,7 +1,7 @@
 # Security Sign-off — Sports Pivot Ship Gate (B10-007)
 
-Status: **DRAFT — awaiting owner acceptance of the open LOW findings.**
-Prepared 2026-08-19 against commit `aeb210e` + the B10 E2E additions.
+Status: **SIGNED — LOW findings accepted by the owner.**
+Prepared 2026-08-17 against commit `aeb210e` + the B10 E2E additions.
 
 ## 1. Findings status
 
@@ -26,9 +26,10 @@ Source review: [dynamic-market-hook-review.md](./dynamic-market-hook-review.md)
   recovery is a second `setKeeper` by the operator. No user funds at risk;
   stale keeper state fails closed to MAX_FEE.
 
-**Owner acceptance:** _pending._ Accepting means shipping with these two LOWs
-open and scheduling the L-01 fix behind the periphery deploy. Record
-acceptance by replacing this line with name + date.
+**Owner acceptance:** Delleon McGlone, 2026-08-18 — L-01 and L-02 accepted
+for the testnet ship ("accept L-01 and L-02", in session). The L-01 fix is
+scheduled behind the trading-UI work; L-02 joins the next contract change
+that touches the registry.
 
 ## 2. Safety rails re-verification (B10-001)
 
