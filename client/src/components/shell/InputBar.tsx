@@ -4,6 +4,8 @@ import { ChainSelector } from "./ChainSelector.tsx";
 
 interface Props {
   onSubmit: (text: string) => void;
+  /** Logged-out state swaps the placeholder to say login is needed. */
+  placeholder?: string | undefined;
 }
 
 /**
@@ -13,7 +15,7 @@ interface Props {
  * panel can switch routes; free-form text starts a chat conversation
  * (chat surface is a follow-on slice).
  */
-export function InputBar({ onSubmit }: Props) {
+export function InputBar({ onSubmit, placeholder }: Props) {
   const [value, setValue] = useState("");
 
   const submit = () => {
@@ -34,7 +36,7 @@ export function InputBar({ onSubmit }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
-          placeholder="Ask Mantua anything or type a trade command..."
+          placeholder={placeholder ?? "Ask Mantua anything or type a trade command..."}
           className="flex-1 bg-transparent border-none outline-none text-[13px] text-text"
         />
         <button

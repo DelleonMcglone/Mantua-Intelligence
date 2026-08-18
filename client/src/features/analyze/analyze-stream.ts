@@ -1,3 +1,4 @@
+import { getAccessToken } from "@privy-io/react-auth";
 import { API_BASE } from "@/lib/api.ts";
 import { type AgentChatEvent } from "@/features/agent/agent-stream.ts";
 
@@ -31,9 +32,15 @@ export async function streamAnalyzeChat(
   onEvent: (event: AgentChatEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  // Chat requires login (owner decision 2026-08-18) — attach the Privy token.
+  const token = await getAccessToken();
   const res = await fetch(`${API_BASE}/api/analyze/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({
       message: params.message,
       ...(params.history && params.history.length > 0 ? { history: params.history } : {}),

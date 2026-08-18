@@ -157,8 +157,18 @@ function GameRow({
   ];
 
   return (
+    // Clicking anywhere on the matchup selects it into the sidebar — the
+    // details view is public; only executing the trade needs login.
     <div
-      className={`rounded-md border bg-panel-solid px-4 py-3 ${selected ? "border-accent/40" : "border-border-soft"}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+        onPick(selectedOutcome ?? 0);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onPick(selectedOutcome ?? 0);
+      }}
+      className={`cursor-pointer rounded-md border bg-panel-solid px-4 py-3 transition-colors hover:border-accent/30 ${selected ? "border-accent/40" : "border-border-soft"}`}
     >
       <div className="mb-2 flex items-center gap-2 text-[11px] text-text-dim">
         {live ? (
@@ -197,7 +207,8 @@ function GameRow({
           <button
             type="button"
             disabled={!tradeable}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onPick(side);
             }}
             className={`w-[104px] rounded-md px-3 py-2 text-center font-mono text-[13px] font-semibold transition-colors ${
