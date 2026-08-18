@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLoginWithEmail, useLoginWithOAuth, usePrivy } from "@privy-io/react-auth";
-import { Wallet, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
+import metamaskLogo from "@/assets/wallets/metamask.svg";
+import coinbaseLogo from "@/assets/wallets/coinbase.svg";
+import rabbyLogo from "@/assets/wallets/rabby.svg";
+import okxLogo from "@/assets/wallets/okx.svg";
+import rainbowLogo from "@/assets/wallets/rainbow.svg";
+import walletConnectLogo from "@/assets/wallets/walletconnect.svg";
 
 /**
  * Custom login modal (B6-002, Polymarket-style layout): primary Google
@@ -12,7 +18,17 @@ import { Button } from "@/components/ui/button.tsx";
  * plumbing we'd rather not own).
  */
 
-const WALLETS = ["MetaMask", "Coinbase", "WalletConnect", "Rabby", "OKX", "Rainbow"] as const;
+/** Brand logos bundled locally (official brand repos + rainbowkit's
+ *  MIT-licensed connector icons) — no external image hosts at runtime.
+ *  WalletConnect sits last and doubles as the "more wallets" door. */
+const WALLETS = [
+  { name: "MetaMask", logo: metamaskLogo },
+  { name: "Coinbase", logo: coinbaseLogo },
+  { name: "Rabby", logo: rabbyLogo },
+  { name: "OKX", logo: okxLogo },
+  { name: "Rainbow", logo: rainbowLogo },
+  { name: "WalletConnect", logo: walletConnectLogo, more: true },
+] as const;
 
 interface Props {
   open: boolean;
@@ -162,15 +178,22 @@ export function LoginModal({ open, onClose }: Props) {
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
-              {WALLETS.map((name) => (
+              {WALLETS.map((wallet) => (
                 <button
-                  key={name}
+                  key={wallet.name}
                   type="button"
                   onClick={handleWallet}
                   className="flex flex-col items-center gap-1.5 rounded-sm border border-border-soft px-2 py-3 text-[11px] text-text-dim transition-colors hover:border-accent/40 hover:text-text cursor-pointer"
                 >
-                  <Wallet className="h-5 w-5" />
-                  {name}
+                  <img src={wallet.logo} alt="" className="h-6 w-6 rounded-[4px] object-contain" />
+                  {"more" in wallet ? (
+                    <span className="text-center leading-tight">
+                      {wallet.name}
+                      <span className="block text-[9px] text-text-mute">+ more wallets</span>
+                    </span>
+                  ) : (
+                    wallet.name
+                  )}
                 </button>
               ))}
             </div>
