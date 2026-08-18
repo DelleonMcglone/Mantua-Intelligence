@@ -21,6 +21,7 @@ import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { ProfilePage } from "./features/portfolio/ProfilePage.tsx";
 import { Board } from "./features/markets/Board.tsx";
+import { TradePanel } from "./features/markets/TradePanel.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
@@ -61,6 +62,7 @@ type Route =
       nonce?: number;
     }
   | { kind: "market"; sport: SportId }
+  | { kind: "trade"; sport: SportId; eventId: string }
   | { kind: "profile" }
   | { kind: "trading" }
   | { kind: "pools" }
@@ -101,6 +103,7 @@ const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "home",
   "swap",
   "market",
+  "trade",
   "profile",
   "trading",
   "pools",
@@ -319,6 +322,9 @@ function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =>
       onOpenLeague={(sport) => {
         setRoute({ kind: "market", sport: sport.id });
       }}
+      onTrade={(sport, eventId) => {
+        setRoute({ kind: "trade", sport: sport.id, eventId });
+      }}
     />
   );
 }
@@ -418,6 +424,17 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           onAnalyze={(question) => {
             setRoute({ kind: "analyze", question });
           }}
+          onClose={() => {
+            setRoute({ kind: "home" });
+          }}
+        />
+      );
+    case "trade":
+      return (
+        <TradePanel
+          key={`${route.sport}-${route.eventId}`}
+          sport={route.sport}
+          eventId={route.eventId}
           onClose={() => {
             setRoute({ kind: "home" });
           }}

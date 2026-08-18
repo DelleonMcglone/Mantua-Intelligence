@@ -11,6 +11,7 @@
  * 2026-04-28.
  */
 import { ARC_TESTNET_CHAIN_ID, DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
+import { MARKETS_PERIPHERY_ARC } from "./markets-contracts.ts";
 
 interface V4Addresses {
   poolManager: `0x${string}`;
@@ -205,6 +206,18 @@ const HERO_STACK: V4Addresses = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
 export function getV4StackForHook(hookAddress: string): V4Addresses {
   const lower = hookAddress.toLowerCase();
   if (lower === ZERO_ADDR) return HERO_STACK;
+  // Dynamic Market Hook — its own PoolManager + periphery (DM-112: market
+  // pools route directly). Registered here so the shared quote/calldata
+  // builders work on market pools without special-casing callers.
+  if (lower === DYNAMIC_MARKET_ARC.hook.toLowerCase()) {
+    return {
+      poolManager: DYNAMIC_MARKET_ARC.poolManager,
+      positionManager: MARKETS_PERIPHERY_ARC.positionManager,
+      stateView: MARKETS_PERIPHERY_ARC.stateView,
+      quoter: MARKETS_PERIPHERY_ARC.quoter,
+      poolSwapTest: MARKETS_PERIPHERY_ARC.poolSwapTest,
+    };
+  }
   for (const name of HOOK_NAMES) {
     const d = HOOK_DEPLOYMENTS_ARC[name];
     if (d.hook.toLowerCase() === lower) {

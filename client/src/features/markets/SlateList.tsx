@@ -7,6 +7,9 @@ interface SlateListProps {
   loading: boolean;
   /** Matchup click — opens the analyst on this game (B5-004). */
   onAnalyze: (event: SlateEvent, sport: Sport) => void;
+  /** Trade click — the position panel (B7-003). Only rendered when the
+   *  event has a live on-chain market. */
+  onTrade?: (event: SlateEvent, sport: Sport) => void;
 }
 
 /**
@@ -16,7 +19,7 @@ interface SlateListProps {
  * to logged-out users (B5-007). Trading buttons live on the market page,
  * behind the login gate, once markets open.
  */
-export function SlateList({ sport, slate, loading, onAnalyze }: SlateListProps) {
+export function SlateList({ sport, slate, loading, onAnalyze, onTrade }: SlateListProps) {
   if (loading && !slate) {
     return (
       <div className="rounded-md border border-border-soft px-4 py-6 text-center text-[12.5px] text-text-dim">
@@ -60,13 +63,28 @@ export function SlateList({ sport, slate, loading, onAnalyze }: SlateListProps) 
           onClick={() => {
             onAnalyze(event, sport);
           }}
+          onTrade={
+            onTrade && event.liveOdds && event.status === "scheduled"
+              ? () => {
+                  onTrade(event, sport);
+                }
+              : undefined
+          }
         />
       ))}
     </div>
   );
 }
 
-function MatchupCard({ event, onClick }: { event: SlateEvent; onClick: () => void }) {
+function MatchupCard({
+  event,
+  onClick,
+  onTrade,
+}: {
+  event: SlateEvent;
+  onClick: () => void;
+  onTrade?: (() => void) | undefined;
+}) {
   const live = event.status === "in_progress";
   const final = event.status === "final";
   const voided = ["postponed", "cancelled", "suspended"].includes(event.status);
@@ -111,6 +129,25 @@ function MatchupCard({ event, onClick }: { event: SlateEvent; onClick: () => voi
         probabilityBps={homeBps}
         winner={final && showScores ? (event.homeScore ?? 0) > (event.awayScore ?? 0) : false}
       />
+      {onTrade && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTrade();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+              onTrade();
+            }
+          }}
+          className="mt-2.5 block w-full rounded-sm border border-accent/40 bg-accent/10 py-1.5 text-center text-[12px] font-medium text-accent transition-colors hover:bg-accent/20"
+        >
+          Trade
+        </span>
+      )}
     </button>
   );
 }

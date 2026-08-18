@@ -9,6 +9,8 @@ interface BoardProps {
   onAnalyze: (question: string) => void;
   /** League heading click — the league's own market page. */
   onOpenLeague: (sport: Sport) => void;
+  /** Trade click — open the position panel for this game (B7-003). */
+  onTrade: (sport: Sport, eventId: string) => void;
 }
 
 /**
@@ -17,7 +19,7 @@ interface BoardProps {
  * in the nav as Coming Soon. Browsing is open to everyone — the login gate
  * guards transactions, not this view (B5-007).
  */
-export function Board({ onAnalyze, onOpenLeague }: BoardProps) {
+export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
   const { slates, loading, error } = useSlate();
   const launchSports = SPORTS.filter((s) => s.coverage === "launch");
 
@@ -61,6 +63,9 @@ export function Board({ onAnalyze, onOpenLeague }: BoardProps) {
                 slate={slates[sport.id]}
                 loading={loading}
                 onAnalyze={handleAnalyze}
+                onTrade={(event, s) => {
+                  onTrade(s, event.providerEventId);
+                }}
               />
             )}
           </Card>
