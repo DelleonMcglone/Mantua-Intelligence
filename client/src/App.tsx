@@ -11,7 +11,7 @@ import { TermsPage } from "./components/legal/TermsPage.tsx";
 import { MarketIntegrityPage } from "./components/legal/MarketIntegrityPage.tsx";
 import type { LegalDoc } from "./components/legal/LegalPage.tsx";
 import { DocsPage } from "./components/docs/DocsPage.tsx";
-import { MarketPage } from "./features/markets/MarketPage.tsx";
+import { LeaguePage } from "./features/markets/LeaguePage.tsx";
 import { isSportId, type SportId } from "./features/markets/sports.ts";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
@@ -22,7 +22,6 @@ import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
 import { PortfolioCard } from "./features/portfolio/PortfolioCard.tsx";
 import { ProfilePage } from "./features/portfolio/ProfilePage.tsx";
 import { Board } from "./features/markets/Board.tsx";
-import { TradePanel } from "./features/markets/TradePanel.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
 import { SwapPanel } from "./features/swap/SwapPanel.tsx";
@@ -63,7 +62,6 @@ type Route =
       nonce?: number;
     }
   | { kind: "market"; sport: SportId }
-  | { kind: "trade"; sport: SportId; eventId: string }
   | { kind: "profile" }
   | { kind: "trading" }
   | { kind: "pools" }
@@ -104,7 +102,6 @@ const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "home",
   "swap",
   "market",
-  "trade",
   "profile",
   "trading",
   "pools",
@@ -255,6 +252,35 @@ export default function App() {
     void logout();
   };
 
+  // The universal command router — the dock at the bottom of every page
+  // feeds this. A command only starts a mode, it never locks it: every
+  // submission re-detects intent and routes to the right surface.
+  const handleCommand = (text: string) => {
+    const intent = detectIntent(text);
+    const hookNamed = mentionsHook(text);
+    if (intent && HOOK_ACTION_KINDS.has(intent.kind) && hookNamed) {
+      setRoute(intentToRoute(intent));
+      return;
+    }
+    if (route.kind === "agent") {
+      window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
+      return;
+    }
+    if (intent && (AGENT_ACTION_KINDS.has(intent.kind) || intent.kind === "agent")) {
+      setRoute({ kind: "agent", message: text });
+      return;
+    }
+    if (route.kind === "analyze" && (!intent || intent.kind === "analyze")) {
+      window.dispatchEvent(new CustomEvent("mantua:analyze-input", { detail: text }));
+      return;
+    }
+    if (intent) {
+      setRoute(intentToRoute(intent));
+      return;
+    }
+    setRoute({ kind: "analyze", question: text });
+  };
+
   return (
     <>
       <LoginModal
@@ -280,6 +306,8 @@ export default function App() {
         onNavigate={(destination) => {
           setRoute(navDestinationToRoute(destination));
         }}
+        full={fullPage(route, setRoute)}
+        dock={<InputBar onSubmit={handleCommand} />}
         left={<LeftColumn route={route} setRoute={setRoute} />}
         right={<RightColumn route={route} setRoute={setRoute} />}
       />
@@ -311,27 +339,6 @@ function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =>
       </>
     );
   }
-  // B7-001 — Trading is a split screen: swap on the left, liquidity on the
-  // right column, pool list beneath the swap (B7-002).
-  if (route.kind === "trading") {
-    return (
-      <>
-        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
-          <SwapPanel />
-        </Card>
-        <Card className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ padding: 0 }}>
-          <LiquidityListPage
-            onSelectPool={(id) => {
-              setRoute({ kind: "pool", id });
-            }}
-            onCreate={() => {
-              setRoute({ kind: "add-liquidity" });
-            }}
-          />
-        </Card>
-      </>
-    );
-  }
   // B5-001 — everywhere else, the left column is the board: today's games
   // across the covered leagues, with the chat/panel column alongside
   // (B5-006). Browsing needs no login (B5-007).
@@ -343,8 +350,8 @@ function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =>
       onOpenLeague={(sport) => {
         setRoute({ kind: "market", sport: sport.id });
       }}
-      onTrade={(sport, eventId) => {
-        setRoute({ kind: "trade", sport: sport.id, eventId });
+      onTrade={(sport) => {
+        setRoute({ kind: "market", sport: sport.id });
       }}
     />
   );
@@ -356,48 +363,6 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <RouteContent route={route} setRoute={setRoute} />
       </div>
-      <InputBar
-        onSubmit={(text) => {
-          // The input bar is a universal command router — a card only *starts*
-          // a mode, it never locks it. Every submission re-detects intent and
-          // routes to the right surface.
-          const intent = detectIntent(text);
-          const hookNamed = mentionsHook(text);
-
-          // Naming a hook (Stable Protection / Dynamic Fee / No Hook) always
-          // means the manual Uniswap-v4 flow — open that panel from anywhere,
-          // even mid-agent-conversation.
-          if (intent && HOOK_ACTION_KINDS.has(intent.kind) && hookNamed) {
-            setRoute(intentToRoute(intent));
-            return;
-          }
-          // The agent panel is the universal Circle/Arc handler — forward
-          // everything else to it while it's open (it swaps / LPs / sends /
-          // researches / manages the wallet itself).
-          if (route.kind === "agent") {
-            window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
-            return;
-          }
-          // No hook named: an action the agent can do (Arc, no-hook pools) or an
-          // explicit agent command routes to the agent and auto-runs.
-          if (intent && (AGENT_ACTION_KINDS.has(intent.kind) || intent.kind === "agent")) {
-            setRoute({ kind: "agent", message: text });
-            return;
-          }
-          // Research question / unrecognized text while Analyze is open → keep
-          // the thread going instead of remounting the panel.
-          if (route.kind === "analyze" && (!intent || intent.kind === "analyze")) {
-            window.dispatchEvent(new CustomEvent("mantua:analyze-input", { detail: text }));
-            return;
-          }
-          // Any other recognized intent → its panel; otherwise drop into Analyze.
-          if (intent) {
-            setRoute(intentToRoute(intent));
-            return;
-          }
-          setRoute({ kind: "analyze", question: text });
-        }}
-      />
     </Card>
   );
 }
@@ -435,47 +400,14 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
+    // market / trading / agent render as full-screen pages (see fullPage);
+    // these cases exist only because the element tree is still constructed
+    // in split mode for every route kind.
     case "market":
-      return (
-        <MarketPage
-          sport={route.sport}
-          onSelectSport={(sport) => {
-            setRoute({ kind: "market", sport });
-          }}
-          onAnalyze={(question) => {
-            setRoute({ kind: "analyze", question });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
-    case "trade":
-      return (
-        <TradePanel
-          key={`${route.sport}-${route.eventId}`}
-          sport={route.sport}
-          eventId={route.eventId}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
+    case "trading":
+      return null;
     case "profile":
       return <ProfileRoute setRoute={setRoute} />;
-    case "trading":
-      // Right half of the trading split screen (B7-001): the liquidity form.
-      return (
-        <AddLiquidityForm
-          key={`trading-${String(chainId)}`}
-          onBack={() => {
-            setRoute({ kind: "pools" });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
     case "pools":
       return (
         <LiquidityListPage
@@ -562,6 +494,75 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
         />
       );
   }
+}
+
+/**
+ * Full-screen routes (Polymarket-style surfaces): league pages, the
+ * trading split, and the agent. Everything else keeps the two-column
+ * board + panel shell. Returning undefined selects the split layout.
+ */
+function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode | undefined {
+  switch (route.kind) {
+    case "market":
+      return (
+        <LeaguePage
+          key={route.sport}
+          sport={route.sport}
+          onSelectSport={(sport) => {
+            setRoute({ kind: "market", sport });
+          }}
+        />
+      );
+    case "trading":
+      return <TradingFullPage setRoute={setRoute} />;
+    case "agent":
+      return (
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
+          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ padding: 0 }}>
+            <AgentPanel
+              onClose={() => {
+                setRoute({ kind: "home" });
+              }}
+            />
+          </Card>
+        </div>
+      );
+    default:
+      return undefined;
+  }
+}
+
+/** B7-001/002 — full-width trading page: swap and liquidity side by side
+ *  at equal height, pool list across the full width beneath. */
+function TradingFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
+  const chainId = useCurrentChainId();
+  return (
+    <div className="mx-auto w-full max-w-6xl px-6 py-6">
+      <div className="grid items-stretch gap-5 lg:grid-cols-2">
+        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
+          <SwapPanel />
+        </Card>
+        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
+          <AddLiquidityForm
+            key={`trading-${String(chainId)}`}
+            onBack={() => {
+              setRoute({ kind: "pools" });
+            }}
+          />
+        </Card>
+      </div>
+      <Card className="mt-5 flex flex-col overflow-hidden" style={{ padding: 0 }}>
+        <LiquidityListPage
+          onSelectPool={(id) => {
+            setRoute({ kind: "pool", id });
+          }}
+          onCreate={() => {
+            setRoute({ kind: "add-liquidity" });
+          }}
+        />
+      </Card>
+    </div>
+  );
 }
 
 /** Profile panel wrapper — owns the Privy handles the page needs. */
