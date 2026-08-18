@@ -24,7 +24,7 @@ interface Props {
  * it stay as they are.
  */
 export function MarketPage({ sport, onSelectSport, onAnalyze, onClose }: Props) {
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
   const { slates, loading } = useSlate();
   const active = getSport(sport);
   const Icon = active.icon;
@@ -32,8 +32,7 @@ export function MarketPage({ sport, onSelectSport, onAnalyze, onClose }: Props) 
   const launchSports = SPORTS.filter((s) => s.coverage === "launch");
   const launchLabels = launchSports.map((s) => s.label).join(" and ");
   const handleLogin = () => {
-    // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator, @typescript-eslint/no-confusing-void-expression
-    void login();
+    window.dispatchEvent(new Event("mantua:open-login"));
   };
 
   return (

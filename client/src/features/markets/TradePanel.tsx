@@ -48,7 +48,7 @@ type Phase =
  * a winning YES redeems for exactly 1 USDC after resolution.
  */
 export function TradePanel({ sport, eventId, onClose }: Props) {
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
   const getWallet = useArcWalletClient();
   const { slates } = useSlate();
   const active = getSport(sport);
@@ -259,8 +259,7 @@ export function TradePanel({ sport, eventId, onClose }: Props) {
             size="lg"
             className="mt-4 w-full"
             onClick={() => {
-              // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator, @typescript-eslint/no-confusing-void-expression
-              void login();
+              window.dispatchEvent(new Event("mantua:open-login"));
             }}
           >
             Log in to trade

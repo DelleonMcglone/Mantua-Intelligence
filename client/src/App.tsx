@@ -4,6 +4,7 @@ import { useCurrentChainId } from "./lib/chain-context.tsx";
 import type { TokenSymbol } from "./lib/tokens.ts";
 import { detectIntent as detectIntentImpl, mentionsHook, type Intent } from "./lib/chat-intent.ts";
 import { LandingPage } from "./components/landing/LandingPage.tsx";
+import { LoginModal } from "./components/auth/LoginModal.tsx";
 import { type NavDestination } from "./components/shell/MarketNav.tsx";
 import { PrivacyPage } from "./components/legal/PrivacyPage.tsx";
 import { TermsPage } from "./components/legal/TermsPage.tsx";
@@ -144,8 +145,21 @@ function loadStoredRoute(): Route | null {
 }
 
 export default function App() {
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, logout, user } = usePrivy();
   const [route, setRoute] = useState<Route>(() => loadStoredRoute() ?? { kind: "landing" });
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Any surface can request the login modal without prop-drilling —
+  // MarketPage and TradePanel gate buttons dispatch this event.
+  useEffect(() => {
+    const handler = () => {
+      setShowLogin(true);
+    };
+    window.addEventListener("mantua:open-login", handler);
+    return () => {
+      window.removeEventListener("mantua:open-login", handler);
+    };
+  }, []);
 
   // Keep the stored route in sync so a refresh restores the current view.
   useEffect(() => {
@@ -235,34 +249,41 @@ export default function App() {
   const walletAddress = user?.wallet?.address;
 
   const handleConnect = () => {
-    // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator, @typescript-eslint/no-confusing-void-expression
-    void login();
+    setShowLogin(true);
   };
   const handleDisconnect = () => {
     void logout();
   };
 
   return (
-    <AppShell
-      walletAddress={walletAddress}
-      onLogin={authenticated ? undefined : handleConnect}
-      onSignup={authenticated ? undefined : handleConnect}
-      onDisconnect={authenticated ? handleDisconnect : undefined}
-      onOpenProfile={() => {
-        setRoute({ kind: "profile" });
-      }}
-      onOpenAgent={() => {
-        setRoute({ kind: "agent" });
-      }}
-      onLogoClick={() => {
-        setRoute({ kind: "landing" });
-      }}
-      onNavigate={(destination) => {
-        setRoute(navDestinationToRoute(destination));
-      }}
-      left={<LeftColumn route={route} setRoute={setRoute} />}
-      right={<RightColumn route={route} setRoute={setRoute} />}
-    />
+    <>
+      <LoginModal
+        open={showLogin}
+        onClose={() => {
+          setShowLogin(false);
+        }}
+      />
+      <AppShell
+        walletAddress={walletAddress}
+        onLogin={authenticated ? undefined : handleConnect}
+        onSignup={authenticated ? undefined : handleConnect}
+        onDisconnect={authenticated ? handleDisconnect : undefined}
+        onOpenProfile={() => {
+          setRoute({ kind: "profile" });
+        }}
+        onOpenAgent={() => {
+          setRoute({ kind: "agent" });
+        }}
+        onLogoClick={() => {
+          setRoute({ kind: "landing" });
+        }}
+        onNavigate={(destination) => {
+          setRoute(navDestinationToRoute(destination));
+        }}
+        left={<LeftColumn route={route} setRoute={setRoute} />}
+        right={<RightColumn route={route} setRoute={setRoute} />}
+      />
+    </>
   );
 }
 
