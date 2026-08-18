@@ -147,9 +147,13 @@ export const DOCS_GROUPS: DocsGroup[] = [
               in real time from market conditions, volatility, and trading activity, so quoted odds
               track the state of the event rather than sitting still between trades.
             </P>
-            <Note tone="warn">
-              Not yet deployed. Prediction markets list as they open — the league pages show an
-              empty state until then.
+            <Note>
+              Live on Arc Testnet at{" "}
+              <A href={`${ARC_EXPLORER}/0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0`}>
+                0xbb5D42…E8c0
+              </A>
+              . Each day&apos;s games mint their markets automatically; their pools open at the
+              implied odds and trade under this hook until kickoff freezes them.
             </Note>
 
             <H>Stable Protection Hook</H>
@@ -401,7 +405,12 @@ export const DOCS_GROUPS: DocsGroup[] = [
                     0xA1Be80…80C0
                   </A>,
                 ],
-                ["Dynamic Market", "Not yet deployed"],
+                [
+                  "Dynamic Market",
+                  <A key="dm" href={`${ARC_EXPLORER}/0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0`}>
+                    0xbb5D42…E8c0
+                  </A>,
+                ],
               ]}
             />
 

@@ -145,8 +145,8 @@ doing so would close this.
 | Unbounded loop in a callback                   | PASS   | Grep-verified: no loop anywhere in the module                                                |
 | Any file exceeds 150 lines                     | PASS   | Largest is 150 (`MarketStateRegistry`); hook is 144                                          |
 | Any TODO or placeholder remains                | PASS   | Grep-verified absent                                                                         |
-| Deployment does not satisfy `0x28C0`           | N/A    | Not yet deployed — B2-005 outstanding                                                        |
-| Arc backend routing wrong                      | N/A    | Not yet deployed                                                                             |
+| Deployment does not satisfy `0x28C0`           | PASS   | Deployed 2026-08-17 at `0xbb5D…E8c0`; bits asserted in-tx and re-derived from the address    |
+| Arc backend routing wrong                      | PASS   | `getV4StackForHook` resolves the hook to its own stack; live pools probed post-deploy        |
 | Tests miss a specified edge case               | PASS   | All 16 mapped to named tests                                                                 |
 | 100k-call fee invariant fails                  | PASS   | Passes at 100k sweep and 128k campaign                                                       |
 
