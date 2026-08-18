@@ -256,9 +256,15 @@ export default function App() {
   // feeds this. A command only starts a mode, it never locks it: every
   // submission re-detects intent and routes to the right surface.
   const handleCommand = (text: string) => {
-    // Chatbot input requires login (owner decision 2026-08-18); browsing
-    // and matchup details stay public.
+    // Freemium chat (owner decision 2026-08-18): logged-out users may ask
+    // the ANALYST — three free questions, enforced server-side — but any
+    // actionable command (trade, agent, liquidity…) demands login here.
     if (!authenticated) {
+      const guest = detectIntent(text);
+      if (!guest || guest.kind === "analyze") {
+        setRoute(guest ? intentToRoute(guest) : { kind: "analyze", question: text });
+        return;
+      }
       setShowLogin(true);
       return;
     }
@@ -329,7 +335,6 @@ export default function App() {
 }
 
 function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
-  const { authenticated } = usePrivy();
   // B6-008 — the portfolio lives inside the profile, not as standalone nav:
   // opening Profile swaps the left column to balances + assets. Position and
   // asset drill-downs keep it too, since they read from it.
@@ -359,11 +364,7 @@ function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =>
   return (
     <Board
       onAnalyze={(question) => {
-        // Analyst output is chatbot usage — login required (2026-08-18).
-        if (!authenticated) {
-          window.dispatchEvent(new Event("mantua:open-login"));
-          return;
-        }
+        // Free for everyone — the server meters 3 anonymous questions/day.
         setRoute({ kind: "analyze", question });
       }}
       onOpenLeague={(sport) => {

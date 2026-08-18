@@ -4,8 +4,7 @@ import { env } from "../env.ts";
 import { logger } from "../lib/logger.ts";
 import { runResearchChat, type ResearchHistoryTurn } from "../lib/research-chat.ts";
 import { type AgentChatEvent } from "../lib/agent-chat.ts";
-import { walletRateLimiter } from "../middleware/rate-limit.ts";
-import { requireAuth } from "../middleware/auth.ts";
+import { freeAnalystQuota, walletRateLimiter } from "../middleware/rate-limit.ts";
 
 export const analyzeChatRouter = Router();
 
@@ -20,14 +19,15 @@ const bodySchema = z.object({
 /**
  * POST /api/analyze/chat — streaming, read-only research analyst (SSE).
  *
- * Login-gated (owner decision 2026-08-18, revising B5-007's original open
- * stance): browsing and matchup details stay public, but sending chat input
- * requires an account. Still rate-limited on top of auth. Mirrors the
- * agent-chat SSE framing so the client reader/renderer is shared.
+ * Freemium-gated (owner decision 2026-08-18): anonymous users get three
+ * analyst questions per day (freeAnalystQuota), then a LOGIN_REQUIRED
+ * response the client turns into the login modal. Logged-in traffic skips
+ * the quota and rides walletRateLimiter. Mirrors the agent-chat SSE
+ * framing so the client reader/renderer is shared.
  */
 analyzeChatRouter.post(
   "/api/analyze/chat",
-  requireAuth,
+  freeAnalystQuota,
   walletRateLimiter,
   async (req: Request, res: Response) => {
     const parsed = bodySchema.safeParse(req.body);

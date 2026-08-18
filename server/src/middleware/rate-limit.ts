@@ -63,3 +63,26 @@ export const walletRateLimiter: RequestHandler = rateLimit({
   },
   message: { error: "Too many requests for this wallet.", code: "RATE_LIMITED" },
 });
+
+/**
+ * The anonymous analyst quota (owner decision 2026-08-18): three free
+ * questions per IP per day, then the login gate. Logged-in users skip it
+ * entirely (their traffic is governed by walletRateLimiter). Counted
+ * in-memory, so a serverless instance recycle resets it — acceptable for
+ * a signup funnel; anyone determined enough to rotate IPs was never going
+ * to convert at question four.
+ */
+export const freeAnalystQuota: RequestHandler = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skip: (req: Request) => skipInDev() || Boolean(req.privyUserId),
+  keyGenerator: (req: Request) => `free:${ipKeyGenerator(req.ip ?? "")}`,
+  handler: (_req, res) => {
+    res.status(401).json({
+      error: "You've used your 3 free analyst questions — log in to keep chatting.",
+      code: "LOGIN_REQUIRED",
+    });
+  },
+});

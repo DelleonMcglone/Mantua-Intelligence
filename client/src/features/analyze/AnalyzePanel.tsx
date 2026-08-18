@@ -199,6 +199,11 @@ export function AnalyzePanel({
               ? "Research is unavailable right now."
               : err.message
             : "The analyst hit an unexpected error.";
+        // Free-quota exhausted (owner's 3-free-questions funnel): surface
+        // the message AND open the login modal in the same beat.
+        if (err instanceof AnalyzeStreamError && err.status === 401) {
+          window.dispatchEvent(new Event("mantua:open-login"));
+        }
         patch(id, (m) => (m.role === "chat" ? { ...m, streaming: false, failed: msg } : m));
       }
     },
