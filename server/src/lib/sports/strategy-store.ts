@@ -124,3 +124,23 @@ export async function engineTrigger(
     .where(and(eq(hedgeStrategies.id, strategyId), eq(hedgeStrategies.status, "armed")));
   await audit(db, "strategy_trigger", "triggered", { strategyId, ...detail }, reason);
 }
+
+/** B9-005 — a trigger that actually closed on-chain. */
+export async function engineExecuted(
+  db: DB,
+  strategyId: string,
+  detail: Record<string, unknown>,
+  txHash: string,
+): Promise<void> {
+  await db
+    .update(hedgeStrategies)
+    .set({ status: "executed", executedAt: new Date(), updatedAt: new Date() })
+    .where(eq(hedgeStrategies.id, strategyId));
+  await db.insert(mantuaAuditLog).values({
+    action: "strategy_execute",
+    outcome: "executed",
+    params: { strategyId, ...detail },
+    txHash,
+    chainId: ARC_TESTNET_CHAIN_ID,
+  });
+}

@@ -74,9 +74,24 @@ function buildAllowlist(): Set<string> {
 
 let cache: Set<string> | null = null;
 
+/** Per-market contracts (YES/NO tokens, Market addresses) are minted at
+ *  ingest time, so they can't live in the static list. Server code that
+ *  reads them from OUR database (the markets table the sweep writes) may
+ *  register them here just before executing — the set is process-local,
+ *  so registration and execution happen in the same invocation. Never
+ *  register anything that came from user input. */
+const dynamicTargets = new Set<string>();
+
+export function registerDynamicTargets(addrs: readonly (string | null | undefined)[]): void {
+  for (const addr of addrs) {
+    if (addr && addr.startsWith("0x")) dynamicTargets.add(addr.toLowerCase());
+  }
+}
+
 export function isAllowedTarget(target: string): boolean {
   cache ??= buildAllowlist();
-  return cache.has(target.toLowerCase());
+  const lower = target.toLowerCase();
+  return cache.has(lower) || dynamicTargets.has(lower);
 }
 
 /** Throws `TargetNotAllowedError` unless `target` is allowlisted. */

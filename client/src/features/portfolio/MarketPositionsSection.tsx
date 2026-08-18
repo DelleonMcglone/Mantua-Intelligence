@@ -11,6 +11,10 @@ interface PositionRow {
   balance: string;
   impliedProbBps: number | null;
   valueRaw: string;
+  league: string | null;
+  providerEventId: string | null;
+  entryPriceBps: number | null;
+  pnlRaw: string | null;
 }
 
 /**
@@ -87,8 +91,43 @@ export function MarketPositionsSection() {
                     <span className="font-mono text-text">≈ {value.toFixed(2)} USDC</span>
                   </span>
                 </div>
-                <div className="mt-0.5 text-[10px] uppercase tracking-wider text-text-mute">
-                  {row.state}
+                <div className="mt-0.5 flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-text-mute">
+                    {row.state}
+                    {row.entryPriceBps !== null && (
+                      <span className="ml-2 normal-case tracking-normal">
+                        entry {(row.entryPriceBps / 100).toFixed(1)}%
+                      </span>
+                    )}
+                    {row.pnlRaw !== null && (
+                      <span
+                        className={`ml-2 font-mono normal-case tracking-normal ${
+                          Number(row.pnlRaw) >= 0 ? "text-green" : "text-yellow"
+                        }`}
+                      >
+                        {Number(row.pnlRaw) >= 0 ? "+" : ""}
+                        {(Number(row.pnlRaw) / 1e6).toFixed(2)} P&L
+                      </span>
+                    )}
+                  </span>
+                  {row.side === "yes" &&
+                    row.league &&
+                    row.providerEventId &&
+                    row.state === "OPEN" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.dispatchEvent(
+                            new CustomEvent("mantua:close-position", {
+                              detail: { league: row.league, eventId: row.providerEventId },
+                            }),
+                          );
+                        }}
+                        className="rounded-sm border border-border-soft px-2 py-0.5 text-[10px] text-text-dim hover:text-text cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    )}
                 </div>
               </li>
             );

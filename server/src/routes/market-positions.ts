@@ -3,7 +3,7 @@ import { desc, eq, isNotNull } from "drizzle-orm";
 import { parseAbi } from "viem";
 import { z } from "zod";
 import { db } from "../db/client.ts";
-import { events, markets } from "../db/schema/index.ts";
+import { events, leagues, marketFills, markets } from "../db/schema/index.ts";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { baseRpcClient } from "../lib/rpc-client.ts";
@@ -25,6 +25,13 @@ export interface MarketPositionRow {
   impliedProbBps: number | null;
   /** Mark value in USDC raw units (6dp): balance × side probability. */
   valueRaw: string;
+  /** For the Close deep-link into the league page. */
+  league: string | null;
+  providerEventId: string | null;
+  /** Average entry price in bps, from indexed fills (YES side only). */
+  entryPriceBps: number | null;
+  /** Unrealized P&L in USDC raw units: mark value − avg-cost basis. */
+  pnlRaw: string | null;
 }
 
 /**
@@ -62,12 +69,35 @@ marketPositionsRouter.get(
           startsAt: events.startsAt,
           homeTeam: events.homeTeam,
           awayTeam: events.awayTeam,
+          providerEventId: events.providerEventId,
+          league: leagues.slug,
         })
         .from(markets)
         .innerJoin(events, eq(markets.eventId, events.id))
+        .innerJoin(leagues, eq(events.leagueId, leagues.id))
         .where(isNotNull(markets.yesToken))
         .orderBy(desc(markets.createdAt))
         .limit(40);
+
+      // Avg-cost basis per market from indexed fills (YES-side trades).
+      const fills = await db
+        .select()
+        .from(marketFills)
+        .where(eq(marketFills.address, owner.toLowerCase()));
+      const basis = new Map<string, { tokens: bigint; usdc: bigint }>();
+      for (const f of fills) {
+        const b = basis.get(f.marketId) ?? { tokens: 0n, usdc: 0n };
+        if (f.direction === "buy") {
+          b.tokens += BigInt(f.tokensRaw);
+          b.usdc += BigInt(f.usdcRaw);
+        } else if (b.tokens > 0n) {
+          // Selling reduces basis at average cost.
+          const sold = BigInt(f.tokensRaw) > b.tokens ? b.tokens : BigInt(f.tokensRaw);
+          b.usdc -= (b.usdc * sold) / b.tokens;
+          b.tokens -= sold;
+        }
+        basis.set(f.marketId, b);
+      }
 
       const positions: MarketPositionRow[] = [];
       await Promise.all(
@@ -121,6 +151,21 @@ marketPositionsRouter.get(
             if (bal === 0n) continue;
             const sideProb =
               yesProbBps === null ? null : side === "yes" ? yesProbBps : 10_000 - yesProbBps;
+            const valueRaw =
+              sideProb === null ? "0" : ((bal * BigInt(sideProb)) / 10_000n).toString();
+
+            // Entry/P&L only for the YES side, where fills are indexed.
+            let entryPriceBps: number | null = null;
+            let pnlRaw: string | null = null;
+            const b = side === "yes" ? basis.get(row.marketId) : undefined;
+            if (b && b.tokens > 0n && sideProb !== null) {
+              entryPriceBps = Number((b.usdc * 10_000n) / b.tokens);
+              const held = bal < b.tokens ? bal : b.tokens;
+              const costOfHeld = (b.usdc * held) / b.tokens;
+              const markOfHeld = (held * BigInt(sideProb)) / 10_000n;
+              pnlRaw = (markOfHeld - costOfHeld).toString();
+            }
+
             positions.push({
               marketId: row.marketId,
               label,
@@ -129,7 +174,11 @@ marketPositionsRouter.get(
               side,
               balance: bal.toString(),
               impliedProbBps: sideProb,
-              valueRaw: sideProb === null ? "0" : ((bal * BigInt(sideProb)) / 10_000n).toString(),
+              valueRaw,
+              league: row.league,
+              providerEventId: row.providerEventId,
+              entryPriceBps,
+              pnlRaw,
             });
           }
         }),

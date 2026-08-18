@@ -16,6 +16,8 @@ export interface TradeCalldata {
   approvalTarget: `0x${string}` | null;
   inputToken: `0x${string}`;
   marketAddress: `0x${string}`;
+  marketId: `0x${string}`;
+  yesToken: `0x${string}`;
   quote: { amountIn: string; amountOut: string; effectivePriceBps: number | null };
 }
 
@@ -111,6 +113,17 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") throw new Error("Transaction reverted");
       setPhase({ kind: "done", txHash, calldata });
+      // Record the fill for entry-price / P&L accounting. Fire-and-forget:
+      // the server verifies the receipt before believing it.
+      void api
+        .post("/api/markets/fills", {
+          txHash,
+          marketId: calldata.marketId,
+          direction,
+          tokensRaw: direction === "buy" ? calldata.quote.amountOut : calldata.quote.amountIn,
+          usdcRaw: direction === "buy" ? calldata.quote.amountIn : calldata.quote.amountOut,
+        })
+        .catch(() => undefined);
       window.dispatchEvent(new Event("mantua:refresh-portfolio"));
     } catch (err) {
       setPhase({ kind: "error", message: err instanceof Error ? err.message : "Trade failed" });

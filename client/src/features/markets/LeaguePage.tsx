@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { publicClient } from "@/lib/privy/wallet-client.ts";
+import { parseAbi } from "viem";
 import { Button } from "@/components/ui/button.tsx";
 import { getSport, SPORTS, type SportId } from "./sports.ts";
 import { useSlate, type SlateEvent } from "./use-slate.ts";
@@ -10,6 +12,10 @@ const EXPLORER = "https://testnet.arcscan.app/tx/";
 interface Props {
   sport: SportId;
   onSelectSport: (id: SportId) => void;
+  /** Deep-link: preselect this game (e.g. Close from the profile). */
+  initialEventId?: string | undefined;
+  /** Deep-link: open the sidebar on this direction. */
+  initialDirection?: "buy" | "sell" | undefined;
 }
 
 interface Selection {
@@ -24,7 +30,7 @@ interface Selection {
  * live and executes with the user's wallet. Covered leagues only — the
  * "soon" leagues render the full-screen coming-soon state instead.
  */
-export function LeaguePage({ sport, onSelectSport }: Props) {
+export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirection }: Props) {
   const active = getSport(sport);
   const { slates, loading } = useSlate();
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -32,12 +38,15 @@ export function LeaguePage({ sport, onSelectSport }: Props) {
   const slate = slates[active.id];
   const events = useMemo(() => slate?.events ?? [], [slate]);
 
-  // Default selection: first tradeable game's home side.
+  // Default selection: the deep-linked game, else the first tradeable one.
   const effective = useMemo<Selection | null>(() => {
     if (selection) return selection;
-    const first = events.find((e) => e.liveOdds && e.status === "scheduled");
+    const linked = initialEventId
+      ? events.find((e) => e.providerEventId === initialEventId)
+      : undefined;
+    const first = linked ?? events.find((e) => e.liveOdds && e.status === "scheduled");
     return first ? { event: first, outcomeIndex: 0 } : null;
-  }, [selection, events]);
+  }, [selection, events, initialEventId]);
 
   if (active.coverage === "soon") return <ComingSoon sport={sport} onSelectSport={onSelectSport} />;
 
@@ -109,6 +118,7 @@ export function LeaguePage({ sport, onSelectSport }: Props) {
             <TradeSidebar
               key={`${effective.event.providerEventId}-${String(effective.outcomeIndex)}`}
               selection={effective}
+              initialDirection={initialDirection}
               onPick={(outcomeIndex) => {
                 setSelection({ event: effective.event, outcomeIndex });
               }}
@@ -229,17 +239,22 @@ function GameRow({
 
 // ─── Trade sidebar ───────────────────────────────────────────────────────────
 
+const BALANCE_ABI = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
+
 function TradeSidebar({
   selection,
   onPick,
+  initialDirection,
 }: {
   selection: Selection;
   onPick: (outcome: 0 | 1) => void;
+  initialDirection?: "buy" | "sell" | undefined;
 }) {
-  const { authenticated } = usePrivy();
+  const { authenticated, user } = usePrivy();
   const { event, outcomeIndex } = selection;
-  const [direction, setDirection] = useState<"buy" | "sell">("buy");
+  const [direction, setDirection] = useState<"buy" | "sell">(initialDirection ?? "buy");
   const [amount, setAmount] = useState("0");
+  const [yesBalance, setYesBalance] = useState<bigint | null>(null);
 
   const { phase, execute } = useMarketTrade({
     eventId: event.providerEventId,
@@ -250,7 +265,28 @@ function TradeSidebar({
   });
 
   const chosen = outcomeIndex === 0 ? event.home : event.away;
-  const quote = phase.kind === "quoted" || phase.kind === "done" ? phase.calldata.quote : null;
+  const calldata = phase.kind === "quoted" || phase.kind === "done" ? phase.calldata : null;
+
+  // Once a quote reveals the YES token, show the user's holdings so Sell
+  // has a truthful Max.
+  const walletAddress = user?.wallet?.address as `0x${string}` | undefined;
+  const yesToken = calldata?.yesToken;
+  useEffect(() => {
+    if (!yesToken || !walletAddress) return;
+    publicClient
+      .readContract({
+        address: yesToken,
+        abi: BALANCE_ABI,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      })
+      .then(setYesBalance)
+      .catch(() => {
+        setYesBalance(null);
+      });
+  }, [yesToken, walletAddress, phase.kind]);
+
+  const quote = calldata?.quote ?? null;
   const out = quote ? Number(quote.amountOut) / 1e6 : null;
   const busy =
     phase.kind === "approving" || phase.kind === "signing" || phase.kind === "confirming";
@@ -323,6 +359,21 @@ function TradeSidebar({
         </div>
       </div>
 
+      {direction === "sell" && yesBalance !== null && (
+        <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-text-dim">
+          You hold{" "}
+          <span className="font-mono text-text">{(Number(yesBalance) / 1e6).toFixed(2)}</span> YES
+          <button
+            type="button"
+            onClick={() => {
+              setAmount((Number(yesBalance) / 1e6).toFixed(2));
+            }}
+            className="rounded-sm border border-border-soft px-1.5 py-0.5 text-[10px] text-text-dim hover:text-text cursor-pointer"
+          >
+            Max
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex justify-end gap-1.5">
         {[1, 5, 10, 100].map((n) => (
           <button

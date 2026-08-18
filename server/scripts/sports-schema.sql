@@ -145,3 +145,18 @@ CREATE INDEX IF NOT EXISTS "market_positions_wallet_idx" ON "market_positions" U
 CREATE INDEX IF NOT EXISTS "markets_state_idx" ON "markets" USING btree ("state");;
 CREATE INDEX IF NOT EXISTS "markets_event_idx" ON "markets" USING btree ("event_id");;
 CREATE INDEX IF NOT EXISTS "resolutions_market_idx" ON "resolutions" USING btree ("market_id");;
+
+CREATE TABLE IF NOT EXISTS "market_fills" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "address" varchar(42) NOT NULL,
+  "market_id" varchar(66) NOT NULL,
+  "direction" varchar(4) NOT NULL,
+  "tokens_raw" varchar(32) NOT NULL,
+  "usdc_raw" varchar(32) NOT NULL,
+  "tx_hash" varchar(66) NOT NULL UNIQUE,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+DO $$ BEGIN
+ALTER TABLE "market_fills" ADD CONSTRAINT "market_fills_market_id_markets_market_id_fk" FOREIGN KEY ("market_id") REFERENCES "public"."markets"("market_id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS "market_fills_addr_market_idx" ON "market_fills" ("address","market_id");

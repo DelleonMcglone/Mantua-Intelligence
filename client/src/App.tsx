@@ -61,7 +61,7 @@ type Route =
        *  identical — otherwise a repeated "swap USDC for EURC" does nothing. */
       nonce?: number;
     }
-  | { kind: "market"; sport: SportId }
+  | { kind: "market"; sport: SportId; selectEventId?: string; direction?: "buy" | "sell" }
   | { kind: "profile" }
   | { kind: "trading" }
   | { kind: "pools" }
@@ -147,7 +147,7 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false);
 
   // Any surface can request the login modal without prop-drilling —
-  // MarketPage and TradePanel gate buttons dispatch this event.
+  // league-page and dock gate buttons dispatch this event.
   useEffect(() => {
     const handler = () => {
       setShowLogin(true);
@@ -155,6 +155,26 @@ export default function App() {
     window.addEventListener("mantua:open-login", handler);
     return () => {
       window.removeEventListener("mantua:open-login", handler);
+    };
+  }, []);
+
+  // Close-position deep-link from the profile's positions list: open the
+  // league page with that game selected and the sidebar on Sell.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ league?: string; eventId?: string }>).detail;
+      if (detail.league && isSportId(detail.league) && detail.eventId) {
+        setRoute({
+          kind: "market",
+          sport: detail.league,
+          selectEventId: detail.eventId,
+          direction: "sell",
+        });
+      }
+    };
+    window.addEventListener("mantua:close-position", handler);
+    return () => {
+      window.removeEventListener("mantua:close-position", handler);
     };
   }, []);
 
@@ -528,8 +548,10 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
     case "market":
       return (
         <LeaguePage
-          key={route.sport}
+          key={`${route.sport}-${route.selectEventId ?? ""}`}
           sport={route.sport}
+          initialEventId={route.selectEventId}
+          initialDirection={route.direction}
           onSelectSport={(sport) => {
             setRoute({ kind: "market", sport });
           }}

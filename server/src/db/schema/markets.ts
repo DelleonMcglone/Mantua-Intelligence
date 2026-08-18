@@ -314,3 +314,33 @@ export const hedgeStrategies = pgTable(
 
 export type HedgeStrategy = typeof hedgeStrategies.$inferSelect;
 export type NewHedgeStrategy = typeof hedgeStrategies.$inferInsert;
+
+/**
+ * Indexed trade fills — the basis for entry price and realized P&L
+ * (B6-009's final slice). One row per confirmed swap; written by the
+ * client after its transaction confirms and VERIFIED server-side against
+ * the receipt (tx succeeded, target was our router, sender matches) —
+ * trust-but-verify, keyed unique on the tx hash so replays no-op.
+ */
+export const marketFills = pgTable(
+  "market_fills",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    /** The trader's wallet address. */
+    address: varchar("address", { length: 42 }).notNull(),
+    marketId: varchar("market_id", { length: 66 })
+      .notNull()
+      .references(() => markets.marketId, { onDelete: "cascade" }),
+    /** buy = USDC in, YES out; sell = the reverse. */
+    direction: varchar("direction", { length: 4 }).notNull(),
+    tokensRaw: varchar("tokens_raw", { length: 32 }).notNull(),
+    usdcRaw: varchar("usdc_raw", { length: 32 }).notNull(),
+    txHash: varchar("tx_hash", { length: 66 }).notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("market_fills_addr_market_idx").on(t.address, t.marketId)],
+);
+
+export type MarketFill = typeof marketFills.$inferSelect;

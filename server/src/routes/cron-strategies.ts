@@ -9,7 +9,13 @@ import {
   ticksFromSlates,
   type ArmedStrategy,
 } from "../lib/sports/strategies.ts";
-import { engineDisarm, engineTrigger, listArmed } from "../lib/sports/strategy-store.ts";
+import {
+  engineDisarm,
+  engineExecuted,
+  engineTrigger,
+  listArmed,
+} from "../lib/sports/strategy-store.ts";
+import { executeTriggeredClose } from "../lib/sports/strategy-execute.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
 
@@ -26,12 +32,13 @@ const LEAGUES: readonly LeagueSlug[] = ["nfl", "wnba"];
  * immediately (B9-007 — kickoff freeze, resolution, expiry, kill switch);
  * triggers persist as `triggered` with a full audit row.
  *
- * **Execution is held**: closing a position means swapping outcome tokens,
- * which needs the v4 periphery on the market PoolManager (not yet
- * deployed). A triggered strategy therefore records exactly what it wanted
- * to do and waits — it does not guess at a venue. The executor slots in
- * behind `engineTrigger` when the periphery lands, inside the agent
- * wallet's policy caps (B8-010).
+ * **Execution (B9-005)**: a triggered take-profit/stop closes for real —
+ * signed by the user's AGENT wallet (the server never touches Privy keys,
+ * so automation only acts on agent-held positions), sized as the full
+ * agent balance clamped by the strategy's own cap, through the same
+ * shared trade builder the user's button uses. Positions held in the
+ * user's own wallet trigger and record but wait for the user's click;
+ * delta-hedge rebalances still hold.
  */
 cronStrategiesRouter.get(
   "/api/cron/strategies",
@@ -82,12 +89,30 @@ cronStrategiesRouter.get(
       if (decision.kind === "disarm") {
         await engineDisarm(db, row.id, decision.reason);
       } else if (decision.kind === "trigger") {
-        await engineTrigger(
-          db,
-          row.id,
-          { action: decision.action, marketId: decision.marketId, deltaUsd: decision.deltaUsd },
-          `${decision.reason} — execution pending periphery deploy`,
-        );
+        const exec = await executeTriggeredClose(db, row, decision);
+        if (exec.kind === "executed") {
+          await engineExecuted(
+            db,
+            row.id,
+            {
+              action: decision.action,
+              marketId: decision.marketId,
+              soldRaw: exec.soldRaw,
+              usdcOutRaw: exec.usdcOutRaw,
+              reason: decision.reason,
+            },
+            exec.txHash,
+          );
+        } else {
+          await engineTrigger(
+            db,
+            row.id,
+            { action: decision.action, marketId: decision.marketId, deltaUsd: decision.deltaUsd },
+            `${decision.reason} — ${exec.kind === "held" ? exec.reason : exec.error}`,
+          );
+        }
+        decisions.push({ id: row.id, decision: decision.kind, execution: exec.kind });
+        continue;
       }
       decisions.push({ id: row.id, decision: decision.kind, reason: decision.reason });
     }

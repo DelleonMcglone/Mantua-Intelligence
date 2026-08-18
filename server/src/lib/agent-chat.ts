@@ -10,6 +10,8 @@ import { TOKEN_SYMBOLS, getToken, type TokenSymbol } from "./tokens.ts";
 import { getOrCreateAgentWallet, getAgentWallet, updateAgentWalletCap } from "./agent-wallet.ts";
 import { sendFromAgentWallet } from "./agent-send.ts";
 import { swapFromAgentWallet, quoteAgentSwap } from "./agent-swap.ts";
+import { agentMarketTrade } from "./sports/market-agent-trade.ts";
+import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import {
   addLiquidityFromAgentWallet,
   removeLiquidityFromAgentWallet,
@@ -259,6 +261,28 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
+    },
+  },
+  {
+    name: "trade_market",
+    description:
+      "Trade a sports prediction market from the agent wallet (B8-005). direction 'buy' spends USDC to buy the team's YES tokens; 'sell' sells YES tokens held by the agent wallet back to USDC. Use get_sports_slate-style info from the user's request to identify the game: providerEventId comes from the slate (the client shows it on matchup cards), outcomeIndex 0 = home team's market, 1 = away team's. Executes immediately against the live pool; counts against the daily cap. A winning YES redeems for 1 USDC after the game resolves.",
+    input_schema: {
+      type: "object",
+      properties: {
+        providerEventId: { type: "string", description: "ESPN event id of the game." },
+        outcomeIndex: {
+          type: "number",
+          enum: [0, 1],
+          description: "0 = home team's YES market, 1 = away team's.",
+        },
+        direction: { type: "string", enum: ["buy", "sell"] },
+        amount: {
+          type: "string",
+          description: "Decimal amount: USDC to spend (buy) or YES tokens to sell.",
+        },
+      },
+      required: ["providerEventId", "outcomeIndex", "direction", "amount"],
     },
   },
   {
@@ -904,6 +928,44 @@ async function executeTool(
         amountIn: formatUnits(BigInt(r.amountInRaw), getToken(r.tokenIn).decimals),
         amountOut: formatUnits(BigInt(r.amountOutRaw), getToken(r.tokenOut).decimals),
         usdValue: r.usdValue,
+      };
+    }
+    case "trade_market": {
+      const { providerEventId, outcomeIndex, direction, amount } = input;
+      if (typeof providerEventId !== "string" || !/^\d{1,32}$/.test(providerEventId)) {
+        throw new Error("providerEventId must be the numeric event id from the slate");
+      }
+      if (outcomeIndex !== 0 && outcomeIndex !== 1) throw new Error("outcomeIndex must be 0 or 1");
+      if (direction !== "buy" && direction !== "sell") throw new Error("direction: buy|sell");
+      const amountNum = Number(amount);
+      if (!Number.isFinite(amountNum) || amountNum <= 0 || amountNum > 10_000) {
+        throw new Error("amount must be a positive decimal (max 10000)");
+      }
+      const amountRaw = BigInt(Math.round(amountNum * 1e6));
+      if (direction === "buy") {
+        // Buys spend USDC — enforce balance and the daily cap like any spend.
+        await requireAgentBalance(privyUserId, "USDC", String(amountNum));
+      }
+      const wallet = await getAgentWallet(privyUserId);
+      if (!wallet) throw new Error("No agent wallet provisioned — call manage_wallet first.");
+      if (direction === "buy") await checkSpendingCap(wallet.address, amountNum);
+      const result = await agentMarketTrade({
+        walletId: wallet.circleWalletId,
+        providerEventId,
+        outcomeIndex,
+        direction,
+        amountRaw,
+      });
+      if (direction === "buy") await recordSpending(wallet.address, amountNum);
+      return {
+        txHash: result.txHash,
+        marketId: result.marketId,
+        received:
+          direction === "buy"
+            ? `${(Number(result.quote.amountOut) / 1e6).toFixed(2)} YES`
+            : `${(Number(result.quote.amountOut) / 1e6).toFixed(2)} USDC`,
+        effectivePriceBps: result.quote.effectivePriceBps,
+        explorer: `https://testnet.arcscan.app/tx/${result.txHash}`,
       };
     }
     case "standing_intents": {
