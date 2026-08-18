@@ -17,7 +17,8 @@
 
 import { eq, and, sql } from "drizzle-orm";
 import type { DB } from "../../db/client.ts";
-import { events, leagues, sports } from "../../db/schema/index.ts";
+import { events, leagues, markets, sports } from "../../db/schema/index.ts";
+import type { OnChainMarketDetail } from "./markets-onchain.ts";
 import { logger } from "../logger.ts";
 import type { LeagueSlug, ProviderEvent } from "./provider.ts";
 
@@ -155,4 +156,53 @@ export async function upsertEvents(
   }
 
   return result;
+}
+
+// ─── Market rows (B4-006 prerequisite) ──────────────────────────────────────
+
+/**
+ * Persist the markets the on-chain sweep touched. The `resolutions` log
+ * FK-references `markets.market_id`, so a row must exist BEFORE settlement
+ * can be recorded — this runs on every sync tick and is idempotent
+ * (insert-or-update keyed on the deterministic market id).
+ */
+export async function upsertMarketRows(
+  db: DB,
+  provider: string,
+  details: readonly OnChainMarketDetail[],
+): Promise<number> {
+  let written = 0;
+  for (const d of details) {
+    const eventRow = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.provider, provider), eq(events.providerEventId, d.providerEventId)))
+      .limit(1);
+    const eventId = eventRow.at(0)?.id;
+    if (!eventId) continue; // event not ingested yet — next tick heals
+
+    await db
+      .insert(markets)
+      .values({
+        marketId: d.marketId,
+        eventId,
+        marketType: "moneyline",
+        outcomeIndex: d.outcomeIndex,
+        yesToken: d.yesToken,
+        noToken: d.noToken,
+        poolId: d.poolId,
+        openingProbability: d.openingProbability.toFixed(5),
+      })
+      .onConflictDoUpdate({
+        target: markets.marketId,
+        set: {
+          yesToken: d.yesToken,
+          noToken: d.noToken,
+          poolId: d.poolId,
+          updatedAt: new Date(),
+        },
+      });
+    written += 1;
+  }
+  return written;
 }

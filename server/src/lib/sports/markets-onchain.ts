@@ -54,6 +54,17 @@ export function creatableMarkets(
   return planned.filter((m) => m.kickoffTimestamp > nowSeconds);
 }
 
+export interface OnChainMarketDetail {
+  marketId: `0x${string}`;
+  providerEventId: string;
+  outcomeIndex: number;
+  marketAddress: `0x${string}`;
+  yesToken: `0x${string}`;
+  noToken: `0x${string}`;
+  poolId: `0x${string}`;
+  openingProbability: number;
+}
+
 export interface MarketCreationSummary {
   submitted: number;
   created: number;
@@ -61,6 +72,9 @@ export interface MarketCreationSummary {
   skippedPastKickoff: number;
   poolsOpened: number;
   poolsSeeded: number;
+  /** Every market this sweep touched, for DB persistence — the resolutions
+   *  log FK-requires a markets row, so rows must exist before settlement. */
+  details: OnChainMarketDetail[];
   failures: { marketId: string; error: string }[];
 }
 
@@ -168,11 +182,21 @@ async function bootstrapMarketPool(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
   marketAddress: `0x${string}`,
   m: PlannedMarket,
-): Promise<{ opened: boolean; plan: ReturnType<typeof planMarketPool> }> {
+): Promise<{
+  opened: boolean;
+  plan: ReturnType<typeof planMarketPool>;
+  yesToken: `0x${string}`;
+  noToken: `0x${string}`;
+}> {
   const yesToken = await baseRpcClient.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
     functionName: "yesToken",
+  });
+  const noToken = await baseRpcClient.readContract({
+    address: marketAddress,
+    abi: MARKET_ABI,
+    functionName: "noToken",
   });
   const plan = planMarketPool(
     yesToken,
@@ -219,10 +243,10 @@ async function bootstrapMarketPool(
       { marketId: m.marketId, poolId: plan.poolId, probability: m.openingProbability },
       "markets: pool opened at implied probability",
     );
-    return { opened: true, plan };
+    return { opened: true, plan, yesToken, noToken };
   } catch {
     // Already initialized — a previous half-completed run; done is done.
-    return { opened: false, plan };
+    return { opened: false, plan, yesToken, noToken };
   }
 }
 
@@ -246,6 +270,7 @@ export async function createMarketsOnChain(
     skippedPastKickoff: planned.length - todo.length,
     poolsOpened: 0,
     poolsSeeded: 0,
+    details: [],
     failures: [],
   };
 
@@ -284,6 +309,16 @@ export async function createMarketsOnChain(
       const boot = await bootstrapMarketPool(wallet, marketAddress, m);
       if (boot.opened) summary.poolsOpened += 1;
       if (await seedPoolLiquidity(wallet, marketAddress, boot.plan)) summary.poolsSeeded += 1;
+      summary.details.push({
+        marketId: m.marketId,
+        providerEventId: m.providerEventId,
+        outcomeIndex: m.outcomeIndex,
+        marketAddress,
+        yesToken: boot.yesToken,
+        noToken: boot.noToken,
+        poolId: boot.plan.poolId,
+        openingProbability: m.openingProbability,
+      });
     } catch (err) {
       summary.failures.push({
         marketId: m.marketId,

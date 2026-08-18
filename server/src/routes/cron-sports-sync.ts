@@ -3,7 +3,7 @@ import { db } from "../db/client.ts";
 import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { refreshSlate } from "../lib/sports/ingest.ts";
-import { upsertEvents } from "../lib/sports/store.ts";
+import { upsertEvents, upsertMarketRows } from "../lib/sports/store.ts";
 import { createMarketsOnChain } from "../lib/sports/markets-onchain.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
@@ -45,8 +45,14 @@ cronSportsSyncRouter.get(
         const persisted = await upsertEvents(db, refresh.provider, league, refresh.events);
 
         const creation = await createMarketsOnChain(refresh.marketsPlanned);
+        // Markets rows must exist before settlement can log (FK): persist
+        // everything the sweep touched, every tick.
+        const marketRows = creation
+          ? await upsertMarketRows(db, refresh.provider, creation.details)
+          : 0;
 
         results[league] = {
+          marketRowsPersisted: marketRows,
           provider: refresh.provider,
           delayed: refresh.delayed,
           eventsSeen: refresh.events.length,

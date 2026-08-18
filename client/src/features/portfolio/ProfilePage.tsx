@@ -1,5 +1,6 @@
-import { Bot, Droplet, LineChart, LogOut } from "lucide-react";
+import { Bot, Droplet, LogOut } from "lucide-react";
 import { StrategiesSection } from "./StrategiesSection.tsx";
+import { MarketPositionsSection } from "./MarketPositionsSection.tsx";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -53,15 +54,7 @@ export function ProfilePage({
           </p>
         </section>
 
-        <section className="mt-3 rounded-md border border-border-soft px-4 py-3.5">
-          <h3 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-mute">
-            <LineChart className="h-3.5 w-3.5" /> Market positions
-          </h3>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-text-dim">
-            None yet — sports markets open when the Dynamic Market Hook goes live. Positions you
-            take will show here with entry price, current implied probability, and P&amp;L.
-          </p>
-        </section>
+        <MarketPositionsSection />
 
         <section className="mt-3 rounded-md border border-border-soft px-4 py-3.5">
           <h3 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-text-mute">
