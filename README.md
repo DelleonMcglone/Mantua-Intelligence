@@ -20,10 +20,12 @@ From a single natural-language prompt you can:
 - **Bridge & manage treasury** move USDC cross-chain (Circle CCTP) and hold a unified,
   multi-chain USDC balance (Circle Gateway).
 
-> **Status.** The prediction market is under active construction see
-> [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md) for the build plan and what is
-> and is not live. The trading, liquidity, agent, and treasury surfaces described below ship
-> today. Market pools list once the Dynamic Market Hook is deployed.
+> **Status: live on Arc Testnet.** The full pipeline runs in production — each day's games
+> are ingested, their markets minted on-chain, their pools opened at the provider's implied
+> odds and seeded with liquidity, all automatically. Positions trade from the league pages;
+> markets freeze at kickoff and settle from live game data through the on-chain Resolver.
+> [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md) tracks the build plan
+> (phases B0–B10 complete; a handful of P2/P3 refinements remain).
 
 ## The problem and who it's for
 
@@ -99,9 +101,15 @@ Programmable money buying programmable intelligence, then acting on it in one au
   mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
   hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
   open Analyze.
-- **Sports markets.** Per-league pages for the covered leagues, with market pricing, position
-  entry, and settlement. Browsing is open to everyone; any on-chain transaction requires a
-  logged-in wallet.
+- **Sports markets.** Full-screen per-league pages (Polymarket-style): date-grouped games with
+  moneyline prices in cents fed by the **live pool price**, and a trade sidebar — pick a side,
+  set an amount, get a live quote, sign with your wallet. Browsing and matchup details are open
+  to everyone; anonymous visitors also get **three free analyst questions a day** (enforced
+  server-side), after which chat and every transaction require login.
+- **Automated hedging strategies.** Describe one in plain language ("take profit at 80% on the
+  Chiefs"), confirm the structured preview, and it arms: evaluated on price and game-state
+  ticks, sized under its own USDC cap, auto-disarmed at kickoff freeze. Kill switches at every
+  level; every transition audited.
 - **State-aware Mantua hooks.** Custom hooks embed pricing, fee logic, and circuit breakers
   directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
   to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
@@ -163,9 +171,9 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 
 ### Uniswap v4
 
-- **Custom hooks** Mantua hooks, each deployed at a mined CREATE2 address. Stable Protection
-  and Dynamic Fee are live; the Dynamic Market Hook is specified but not yet built. Source repos
-  linked under [Architecture](#architecture).
+- **Custom hooks** Mantua hooks, each deployed at a mined CREATE2 address. All three are live
+  on Arc: the Dynamic Market Hook (prediction markets), Stable Protection, and Dynamic Fee.
+  Source repos linked under [Architecture](#architecture).
 - **v4 periphery, per hook** PoolManager, PositionManager, StateView, V4Quoter, and
   PoolSwapTest. The app routes each pool's create / liquidity / swap / read to its hook's own
   stack (no-hook pools fall back to the Stable Protection stack).
@@ -217,7 +225,10 @@ loop over a server-custodied Circle wallet on Arc (sponsored gas, daily USD spen
 - **Client** Vite + React + TypeScript SPA; Privy auth (embedded + external wallets), viem,
   lightweight-charts.
 - **Server** Express + TypeScript API; Anthropic **Claude** (`claude-opus-4-8`) agent loop,
-  Drizzle ORM + Postgres (Neon). Deployed on **Vercel** (serverless) with daily crons (agent rebalance + Pyth peg-sync).
+  Drizzle ORM + Postgres (Neon). Deployed on **Vercel** (serverless) with daily crons —
+  sports-sync (ingest + on-chain market/pool creation), resolution (settlement), strategies
+  (hedging ticks), agent rebalance, and Pyth peg-sync. Game-day cadence comes from pointing any
+  external scheduler at the same cron URLs.
 
 ---
 
@@ -249,16 +260,18 @@ contract deployed at a mined CREATE2 address, and each lives on its **own** v4 s
 - PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every pool's create /
   liquidity / swap / read to the stack of that pool's hook.
 
-| Hook                    | Surface           | Purpose                                                                                     | Status       |
-| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------- | ------------ |
-| **Dynamic Market Hook** | Prediction market | Adapts pricing, fees, liquidity, and risk parameters in real time from game state and flow  | Not deployed |
-| **Stable Protection**   | Trading           | Monitors peg deviation across five zones, scaling LP fees to severity and halting past 5%   | Live on Arc  |
-| **Dynamic Fee**         | Trading           | Nezlobin directional fees across five deviation zones, charging the toxic side of the trade | Live on Arc  |
+| Hook                    | Surface           | Purpose                                                                                     | Status      |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------- | ----------- |
+| **Dynamic Market Hook** | Prediction market | Adapts pricing, fees, liquidity, and risk parameters in real time from game state and flow  | Live on Arc |
+| **Stable Protection**   | Trading           | Monitors peg deviation across five zones, scaling LP fees to severity and halting past 5%   | Live on Arc |
+| **Dynamic Fee**         | Trading           | Nezlobin directional fees across five deviation zones, charging the toxic side of the trade | Live on Arc |
 
-> **The Dynamic Market Hook is not built yet.** Its specification is the open decision DM-110,
-> which blocks the whole of phase B2 see
-> [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md) for what the spec
-> must answer. Market pages show an empty state until it deploys.
+> The Dynamic Market Hook shipped against the authoritative spec in
+> [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md): a 0.30%–5% adaptive
+> fee band (five weighted premiums + a directional adjustment), per-risk trade caps,
+> timestamp-driven kickoff freeze that fires even with no keeper write, and fail-closed
+> behaviour on stale keeper state. Security review: 0 HIGH / 0 MEDIUM open
+> ([`docs/security/sign-off.md`](docs/security/sign-off.md), owner-signed).
 
 > Two further hooks **RWA Gate** (permissioned pools via a ComplianceRegistry) and
 > **Async Limit Order** are built and were previously deployed on testnet, but are
@@ -270,6 +283,27 @@ contract deployed at a mined CREATE2 address, and each lives on its **own** v4 s
 
 All addresses are live on Arc Testnet and verifiable on [ArcScan](https://testnet.arcscan.app).
 Each hook has its own full v4 stack.
+
+### Dynamic Market Hook — sports prediction markets
+
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
+| DynamicMarketHook       | `0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0` |
+| PoolManager             | `0xee196B3F83Fe6f57E074C399DBdeFe07e1407636` |
+| MarketStateRegistry     | `0xEA8c2f329E7eBD9a67FA7E502CEcc938bE3ec7a6` |
+| MarketFactory           | `0x0cd79B383c3f10F786bF9B942F791283dFB4d6e6` |
+| Resolver                | `0x76578c4EA626bEe114e5B72939e7927eF5f1CAbF` |
+| PositionManager         | `0xd288EE632fb58101211C7c87b3FCF44328C6866d` |
+| StateView               | `0x17a69A23F3c0F7F0dCA6391f967C020BaC0906da` |
+| V4Quoter                | `0x448E16702C19fF0b0AF7b51D675Cc40f1b2D5281` |
+| PoolSwapTest            | `0x1791972C76a8Bcb9da83E50B9435612590a0102f` |
+| PoolModifyLiquidityTest | `0x6A8Ce701aB14a2909F22a18063426fEE016A36da` |
+
+Each game's Market contract and YES/NO tokens are minted by the factory at ingest time —
+deterministic ids, one market per side per game. The Resolver is the fixed settlement
+authority every market burns in as an immutable; the keys behind it rotate without
+redeploying a single market. Deployment record:
+[`deploy/dynamic-market/README.md`](deploy/dynamic-market/README.md).
 
 ### Stable Protection USDC/EURC
 
@@ -305,8 +339,9 @@ client/      Vite + React + TypeScript SPA (port 5173) landing, docs, legal, mar
              swap/LP/agent panels
 server/      Express + TypeScript API (port 3001) calldata builders, quotes, agent, portfolio,
              market id + probability utils, Drizzle schema
-contracts/   Foundry market primitives (MarketFactory, Market, OutcomeToken, pool bootstrap)
-             and their tests
+contracts/   Foundry contracts: market primitives (MarketFactory, Market, OutcomeToken,
+             Resolver, pool bootstrap), the Dynamic Market Hook (8 modules), full-lifecycle
+             E2E tests, and the deploy scripts (contracts/script/)
 deploy/      Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
 docs/        Architecture, specs, decision memos, task lists, legal drafts
 ```
@@ -334,7 +369,9 @@ docs/        Architecture, specs, decision memos, task lists, legal drafts
 | [`docs/decisions/sports-pivot-decisions.md`](docs/decisions/sports-pivot-decisions.md)               | Each decision, its reasoning, and what it rules out           |
 | [`docs/specs/market-lifecycle.md`](docs/specs/market-lifecycle.md)                                   | Market states, transitions, failure modes                     |
 | [`docs/specs/market-id.md`](docs/specs/market-id.md)                                                 | Deterministic market ids                                      |
-| [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md)                             | Blocked what the hook spec must answer                        |
+| [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md)                             | The authoritative hook spec (§1–§46) + implementation record  |
+| [`docs/security/sign-off.md`](docs/security/sign-off.md)                                             | Ship-gate security sign-off — findings, rails, E2E proofs     |
+| [`docs/ops/incident-runbook.md`](docs/ops/incident-runbook.md)                                       | Kill switches, mis-resolution, provider failover, comms       |
 | [`docs/tasks/sports-pivot-scope-reconciliation.md`](docs/tasks/sports-pivot-scope-reconciliation.md) | What survives the pivot, what is superseded, what is deferred |
 
 An in-app documentation site covering the same ground for users is reachable from the landing
@@ -355,15 +392,15 @@ Requires Postgres + a `.env` (see `server/.env.example`, `client/.env.example`).
 ```bash
 npm run typecheck            # all workspaces
 npm run lint                 # eslint, zero warnings tolerated
-npm test -w @mantua/server   # 100 tests
-npm test -w @mantua/client   # 75 tests
+npm test -w @mantua/server   # 223 tests
+npm test -w @mantua/client   # 84 tests
 ```
 
 ### Contracts
 
 ```bash
 cd contracts
-forge test --match-path "test/markets/*"   # 40 tests
+forge test    # 204 tests: market primitives, hook suites, invariants, full-lifecycle E2E
 ```
 
 > **Dependencies are not vendored.** `contracts/lib/` is gitignored, so a fresh checkout has no
