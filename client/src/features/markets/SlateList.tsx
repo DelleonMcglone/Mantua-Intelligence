@@ -85,7 +85,14 @@ function MatchupCard({ event, onClick }: { event: SlateEvent; onClick: () => voi
     >
       <div className="mb-2 flex items-center justify-between text-[11px]">
         <StatusChip live={live} final={final} voided={voided} startsAt={event.startsAt} />
-        <span className="text-text-mute">Tap to analyze</span>
+        <span className="text-text-mute">
+          {event.liveOdds && (
+            <span className="mr-2 rounded-[3px] bg-accent/15 px-1 py-px font-mono text-[9px] uppercase tracking-wider text-accent">
+              Market odds
+            </span>
+          )}
+          Tap to analyze
+        </span>
       </div>
       <TeamRow
         team={event.away}

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { toPublicSlate, type PublicSlate } from "../lib/sports/public-slate.ts";
+import { withLiveOdds } from "../lib/sports/live-odds.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 
 export const sportsSlateRouter = Router();
@@ -38,7 +39,7 @@ sportsSlateRouter.get("/api/sports/slate", async (req: Request, res: Response) =
   await Promise.all(
     leagues.map(async (league) => {
       try {
-        slates[league] = toPublicSlate(await espn.getSlate(league));
+        slates[league] = await withLiveOdds(toPublicSlate(await espn.getSlate(league)));
       } catch (err) {
         logger.warn({ league, err }, "sports-slate: fetch failed");
         slates[league] = { error: "Slate temporarily unavailable" };

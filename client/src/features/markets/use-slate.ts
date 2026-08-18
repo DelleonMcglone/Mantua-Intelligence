@@ -18,6 +18,8 @@ export interface SlateEvent {
   homeScore?: number;
   awayScore?: number;
   homeWinProbabilityBps?: number;
+  /** True when the probability is the live on-chain pool price. */
+  liveOdds?: boolean;
 }
 
 export interface Slate {

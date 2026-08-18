@@ -46,6 +46,11 @@ const schema = z.object({
     .union([z.literal("0"), z.literal("1")])
     .default("0")
     .transform((v) => v === "1"),
+  /** Per-market liquidity seed, in USDC units (6dp; 1000000 = 1 USDC).
+   *  The signer splits this into a YES/NO set and LPs the YES/USDC pool so
+   *  new markets are tradeable at the opening odds. 0 disables seeding. */
+  MARKET_SEED_USDC: z.coerce.number().int().min(0).max(50_000_000).default(1_000_000),
+
   /** B9-007 — strategies-only global kill: every armed hedging strategy
    *  disarms on the next engine tick and nothing new fires. Narrower than
    *  MANTUA_KILL_SWITCH (which blocks all writes app-wide). */

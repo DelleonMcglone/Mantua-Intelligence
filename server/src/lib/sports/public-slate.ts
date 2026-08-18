@@ -32,6 +32,9 @@ export interface PublicEvent {
   homeScore?: number;
   awayScore?: number;
   homeWinProbabilityBps?: number;
+  /** True when homeWinProbabilityBps is the on-chain pool price, not the
+   *  provider's line (live-odds.ts). */
+  liveOdds?: boolean;
 }
 
 export interface PublicSlate {

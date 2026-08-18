@@ -17,12 +17,17 @@ import { env } from "../../env.ts";
 import { logger } from "../logger.ts";
 import { baseRpcClient } from "../rpc-client.ts";
 import {
+  ERC20_APPROVE_ABI,
+  LP_ROUTER_ABI,
   MARKETS_ARC,
+  MARKETS_PERIPHERY_ARC,
   MARKET_ABI,
   MARKET_FACTORY_ABI,
+  MARKET_SPLIT_ABI,
   POOL_MANAGER_INIT_ABI,
   REGISTRY_ABI,
   RESOLVER_CONTRACT_ABI,
+  STATE_VIEW_ABI,
 } from "../markets-contracts.ts";
 import { DYNAMIC_MARKET_ARC } from "../v4-contracts.ts";
 import { planMarketPool } from "./market-pool.ts";
@@ -55,12 +60,102 @@ export interface MarketCreationSummary {
   existed: number;
   skippedPastKickoff: number;
   poolsOpened: number;
+  poolsSeeded: number;
   failures: { marketId: string; error: string }[];
 }
 
 /** Four-hour window mirrors the test harness; resolution can run later —
  *  the registry timestamp only drives the hook's near-resolution premium. */
 const RESOLUTION_WINDOW_SECONDS = 4 * 3600;
+
+/** Wide range straddling most opening odds (p ≈ 0.09–0.91); multiple of
+ *  the 60 tick spacing. Outside it a seed goes single-sided, which the
+ *  conservative L sizing below still affords. */
+const SEED_TICK = 11_520;
+
+async function writeAndWait(
+  wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
+  request: unknown,
+): Promise<void> {
+  const tx = await wallet.writeContract(request as never);
+  await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+}
+
+/**
+ * Seed a freshly opened pool with a sliver of protocol liquidity so the
+ * market is actually tradeable at its opening odds — a pool with a price
+ * but no liquidity fills nothing. The signer splits MARKET_SEED_USDC into
+ * a full YES/NO set and LPs the YES side with USDC across a wide range.
+ * L = seed/3 keeps the worst-case single-sided requirement under the
+ * split amount at any clamped opening probability. Idempotent by the
+ * liquidity check: already-seeded pools are skipped.
+ */
+async function seedPoolLiquidity(
+  wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
+  marketAddress: `0x${string}`,
+  plan: ReturnType<typeof planMarketPool>,
+): Promise<boolean> {
+  const seed = BigInt(env.MARKET_SEED_USDC);
+  if (seed === 0n) return false;
+
+  const liquidity = await baseRpcClient.readContract({
+    address: MARKETS_PERIPHERY_ARC.stateView,
+    abi: STATE_VIEW_ABI,
+    functionName: "getLiquidity",
+    args: [plan.poolId],
+  });
+  if (liquidity > 0n) return false;
+
+  const approveThenCall = async (token: `0x${string}`, spender: `0x${string}`, amount: bigint) => {
+    const { request } = await baseRpcClient.simulateContract({
+      account: wallet.account,
+      address: token,
+      abi: ERC20_APPROVE_ABI,
+      functionName: "approve",
+      args: [spender, amount],
+    });
+    await writeAndWait(wallet, request);
+  };
+
+  // 1. Split seed USDC into YES + NO (NO stays with the signer; only the
+  //    YES/USDC pool exists — DM-101's complementary market covers NO).
+  await approveThenCall(MARKETS_ARC.collateral, marketAddress, seed);
+  const { request: splitReq } = await baseRpcClient.simulateContract({
+    account: wallet.account,
+    address: marketAddress,
+    abi: MARKET_SPLIT_ABI,
+    functionName: "split",
+    args: [seed],
+  });
+  await writeAndWait(wallet, splitReq);
+
+  // 2. LP: approve both sides to the liquidity router and add.
+  const yesToken = plan.yesIsToken0 ? plan.key.currency0 : plan.key.currency1;
+  await approveThenCall(yesToken, MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest, seed);
+  await approveThenCall(
+    MARKETS_ARC.collateral,
+    MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest,
+    seed,
+  );
+  const { request: lpReq } = await baseRpcClient.simulateContract({
+    account: wallet.account,
+    address: MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest,
+    abi: LP_ROUTER_ABI,
+    functionName: "modifyLiquidity",
+    args: [
+      plan.key,
+      {
+        tickLower: -SEED_TICK,
+        tickUpper: SEED_TICK,
+        liquidityDelta: seed / 3n,
+        salt: `0x${"00".repeat(32)}`,
+      },
+      "0x",
+    ],
+  });
+  await writeAndWait(wallet, lpReq);
+  return true;
+}
 
 /**
  * B1-009 — open the market's YES/USDC pool at the provider's implied
@@ -73,7 +168,7 @@ async function bootstrapMarketPool(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
   marketAddress: `0x${string}`,
   m: PlannedMarket,
-): Promise<boolean> {
+): Promise<{ opened: boolean; plan: ReturnType<typeof planMarketPool> }> {
   const yesToken = await baseRpcClient.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
@@ -124,10 +219,10 @@ async function bootstrapMarketPool(
       { marketId: m.marketId, poolId: plan.poolId, probability: m.openingProbability },
       "markets: pool opened at implied probability",
     );
-    return true;
+    return { opened: true, plan };
   } catch {
     // Already initialized — a previous half-completed run; done is done.
-    return false;
+    return { opened: false, plan };
   }
 }
 
@@ -150,6 +245,7 @@ export async function createMarketsOnChain(
     existed: 0,
     skippedPastKickoff: planned.length - todo.length,
     poolsOpened: 0,
+    poolsSeeded: 0,
     failures: [],
   };
 
@@ -183,9 +279,11 @@ export async function createMarketsOnChain(
         summary.created += 1;
         logger.info({ marketId: m.marketId, label: m.label, txHash }, "markets: created on-chain");
       }
-      // Pool bootstrap runs for existing markets too — a half-completed
-      // earlier sweep (market yes, pool no) heals on the next tick.
-      if (await bootstrapMarketPool(wallet, marketAddress, m)) summary.poolsOpened += 1;
+      // Pool bootstrap + seed run for existing markets too — a
+      // half-completed earlier sweep heals on the next tick.
+      const boot = await bootstrapMarketPool(wallet, marketAddress, m);
+      if (boot.opened) summary.poolsOpened += 1;
+      if (await seedPoolLiquidity(wallet, marketAddress, boot.plan)) summary.poolsSeeded += 1;
     } catch (err) {
       summary.failures.push({
         marketId: m.marketId,
