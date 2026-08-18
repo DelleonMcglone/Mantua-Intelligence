@@ -323,7 +323,9 @@ export default function App() {
           <InputBar
             onSubmit={handleCommand}
             placeholder={
-              authenticated ? undefined : "Log in to chat with Mantua or trade — browsing is free"
+              authenticated
+                ? undefined
+                : "Ask the analyst — 3 free questions. Log in to trade and do more"
             }
           />
         }
