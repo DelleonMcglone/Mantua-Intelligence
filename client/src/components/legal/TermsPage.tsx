@@ -1,4 +1,4 @@
-import { LegalPage, Section, List, Mail, CONTACT_EMAIL, GOVERNING_LAW } from "./LegalPage.tsx";
+import { LegalPage, Section, List, DiscordLink, GOVERNING_LAW } from "./LegalPage.tsx";
 
 interface Props {
   onBack: () => void;
@@ -222,7 +222,7 @@ export function TermsPage({ onBack, onLaunch }: Props) {
 
       <Section title="Contact us">
         <p>
-          Questions about these terms can be sent to <Mail address={CONTACT_EMAIL} />.
+          Questions about these terms can be sent to us on <DiscordLink />.
         </p>
       </Section>
     </LegalPage>

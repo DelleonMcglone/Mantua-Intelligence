@@ -1,4 +1,4 @@
-import { LegalPage, Section, List, Mail, CONTACT_EMAIL } from "./LegalPage.tsx";
+import { LegalPage, Section, List, DiscordLink } from "./LegalPage.tsx";
 
 interface Props {
   onBack: () => void;
@@ -194,9 +194,8 @@ export function PrivacyPage({ onBack, onLaunch }: Props) {
           address to a Mantua user — it cannot remove anything from the chain.
         </p>
         <p>
-          To make a request, contact us at <Mail address={CONTACT_EMAIL} />. We may need to verify
-          your identity before we act. We will not discriminate against you for exercising these
-          rights.
+          To make a request, contact us on <DiscordLink />. We may need to verify your identity
+          before we act. We will not discriminate against you for exercising these rights.
         </p>
       </Section>
 
@@ -227,8 +226,8 @@ export function PrivacyPage({ onBack, onLaunch }: Props) {
 
       <Section title="Contact us">
         <p>
-          Questions about this policy or how we handle information can be sent to{" "}
-          <Mail address={CONTACT_EMAIL} />.
+          Questions about this policy or how we handle information can be sent to us on{" "}
+          <DiscordLink />.
         </p>
       </Section>
     </LegalPage>

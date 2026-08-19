@@ -1,4 +1,4 @@
-import { LegalPage, Section, List, Mail, CONTACT_EMAIL } from "./LegalPage.tsx";
+import { LegalPage, Section, List, DiscordLink } from "./LegalPage.tsx";
 
 interface Props {
   onBack: () => void;
@@ -126,10 +126,9 @@ export function MarketIntegrityPage({ onBack, onLaunch }: Props) {
       <Section title="Reporting a concern">
         <p>
           If you see something that looks like manipulation, insider activity, or an attempt to
-          influence an event, tell us at <Mail address={CONTACT_EMAIL} />. Include the market, the
-          approximate time, and any addresses or transactions involved. Reports are treated
-          confidentially, and we will not retaliate against anyone who reports a concern in good
-          faith.
+          influence an event, tell us on <DiscordLink />. Include the market, the approximate time,
+          and any addresses or transactions involved. Reports are treated confidentially, and we
+          will not retaliate against anyone who reports a concern in good faith.
         </p>
       </Section>
 

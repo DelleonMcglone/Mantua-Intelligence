@@ -10,9 +10,9 @@ export type LegalDoc = "privacy" | "terms" | "integrity";
  *  materially. */
 export const EFFECTIVE_DATE = "August 15, 2026";
 
-/** One inbox handles privacy requests, terms questions, and market
- *  integrity reports. */
-export const CONTACT_EMAIL = "info@mantua.ai";
+/** One channel handles privacy requests, terms questions, and market
+ *  integrity reports while the support inbox is not yet set up. */
+export const DISCORD_URL = "https://discord.gg/kUfEpzvaFf";
 
 /** Governing law for the Terms. Set to Delaware on the basis that the
  *  operating entity is established there — re-check if that changes. The
@@ -118,11 +118,11 @@ export function List({ children }: { children: ReactNode }) {
   );
 }
 
-/** Inline mailto styled as a policy link. */
-export function Mail({ address }: { address: string }) {
+/** Inline Discord link styled as a policy link. */
+export function DiscordLink() {
   return (
-    <a href={`mailto:${address}`} className="text-accent hover:text-accent-2 underline">
-      {address}
+    <a href={DISCORD_URL} className="text-accent hover:text-accent-2 underline">
+      Discord
     </a>
   );
 }
