@@ -512,6 +512,7 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
             {...(route.topic ? { initialTopic: route.topic } : {})}
             {...(route.question ? { initialQuestion: route.question } : {})}
             {...(route.symbol ? { initialSymbol: route.symbol } : {})}
+            onBack={home}
             onClose={home}
           />
         </PanelPage>

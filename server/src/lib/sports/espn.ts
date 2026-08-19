@@ -227,9 +227,16 @@ export class EspnProvider implements SportsDataProvider {
     return this.http.breakerState();
   }
 
-  async getSlate(league: LeagueSlug): Promise<ProviderSlate> {
-    const path = `/apis/site/v2/sports/${LEAGUE_PATH[league]}/scoreboard`;
-    const res = await this.http.get<unknown>(`espn:slate:${league}`, path, PREGAME_TTL_MS);
+  async getSlate(league: LeagueSlug, dates?: string): Promise<ProviderSlate> {
+    // `dates` is a pre-validated YYYYMMDD-YYYYMMDD range (see the slate
+    // route); ESPN's scoreboard accepts it on every league. Omitted = today.
+    const suffix = dates ? `?dates=${dates}` : "";
+    const path = `/apis/site/v2/sports/${LEAGUE_PATH[league]}/scoreboard${suffix}`;
+    const res = await this.http.get<unknown>(
+      `espn:slate:${league}:${dates ?? "today"}`,
+      path,
+      PREGAME_TTL_MS,
+    );
     return {
       provider: this.name,
       league,

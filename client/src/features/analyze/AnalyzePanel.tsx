@@ -91,6 +91,10 @@ const nextId = () => `t${String(++seq)}`;
 
 interface AnalyzePanelProps {
   onClose: () => void;
+  /** Back affordance — returns to where the user came from (e.g. the home
+   *  board after a tap-to-analyze). Falls back to "clear the thread" when
+   *  absent. */
+  onBack?: () => void;
   /** Skip the suggestions and run this topic immediately (chat input matched a
    *  known topic). */
   initialTopic?: Topic;
@@ -113,6 +117,7 @@ interface AnalyzePanelProps {
  */
 export function AnalyzePanel({
   onClose,
+  onBack,
   initialTopic,
   initialQuestion,
   initialSymbol,
@@ -307,7 +312,7 @@ export function AnalyzePanel({
       <PanelSubHeader
         title="Analyze & Research"
         subtitle="Ask about prices, pegs, pools, or anything markets — pick a suggestion or type."
-        {...(messages.length > 0 ? { onBack: newChat } : {})}
+        {...(onBack ? { onBack } : messages.length > 0 ? { onBack: newChat } : {})}
         onClose={onClose}
       />
 

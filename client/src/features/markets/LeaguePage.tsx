@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { publicClient } from "@/lib/privy/wallet-client.ts";
 import { parseAbi } from "viem";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { getSport, SPORTS, type SportId } from "./sports.ts";
 import { useSlate, type SlateEvent } from "./use-slate.ts";
@@ -23,6 +24,105 @@ interface Selection {
   outcomeIndex: 0 | 1;
 }
 
+// ─── Week selector ───────────────────────────────────────────────────────────
+
+interface WeekOption {
+  label: string;
+  /** YYYYMMDD-YYYYMMDD range for the slate API. */
+  dates: string;
+}
+
+function ymd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${String(d.getFullYear())}${m}${day}`;
+}
+
+function shortDate(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Last week, this week, and the next four — Sunday-to-Saturday windows. */
+function buildWeekOptions(): WeekOption[] {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(now.getDate() - now.getDay());
+  const options: WeekOption[] = [];
+  for (let i = -1; i <= 4; i++) {
+    const s = new Date(start);
+    s.setDate(start.getDate() + i * 7);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    const label =
+      i === -1 ? "Last week" : i === 0 ? "This week" : `${shortDate(s)} – ${shortDate(e)}`;
+    options.push({ label, dates: `${ymd(s)}-${ymd(e)}` });
+  }
+  return options;
+}
+
+function WeekSelector({
+  options,
+  active,
+  onSelect,
+}: {
+  options: WeekOption[];
+  active: WeekOption;
+  onSelect: (option: WeekOption) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on any outside click.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+        }}
+        className="inline-flex items-center gap-1.5 rounded-full bg-chip px-4 py-2 text-[13px] font-medium text-text hover:bg-accent/20 transition-colors cursor-pointer"
+      >
+        {active.label}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1.5 w-48 rounded-md border border-border-soft bg-panel-solid py-1 shadow-lg">
+          {options.map((option) => (
+            <button
+              key={option.dates}
+              type="button"
+              onClick={() => {
+                onSelect(option);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between px-3.5 py-2 text-left text-[13px] hover:bg-chip cursor-pointer ${
+                option.dates === active.dates ? "font-semibold text-text" : "text-text-dim"
+              }`}
+            >
+              {option.label}
+              {option.dates === active.dates && (
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Full-screen league page (Polymarket-style): date-grouped game rows with
  * moneyline prices in cents, and a persistent trade sidebar on the right.
@@ -32,19 +132,28 @@ interface Selection {
  */
 export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirection }: Props) {
   const active = getSport(sport);
-  const { slates, loading } = useSlate();
+  const weekOptions = useMemo(() => buildWeekOptions(), []);
+  // Index 1 = "This week" — the page shows the week's games, not just today's.
+  const [week, setWeek] = useState<WeekOption>(() => weekOptions[1]);
+  const { slates, loading } = useSlate(week.dates);
   const [selection, setSelection] = useState<Selection | null>(null);
 
   const slate = slates[active.id];
   const events = useMemo(() => slate?.events ?? [], [slate]);
 
-  // Default selection: the deep-linked game, else the first tradeable one.
+  // Default selection: the deep-linked game, else the first tradeable one,
+  // else the first upcoming (or any) game — the trade sidebar is always
+  // populated so switching matchups just switches the teams in it.
   const effective = useMemo<Selection | null>(() => {
     if (selection) return selection;
     const linked = initialEventId
       ? events.find((e) => e.providerEventId === initialEventId)
       : undefined;
-    const first = linked ?? events.find((e) => e.liveOdds && e.status === "scheduled");
+    const first =
+      linked ??
+      events.find((e) => e.liveOdds && e.status === "scheduled") ??
+      events.find((e) => e.status === "scheduled") ??
+      events.at(0);
     return first ? { event: first, outcomeIndex: 0 } : null;
   }, [selection, events, initialEventId]);
 
@@ -63,8 +172,22 @@ export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirect
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-6">
-      <h1 className="text-[28px] font-bold tracking-tight">{active.label}</h1>
-      <p className="mt-1 text-[13px] text-text-dim">{active.blurb}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-bold tracking-tight">{active.label}</h1>
+          <p className="mt-1 text-[13px] text-text-dim">{active.blurb}</p>
+        </div>
+        <WeekSelector
+          options={weekOptions}
+          active={week}
+          onSelect={(option) => {
+            setWeek(option);
+            // A selection from another week is stale — let the default
+            // re-pick from the new slate.
+            setSelection(null);
+          }}
+        />
+      </div>
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row">
         {/* Games list */}
@@ -72,7 +195,14 @@ export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirect
           {loading && !slate && <p className="text-[13px] text-text-dim">Loading games…</p>}
           {!loading && events.length === 0 && (
             <div className="rounded-md border border-border-soft px-5 py-10 text-center">
-              <p className="text-[14px] font-medium">No {active.label} games today</p>
+              <p className="text-[14px] font-medium">
+                No {active.label} games{" "}
+                {week.label === "This week"
+                  ? "this week"
+                  : week.label === "Last week"
+                    ? "last week"
+                    : `for ${week.label}`}
+              </p>
               <p className="mx-auto mt-1.5 max-w-sm text-[12.5px] text-text-dim">
                 Off-season or a quiet slate — games and markets appear the moment the schedule does.
               </p>

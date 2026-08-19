@@ -44,28 +44,42 @@ export interface SlateState {
 const REFRESH_MS = 60_000;
 
 /**
- * Today's games across the covered leagues, refreshed once a minute.
+ * Games across the covered leagues, refreshed once a minute. Defaults to
+ * today's slate; pass `dates` (YYYYMMDD-YYYYMMDD) for a whole week's games.
  * Public — no login needed to browse (B5-007); the server's provider cache
  * makes the poll cheap.
  */
-export function useSlate(): SlateState {
-  const [state, setState] = useState<SlateState>({ slates: {}, loading: true, error: false });
+interface SlateInner extends SlateState {
+  /** Which `dates` window the state was loaded for. `null` = nothing yet.
+   *  Comparing it against the requested window derives `loading` during a
+   *  week switch without a setState-in-effect. */
+  loadedFor: string | undefined | null;
+}
+
+export function useSlate(dates?: string): SlateState {
+  const [state, setState] = useState<SlateInner>({
+    slates: {},
+    loading: true,
+    error: false,
+    loadedFor: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const res = await api.get<SlateResponse>("/api/sports/slate");
+        const query = dates ? `?dates=${encodeURIComponent(dates)}` : "";
+        const res = await api.get<SlateResponse>(`/api/sports/slate${query}`);
         if (cancelled) return;
         const slates: Partial<Record<string, Slate>> = {};
         for (const [league, value] of Object.entries(res.leagues)) {
           if (!("error" in value)) slates[league] = value;
         }
-        setState({ slates, loading: false, error: false });
+        setState({ slates, loading: false, error: false, loadedFor: dates });
       } catch {
         if (!cancelled) {
-          setState((prev) => ({ ...prev, loading: false, error: true }));
+          setState((prev) => ({ ...prev, loading: false, error: true, loadedFor: dates }));
         }
       }
     };
@@ -78,7 +92,12 @@ export function useSlate(): SlateState {
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [dates]);
 
-  return state;
+  const switching = state.loadedFor !== null && state.loadedFor !== dates;
+  return {
+    slates: state.slates,
+    error: state.error,
+    loading: state.loading || switching,
+  };
 }

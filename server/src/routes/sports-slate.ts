@@ -27,6 +27,29 @@ function isLeague(value: unknown): value is LeagueSlug {
  * A league whose fetch fails reports `error` for that league while the others
  * still render — one upstream outage must not blank the whole board.
  */
+// A week's range as YYYYMMDD-YYYYMMDD. Bounded to 31 days below so a
+// crafted range can't turn one request into a season-sized upstream fetch.
+const DATES_RE = /^(\d{8})-(\d{8})$/;
+const MAX_RANGE_DAYS = 31;
+
+function parseYmd(ymd: string): number | null {
+  const t = Date.parse(`${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}T00:00:00Z`);
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Validated `?dates=` range, or null when absent, or an error string. */
+function parseDates(raw: unknown): string | null | { error: string } {
+  if (raw === undefined) return null;
+  if (typeof raw !== "string") return { error: "dates must be YYYYMMDD-YYYYMMDD" };
+  const m = DATES_RE.exec(raw);
+  if (!m) return { error: "dates must be YYYYMMDD-YYYYMMDD" };
+  const start = parseYmd(m[1]);
+  const end = parseYmd(m[2]);
+  if (start === null || end === null || end < start) return { error: "dates range is invalid" };
+  if (end - start > MAX_RANGE_DAYS * 86_400_000) return { error: "dates range is too long" };
+  return raw;
+}
+
 sportsSlateRouter.get("/api/sports/slate", async (req: Request, res: Response) => {
   const requested = req.query.league;
   if (requested !== undefined && !isLeague(requested)) {
@@ -35,11 +58,19 @@ sportsSlateRouter.get("/api/sports/slate", async (req: Request, res: Response) =
   }
   const leagues = requested !== undefined && isLeague(requested) ? [requested] : LEAGUES;
 
+  const dates = parseDates(req.query.dates);
+  if (dates !== null && typeof dates === "object") {
+    res.status(400).json({ error: dates.error, code: "BAD_DATES" });
+    return;
+  }
+
   const slates: Record<string, PublicSlate | { error: string }> = {};
   await Promise.all(
     leagues.map(async (league) => {
       try {
-        slates[league] = await withLiveOdds(toPublicSlate(await espn.getSlate(league)));
+        slates[league] = await withLiveOdds(
+          toPublicSlate(await espn.getSlate(league, dates ?? undefined)),
+        );
       } catch (err) {
         logger.warn({ league, err }, "sports-slate: fetch failed");
         slates[league] = { error: "Slate temporarily unavailable" };
