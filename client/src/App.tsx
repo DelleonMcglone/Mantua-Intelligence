@@ -489,6 +489,7 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
           onSelectSport={(sport) => {
             setRoute({ kind: "market", sport });
           }}
+          onBack={home}
         />
       );
     case "trading":

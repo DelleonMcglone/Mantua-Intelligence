@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { publicClient } from "@/lib/privy/wallet-client.ts";
 import { parseAbi } from "viem";
-import { ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { getSport, SPORTS, type SportId } from "./sports.ts";
 import { useSlate, type SlateEvent } from "./use-slate.ts";
@@ -13,6 +13,8 @@ const EXPLORER = "https://testnet.arcscan.app/tx/";
 interface Props {
   sport: SportId;
   onSelectSport: (id: SportId) => void;
+  /** Back to the home page. */
+  onBack: () => void;
   /** Deep-link: preselect this game (e.g. Close from the profile). */
   initialEventId?: string | undefined;
   /** Deep-link: open the sidebar on this direction. */
@@ -130,7 +132,13 @@ function WeekSelector({
  * live and executes with the user's wallet. Covered leagues only — the
  * "soon" leagues render the full-screen coming-soon state instead.
  */
-export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirection }: Props) {
+export function LeaguePage({
+  sport,
+  onSelectSport,
+  onBack,
+  initialEventId,
+  initialDirection,
+}: Props) {
   const active = getSport(sport);
   const weekOptions = useMemo(() => buildWeekOptions(), []);
   // Index 1 = "This week" — the page shows the week's games, not just today's.
@@ -157,7 +165,8 @@ export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirect
     return first ? { event: first, outcomeIndex: 0 } : null;
   }, [selection, events, initialEventId]);
 
-  if (active.coverage === "soon") return <ComingSoon sport={sport} onSelectSport={onSelectSport} />;
+  if (active.coverage === "soon")
+    return <ComingSoon sport={sport} onSelectSport={onSelectSport} onBack={onBack} />;
 
   // Group by local date.
   const groups = new Map<string, SlateEvent[]>();
@@ -173,9 +182,19 @@ export function LeaguePage({ sport, onSelectSport, initialEventId, initialDirect
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-bold tracking-tight">{active.label}</h1>
-          <p className="mt-1 text-[13px] text-text-dim">{active.blurb}</p>
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to home"
+            className="mt-1.5 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border-soft bg-transparent text-text-dim transition-colors hover:text-text cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-[28px] font-bold tracking-tight">{active.label}</h1>
+            <p className="mt-1 text-[13px] text-text-dim">{active.blurb}</p>
+          </div>
         </div>
         <WeekSelector
           options={weekOptions}
@@ -595,9 +614,11 @@ function TradeSidebar({
 function ComingSoon({
   sport,
   onSelectSport,
+  onBack,
 }: {
   sport: SportId;
   onSelectSport: (id: SportId) => void;
+  onBack: () => void;
 }) {
   const active = getSport(sport);
   const Icon = active.icon;
@@ -613,6 +634,13 @@ function ComingSoon({
         once those are running.
       </p>
       <div className="mt-6 flex gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-transparent px-4 py-2 text-[13px] font-medium text-text-dim transition-colors hover:text-text cursor-pointer"
+        >
+          <ArrowLeft className="h-4 w-4" /> Home
+        </button>
         {launch.map((s) => {
           const SIcon = s.icon;
           return (
