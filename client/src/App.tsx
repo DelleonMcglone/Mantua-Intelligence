@@ -15,7 +15,7 @@ import { LeaguePage } from "./features/markets/LeaguePage.tsx";
 import { isSportId, type SportId } from "./features/markets/sports.ts";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
-import { HomeMenu, type HomePromptId } from "./components/shell/HomeMenu.tsx";
+import { HomePromptRow, type HomePromptId } from "./components/shell/HomeMenu.tsx";
 import { InputBar } from "./components/shell/InputBar.tsx";
 import { AgentPanel } from "./features/agent/AgentPanel.tsx";
 import { AnalyzePanel } from "./features/analyze/AnalyzePanel.tsx";
@@ -412,17 +412,10 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
 function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
   const chainId = useCurrentChainId();
   switch (route.kind) {
+    // home renders as a full-screen page (see fullPage), like market /
+    // trading / agent below.
     case "home":
-      return (
-        <HomeMenu
-          onPromptSelect={(id) => {
-            setRoute(promptToRoute(id));
-          }}
-          onNewChat={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
+      return null;
     case "swap":
       return (
         <SwapPanel
@@ -545,6 +538,8 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
  */
 function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode | undefined {
   switch (route.kind) {
+    case "home":
+      return <HomeFullPage setRoute={setRoute} />;
     case "market":
       return (
         <LeaguePage
@@ -574,6 +569,34 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
     default:
       return undefined;
   }
+}
+
+/** Home page — the four prompt cards in a row across the top (agent →
+ *  analyze → swap → liquidity), then today's boards split side by side
+ *  (NFL | WNBA) instead of stacked. Chat starts from the dock below. */
+function HomeFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-6 py-6">
+      <HomePromptRow
+        onPromptSelect={(id) => {
+          setRoute(promptToRoute(id));
+        }}
+      />
+      <div className="mt-5 grid items-start gap-5 md:grid-cols-2">
+        <Board
+          onAnalyze={(question) => {
+            setRoute({ kind: "analyze", question });
+          }}
+          onOpenLeague={(sport) => {
+            setRoute({ kind: "market", sport: sport.id });
+          }}
+          onTrade={(sport) => {
+            setRoute({ kind: "market", sport: sport.id });
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 /** B7-001/002 — full-width trading page: swap and liquidity side by side
@@ -681,7 +704,7 @@ function detectIntent(text: string): Intent | null {
  *   needs a pool/position id we don't extract yet; PositionsList lets
  *   the user pick which position to remove.
  * - `send` → `agent` — the conversational agent handles sends.
- * - `portfolio` → `home` — HomeMenu already surfaces PortfolioCard
+ * - `portfolio` → `profile` — the profile surfaces PortfolioCard
  *   + AssetsCard.
  *
  * As deep-link surfaces land (send Route, etc.), the corresponding
