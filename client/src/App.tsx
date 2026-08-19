@@ -410,53 +410,24 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
 }
 
 function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
-  const chainId = useCurrentChainId();
   switch (route.kind) {
     // home renders as a full-screen page (see fullPage), like market /
     // trading / agent below.
     case "home":
       return null;
+    // swap / pools / add-liquidity / analyze / market / trading / agent
+    // render as full-screen pages (see fullPage); these cases exist only
+    // because the element tree is still constructed in split mode for
+    // every route kind.
     case "swap":
-      return (
-        <SwapPanel
-          // Remount per command so a fresh "swap …" re-applies tokens/hook/
-          // amount even when the resulting route looks identical.
-          key={`swap-${String(route.nonce ?? 0)}`}
-          {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
-          {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
-          {...(route.hook ? { initialHook: route.hook } : {})}
-          {...(route.amountIn ? { initialAmount: route.amountIn } : {})}
-          {...(route.venue ? { initialVenue: route.venue } : {})}
-          {...(route.bridgeDestination
-            ? { initialBridgeDestination: route.bridgeDestination }
-            : {})}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
-    // market / trading / agent render as full-screen pages (see fullPage);
-    // these cases exist only because the element tree is still constructed
-    // in split mode for every route kind.
+    case "pools":
+    case "add-liquidity":
+    case "analyze":
     case "market":
     case "trading":
       return null;
     case "profile":
       return <ProfileRoute setRoute={setRoute} />;
-    case "pools":
-      return (
-        <LiquidityListPage
-          onSelectPool={(id) => {
-            setRoute({ kind: "pool", id });
-          }}
-          onCreate={() => {
-            setRoute({ kind: "add-liquidity" });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
     case "pool":
       return (
         <PoolDetailPage
@@ -466,21 +437,6 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
           onAddLiquidity={(ctx) => {
             setRoute({ kind: "add-liquidity", ctx: { ...ctx, locked: true } });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
-    case "add-liquidity":
-      // Key on chainId so a network switch remounts the form and the
-      // useState initializers re-pick chain-aware defaults.
-      return (
-        <AddLiquidityForm
-          key={chainId}
-          {...(route.ctx ? { ctx: route.ctx } : {})}
-          onBack={() => {
-            setRoute({ kind: "pools" });
           }}
           onClose={() => {
             setRoute({ kind: "home" });
@@ -505,38 +461,21 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
-    case "analyze":
-      // No remount key: the panel is a persistent conversation thread. The
-      // first query seeds turn 1 from these props; later input arrives via the
-      // `mantua:analyze-input` event (see InputBar above) and appends.
-      return (
-        <AnalyzePanel
-          {...(route.topic ? { initialTopic: route.topic } : {})}
-          {...(route.question ? { initialQuestion: route.question } : {})}
-          {...(route.symbol ? { initialSymbol: route.symbol } : {})}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
     case "agent":
-      return (
-        <AgentPanel
-          {...(route.message ? { initialMessage: route.message } : {})}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
+      return null;
   }
 }
 
 /**
- * Full-screen routes (Polymarket-style surfaces): league pages, the
- * trading split, and the agent. Everything else keeps the two-column
- * board + panel shell. Returning undefined selects the split layout.
+ * Full-screen routes (Polymarket-style surfaces): home, league pages, the
+ * trading split, the agent, and the single-panel pages (analyze, swap,
+ * pools, add-liquidity). Everything else keeps the two-column board +
+ * panel shell. Returning undefined selects the split layout.
  */
 function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode | undefined {
+  const home = () => {
+    setRoute({ kind: "home" });
+  };
   switch (route.kind) {
     case "home":
       return <HomeFullPage setRoute={setRoute} />;
@@ -556,19 +495,106 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
       return <TradingFullPage setRoute={setRoute} />;
     case "agent":
       return (
-        <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
-          <Card className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ padding: 0 }}>
-            <AgentPanel
-              onClose={() => {
-                setRoute({ kind: "home" });
-              }}
-            />
-          </Card>
-        </div>
+        <PanelPage>
+          <AgentPanel
+            {...(route.message ? { initialMessage: route.message } : {})}
+            onClose={home}
+          />
+        </PanelPage>
       );
+    case "analyze":
+      // No remount key: the panel is a persistent conversation thread. The
+      // first query seeds turn 1 from these props; later input arrives via
+      // the `mantua:analyze-input` event (see InputBar above) and appends.
+      return (
+        <PanelPage>
+          <AnalyzePanel
+            {...(route.topic ? { initialTopic: route.topic } : {})}
+            {...(route.question ? { initialQuestion: route.question } : {})}
+            {...(route.symbol ? { initialSymbol: route.symbol } : {})}
+            onClose={home}
+          />
+        </PanelPage>
+      );
+    case "swap":
+      return (
+        <PanelPage>
+          <SwapPanel
+            // Remount per command so a fresh "swap …" re-applies tokens/hook/
+            // amount even when the resulting route looks identical.
+            key={`swap-${String(route.nonce ?? 0)}`}
+            {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
+            {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
+            {...(route.hook ? { initialHook: route.hook } : {})}
+            {...(route.amountIn ? { initialAmount: route.amountIn } : {})}
+            {...(route.venue ? { initialVenue: route.venue } : {})}
+            {...(route.bridgeDestination
+              ? { initialBridgeDestination: route.bridgeDestination }
+              : {})}
+            onClose={home}
+          />
+        </PanelPage>
+      );
+    case "pools":
+      return (
+        <PanelPage wide>
+          <LiquidityListPage
+            onSelectPool={(id) => {
+              setRoute({ kind: "pool", id });
+            }}
+            onCreate={() => {
+              setRoute({ kind: "add-liquidity" });
+            }}
+            onClose={home}
+          />
+        </PanelPage>
+      );
+    case "add-liquidity":
+      return <AddLiquidityFullPage route={route} setRoute={setRoute} />;
     default:
       return undefined;
   }
+}
+
+/** Full-page wrapper for the panels that used to live in the right column —
+ *  a centered card; each panel keeps its own header and X-close home. */
+function PanelPage({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div
+      className={`mx-auto flex h-full w-full ${wide ? "max-w-6xl" : "max-w-3xl"} flex-col px-6 py-6`}
+    >
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ padding: 0 }}>
+        {children}
+      </Card>
+    </div>
+  );
+}
+
+/** Add-liquidity as a full page — a component so it can key the form on the
+ *  chain id: a network switch remounts it and the useState initializers
+ *  re-pick chain-aware defaults. */
+function AddLiquidityFullPage({
+  route,
+  setRoute,
+}: {
+  route: Extract<Route, { kind: "add-liquidity" }>;
+  setRoute: (r: Route) => void;
+}) {
+  const chainId = useCurrentChainId();
+  return (
+    <PanelPage>
+      <AddLiquidityForm
+        key={chainId}
+        {...(route.ctx ? { ctx: route.ctx } : {})}
+        onBack={() => {
+          setRoute({ kind: "pools" });
+        }}
+        onClose={() => {
+          setRoute({ kind: "home" });
+        }}
+      />
+    </PanelPage>
+  );
 }
 
 /** Home page — the four prompt cards in a row across the top (agent →

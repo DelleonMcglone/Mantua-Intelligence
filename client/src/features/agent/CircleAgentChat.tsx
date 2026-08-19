@@ -71,8 +71,7 @@ type Msg = UserMsg | AssistantMsg;
  * under the default $100 daily spending cap.
  */
 const SUGGESTIONS: { label: string; message: string }[] = [
-  { label: "Create and manage agent wallet", message: "Create and manage agent wallet" },
-  { label: "Fund wallet", message: "Fund wallet" },
+  { label: "Create / Manage Agent", message: "Create and manage agent wallet" },
   {
     label: "Daily Brief",
     message:
@@ -83,6 +82,11 @@ const SUGGESTIONS: { label: string; message: string }[] = [
       "(4) Send 10 USDC back to my main wallet. " +
       "(5) If you need information you don't have, buy it from the x402 marketplace and say what it cost. " +
       "Finish by appending every transaction result to the briefing.",
+  },
+  {
+    label: "Trade",
+    message:
+      "Show me today's sports markets with live prices, evaluate the matchups, and recommend a bet.",
   },
   { label: "Swap Tokens", message: "Swap Tokens" },
   { label: "Send Tokens", message: "Send Tokens" },
@@ -95,6 +99,8 @@ const TOOL_VERB: Record<string, string> = {
   swap: "Executing swap",
   send: "Sending tokens",
   get_market_data: "Pulling market data",
+  get_sports_slate: "Reading today's games",
+  trade_market: "Trading sports market",
 };
 
 let seq = 0;
@@ -862,8 +868,8 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
         Hi — I'm your Circle agent on Arc. Tell me what to do in plain language and I'll handle it:
-        check balances, swap or send tokens, or look up market &amp; on-chain data. I act
-        autonomously within your daily spending cap.
+        check balances, swap or send tokens, evaluate sports markets and place bets, or look up
+        market &amp; on-chain data. I act autonomously within your daily spending cap.
       </div>
       <div
         style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflowX: "auto", paddingBottom: 2 }}

@@ -46,14 +46,17 @@ type Topic =
   | "mantua-hooks"
   | "token-price";
 
-const SUGGESTIONS: { topic: Topic; question: string }[] = [
-  { topic: "mantua-hooks", question: "Learn about Mantua hooks" },
+/** Empty-state cards: the top three are stablecoin questions (deterministic
+ *  topics), the remaining four are sports questions with no `topic` — they
+ *  route through the free-form analyst stream, which reads the live slate. */
+const SUGGESTIONS: { topic?: Topic; question: string }[] = [
   { topic: "market-summary", question: "Stablecoin market summary for USDC and EURC" },
-  { topic: "cirbtc-price", question: "Show me cirBTC price" },
   { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
   { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
-  { topic: "usdc-24h-volume", question: "What is USDC's 24h volume trend?" },
-  { topic: "coinbase-prices", question: "Coinbase spot prices for USDC, EURC, cirBTC" },
+  { question: "Analyze today's NFL games and matchups" },
+  { question: "Analyze today's WNBA games and matchups" },
+  { question: "Which game looks closest today, and where is the value?" },
+  { question: "What should a prediction-market bettor watch this week?" },
 ];
 
 // --- Conversation turn model -------------------------------------------------
@@ -247,13 +250,15 @@ export function AnalyzePanel({
     [buildHistory, seedTopic, streamChat],
   );
 
-  // Suggestion card → user turn + deterministic topic turn.
+  // Suggestion card → deterministic topic turn when the card names a topic,
+  // otherwise the free-form analyst stream (the sports cards).
   const runSuggestion = useCallback(
-    (s: { topic: Topic; question: string }) => {
+    (s: { topic?: Topic; question: string }) => {
       if (busyRef.current) return;
-      seedTopic(s.topic, s.question);
+      if (s.topic) seedTopic(s.topic, s.question);
+      else ask(s.question);
     },
-    [seedTopic],
+    [seedTopic, ask],
   );
 
   // Listen for input forwarded from the global InputBar (App.tsx).
@@ -318,7 +323,7 @@ export function AnalyzePanel({
   );
 }
 
-function EmptyState({ onPick }: { onPick: (s: { topic: Topic; question: string }) => void }) {
+function EmptyState({ onPick }: { onPick: (s: { topic?: Topic; question: string }) => void }) {
   return (
     <>
       <div className="text-[11px] text-text-mute tracking-[0.08em] mb-1 font-semibold">
@@ -327,7 +332,7 @@ function EmptyState({ onPick }: { onPick: (s: { topic: Topic; question: string }
       <div className="grid grid-cols-2 gap-2.5">
         {SUGGESTIONS.map((s) => (
           <button
-            key={s.topic}
+            key={s.question}
             type="button"
             onClick={() => {
               onPick(s);
