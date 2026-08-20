@@ -1,16 +1,22 @@
 /**
- * Supported chains.
- *
- * Scope: **Arc Testnet (5042002) only.** Mantua builds exclusively on
- * Arc, Circle's USDC-gas chain. Base (Sepolia + Mainnet) support has been
- * removed. Per-chain config (v4 contracts, hook addresses, token
+ * Supported chains: **Base Sepolia (84532, default)** and **Arc Testnet
+ * (5042002)**. Per-chain config (v4 contracts, hook addresses, token
  * registry, RPC URL) is keyed by chainId in the modules that own each
- * concern, leaving room to add Arc Mainnet later.
+ * concern.
  */
 
 import { fallback, http, type FallbackTransport } from "viem";
-import { arcTestnet as viemArcTestnet, type Chain } from "viem/chains";
+import {
+  arcTestnet as viemArcTestnet,
+  baseSepolia as viemBaseSepolia,
+  type Chain,
+} from "viem/chains";
 import { cleanEnv } from "./env.ts";
+
+// `import.meta.env` only exists under Vite — node-based test runners load
+// this module too (via hook-recommendations et al.), so read defensively.
+const viteEnv: Record<string, string | undefined> =
+  (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
 /**
  * Arc's three public RPC hosts. The primary rate-limits under load
@@ -34,7 +40,7 @@ const PUBLIC_ARC_RPC_URLS = [
  * limited"). Reorder the hosts so wallet ops start on Blockdaemon while
  * reads start on the main host; a VITE_ARC_RPC_URL override goes first.
  */
-const walletRpcOverride = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
+const walletRpcOverride = cleanEnv(viteEnv["VITE_ARC_RPC_URL"]);
 /**
  * Same-origin server proxy (`/api/rpc`) goes first: it rotates across all
  * three public hosts server-side and caches hot calls (eth_gasPrice), so
@@ -63,7 +69,28 @@ export const arcTestnet = {
   },
 } satisfies Chain;
 
+/**
+ * Base Sepolia — Base's public testnet (84532), ETH gas. The public RPC
+ * (`https://sepolia.base.org`) has no per-IP pathology like Arc's hosts,
+ * so no proxy/fallback reorder is needed; a `VITE_BASE_SEPOLIA_RPC_URL`
+ * override still goes first when set.
+ */
+const baseRpcOverride = cleanEnv(viteEnv["VITE_BASE_SEPOLIA_RPC_URL"]);
+const BASE_SEPOLIA_RPC_URLS = [
+  ...(baseRpcOverride ? [baseRpcOverride] : []),
+  "https://sepolia.base.org",
+];
+
+export const baseSepolia = {
+  ...viemBaseSepolia,
+  rpcUrls: {
+    ...viemBaseSepolia.rpcUrls,
+    default: { http: BASE_SEPOLIA_RPC_URLS },
+  },
+} satisfies Chain;
+
 export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
+export const BASE_SEPOLIA_CHAIN_ID = 84532 as const;
 
 /**
  * Arc Testnet — Circle's public testnet (chain id 5042002), where USDC
@@ -73,12 +100,12 @@ export const ARC_TESTNET_CHAIN_ID = 5042002 as const;
  * for the Privy config + per-chain RPC.
  */
 
-export const SUPPORTED_TESTNET_CHAIN_IDS = [ARC_TESTNET_CHAIN_ID] as const;
+export const SUPPORTED_TESTNET_CHAIN_IDS = [BASE_SEPOLIA_CHAIN_ID, ARC_TESTNET_CHAIN_ID] as const;
 
 export type SupportedTestnetChainId = (typeof SUPPORTED_TESTNET_CHAIN_IDS)[number];
 
-/** The single active chain id. */
-export const DEFAULT_CHAIN_ID: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID;
+/** The default chain — Base Sepolia. */
+export const DEFAULT_CHAIN_ID: SupportedTestnetChainId = BASE_SEPOLIA_CHAIN_ID;
 
 export function isSupportedTestnetChainId(id: number): id is SupportedTestnetChainId {
   return (SUPPORTED_TESTNET_CHAIN_IDS as readonly number[]).includes(id);
@@ -99,6 +126,16 @@ export interface ChainInfo {
 }
 
 export const CHAIN_INFO: Record<SupportedTestnetChainId, ChainInfo> = {
+  [BASE_SEPOLIA_CHAIN_ID]: {
+    id: BASE_SEPOLIA_CHAIN_ID,
+    shortName: "Base",
+    displayName: "Base Sepolia",
+    viemChain: baseSepolia,
+    defaultRpcUrl: "https://sepolia.base.org",
+    explorerUrl: "https://sepolia.basescan.org",
+    explorerName: "BaseScan",
+    dotColor: "#0000ff",
+  },
   [ARC_TESTNET_CHAIN_ID]: {
     id: ARC_TESTNET_CHAIN_ID,
     shortName: "Arc",
@@ -116,10 +153,9 @@ export function getChainInfo(chainId: SupportedTestnetChainId): ChainInfo {
 }
 
 /**
- * Network options for the chatbot's network chip. Single entry (Arc)
- * while Arc is the only chain; the chip renders statically.
+ * Network options for the chain selector chips. Base first (default).
  */
-export type NetworkKey = "arc";
+export type NetworkKey = "base" | "arc";
 
 export interface NetworkOption {
   key: NetworkKey;
@@ -132,6 +168,13 @@ export interface NetworkOption {
 
 export const NETWORK_OPTIONS: NetworkOption[] = [
   {
+    key: "base",
+    shortName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].shortName,
+    displayName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].displayName,
+    dotColor: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].dotColor,
+    dataChainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+  {
     key: "arc",
     shortName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].shortName,
     displayName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].displayName,
@@ -140,10 +183,15 @@ export const NETWORK_OPTIONS: NetworkOption[] = [
   },
 ];
 
-export const DEFAULT_NETWORK_KEY: NetworkKey = "arc";
+export const DEFAULT_NETWORK_KEY: NetworkKey = "base";
 
 export function isNetworkKey(s: string): s is NetworkKey {
-  return s === "arc";
+  return s === "base" || s === "arc";
+}
+
+/** NetworkKey for a chain id — the logo/chip lookup. */
+export function networkKeyForChain(chainId: SupportedTestnetChainId): NetworkKey {
+  return chainId === BASE_SEPOLIA_CHAIN_ID ? "base" : "arc";
 }
 
 export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: string): string {
@@ -155,33 +203,40 @@ export function getExplorerAddressUrl(chainId: SupportedTestnetChainId, address:
 }
 
 /**
- * Resolve the RPC URL for a chain. Falls back to the public Arc endpoint;
- * overridable by setting `VITE_ARC_RPC_URL` in `client/.env.local`.
+ * Resolve the RPC URL for a chain. Overridable per chain via
+ * `VITE_ARC_RPC_URL` / `VITE_BASE_SEPOLIA_RPC_URL` in `client/.env.local`.
  */
 export function getRpcUrl(chainId: SupportedTestnetChainId): string {
-  return (
-    cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined) ||
-    CHAIN_INFO[chainId].defaultRpcUrl
-  );
+  const override =
+    chainId === BASE_SEPOLIA_CHAIN_ID
+      ? cleanEnv(viteEnv["VITE_BASE_SEPOLIA_RPC_URL"])
+      : cleanEnv(viteEnv["VITE_ARC_RPC_URL"]);
+  return override || CHAIN_INFO[chainId].defaultRpcUrl;
 }
 
 /**
- * Hardened viem transport for browser-side public clients. The Arc hosts
- * rate-limit PER IP — and the app's own polling (portfolio, pools, quotes)
- * exhausts the user's browser-IP budget on all three hosts, after which
- * rotation just cycles between three closed doors (and Privy's own gas
- * lookups die too). So browser reads go through the same-origin `/api/rpc`
- * proxy FIRST: calls then originate from the server's IPs with server-side
- * rotation and hot-call caching. The public hosts remain as direct
- * fallbacks, and a `VITE_ARC_RPC_URL` override still goes first.
+ * Hardened viem transport for browser-side public clients.
+ *
+ * Arc: the public hosts rate-limit PER IP — and the app's own polling
+ * (portfolio, pools, quotes) exhausts the user's browser-IP budget on all
+ * three hosts, after which rotation just cycles between three closed doors
+ * (and Privy's own gas lookups die too). So Arc browser reads go through
+ * the same-origin `/api/rpc` proxy FIRST (server-side rotation + hot-call
+ * caching), with the public hosts as direct fallbacks and a
+ * `VITE_ARC_RPC_URL` override first.
+ *
+ * Base Sepolia: `https://sepolia.base.org` has no such pathology, so it is
+ * hit directly (the `/api/rpc` proxy is Arc-only and is NOT in this list).
  * Use this instead of `http(getRpcUrl(chainId))`.
  */
-export function getRpcTransport(_chainId: SupportedTestnetChainId): FallbackTransport {
-  const override = cleanEnv(import.meta.env.VITE_ARC_RPC_URL as string | undefined);
-  const urls = [
-    ...(override ? [override] : []),
-    ...(rpcProxyUrl ? [rpcProxyUrl] : []),
-    ...PUBLIC_ARC_RPC_URLS,
-  ];
+export function getRpcTransport(chainId: SupportedTestnetChainId): FallbackTransport {
+  const urls =
+    chainId === BASE_SEPOLIA_CHAIN_ID
+      ? BASE_SEPOLIA_RPC_URLS
+      : [
+          ...(walletRpcOverride ? [walletRpcOverride] : []),
+          ...(rpcProxyUrl ? [rpcProxyUrl] : []),
+          ...PUBLIC_ARC_RPC_URLS,
+        ];
   return fallback(urls.map((url) => http(url, { batch: true, retryCount: 1, retryDelay: 300 })));
 }

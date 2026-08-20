@@ -1,15 +1,19 @@
 /**
- * Hook ↔ token-pair allowlist, chain-aware. Mantua runs on Arc Testnet
- * only; the allowlist below is the canonical hook→pair matrix:
- *  - Stable Protection: USDC/EURC (the peg-protected stable pool).
- *  - Dynamic Fee:       USDC/cirBTC, EURC/cirBTC (volatile pairs).
- * RWA Gate and ALO are deferred to mainnet (built, previously deployed on
- * testnet) — they have no allowlist entries and are not executable here.
+ * Hook ↔ token-pair allowlist, chain-aware.
+ *  - Arc: Stable Protection USDC/EURC; Dynamic Fee USDC/cirBTC, EURC/cirBTC.
+ *  - Base Sepolia: Stable Protection USDC/EURC (real Circle tokens);
+ *    Dynamic Fee has zero allowed pairs — its Base pools use mock tokens
+ *    that are deliberately not in the user token registry.
  * A hook must also be deployed on-chain (getHookAddress) before it can
  * be used — calling one whose address is unset throws "not deployed".
  */
 
-import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  getChainInfo,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { DEFAULT_CHAIN_ID, getHookAddress, type HookName } from "./v4-contracts.ts";
 import { getTokens, ZERO_ADDRESS, type TokenSymbol } from "./tokens.ts";
 
@@ -29,6 +33,14 @@ const HOOK_ALLOWLIST: Record<
   SupportedTestnetChainId,
   Partial<Record<HookName, ChainHookAllowlist>>
 > = {
+  [BASE_SEPOLIA_CHAIN_ID]: {
+    // Stable Protection — deployed against the canonical PoolManager with
+    // real Circle USDC/EURC.
+    "stable-protection": { pairs: [["USDC", "EURC"]] },
+    // Dynamic Fee — deployed, but its Base pools use mock tokens (tWETH/
+    // tUSDC/tLINK) that are not user-facing: zero allowed pairs for now.
+    "dynamic-fee": { pairs: [] },
+  },
   [ARC_TESTNET_CHAIN_ID]: {
     // Stable Protection — the FX-rate-aware showcase on the stable pair.
     "stable-protection": { pairs: [["USDC", "EURC"]] },
@@ -86,7 +98,7 @@ export function isHookPairAllowed(
 function hookIncompatibilityReason(hook: HookName, chainId: SupportedTestnetChainId): string {
   const allow = listAllowedPairs(hook, chainId);
   if (allow === undefined) {
-    return `Hook "${hook}" is not available on Arc Testnet yet. Pick a different hook.`;
+    return `Hook "${hook}" is not available on ${getChainInfo(chainId).displayName} yet. Pick a different hook.`;
   }
   if (hook === "stable-protection") {
     return "Stable Protection is only available on the USDC/EURC pair. Pick that pair or create the pool without a hook.";
@@ -95,6 +107,9 @@ function hookIncompatibilityReason(hook: HookName, chainId: SupportedTestnetChai
   // reason function wouldn't be reached; guard for the type-checker.
   if (allow === null) {
     return `Hook "${hook}" does not support this pair. Pick a supported pair or create the pool without a hook.`;
+  }
+  if (allow.length === 0) {
+    return `Hook "${hook}" has no supported pairs on ${getChainInfo(chainId).displayName} yet. Create the pool without a hook.`;
   }
   const pairs = allow.map(([a, b]) => `${a}/${b}`).join(", ");
   return `Hook "${hook}" supports ${pairs}. Pick a supported pair or create the pool without a hook.`;

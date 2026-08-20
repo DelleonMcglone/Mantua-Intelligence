@@ -133,7 +133,7 @@ poolCreateRouter.post(
       });
       res.json({
         // Initialize on the PoolManager for this pool's hook stack.
-        to: getV4StackForHook(key.hooks).poolManager,
+        to: getV4StackForHook(key.hooks, chainId).poolManager,
         chainId,
         data,
         value: "0",

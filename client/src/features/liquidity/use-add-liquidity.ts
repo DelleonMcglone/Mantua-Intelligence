@@ -96,7 +96,7 @@ export function useAddLiquidity() {
       const walletClient = createWalletClient({
         account: owner,
         chain,
-        transport: custom(hardenProvider(provider)),
+        transport: custom(hardenProvider(provider, chainId)),
       });
 
       // Step 0 — initialize the pool if it doesn't exist yet.

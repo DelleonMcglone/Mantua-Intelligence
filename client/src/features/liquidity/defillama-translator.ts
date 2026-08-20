@@ -1,3 +1,4 @@
+import type { SupportedTestnetChainId } from "../../lib/chains.ts";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 import { hookForPairAndFee } from "./hook-recommendations.ts";
@@ -63,9 +64,15 @@ export function parseFeeTier(meta: string | null): FeeTier | null {
  */
 export function tryDeriveAddCtx(
   pool: Pick<PoolSummary, "symbol" | "feeTier">,
+  chainId: SupportedTestnetChainId,
 ): DerivedAddCtx | null {
   const pair = parsePairSymbol(pool.symbol);
   const fee = parseFeeTier(pool.feeTier);
   if (!pair || fee === null) return null;
-  return { tokenA: pair[0], tokenB: pair[1], fee, hook: hookForPairAndFee(pair[0], pair[1], fee) };
+  return {
+    tokenA: pair[0],
+    tokenB: pair[1],
+    fee,
+    hook: hookForPairAndFee(pair[0], pair[1], fee, chainId),
+  };
 }

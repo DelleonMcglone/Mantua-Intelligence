@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -42,7 +43,8 @@ export function PoolDetailPage({ poolId, onBack, onAddLiquidity, onClose }: Prop
   const { walletAddress } = usePortfolio();
   const onchainPositions = useOnchainPositions(walletAddress);
 
-  const derived = data ? tryDeriveAddCtx(data.pool) : null;
+  const chainId = useCurrentChainId();
+  const derived = data ? tryDeriveAddCtx(data.pool, chainId) : null;
 
   // Pair exchange-rate chart (quote = tokenB priced in base = tokenA) — real
   // reference prices from DefiLlama since the testnet pool has no index.

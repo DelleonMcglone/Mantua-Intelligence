@@ -1,22 +1,23 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { ARC_TESTNET_CHAIN_ID } from "../../lib/chains.ts";
 import { tryDeriveAddCtx } from "./defillama-translator.ts";
 import { feeForHook, hookForPairAndFee } from "./hook-recommendations.ts";
 
 describe("hookForPairAndFee", () => {
   it("USDC/EURC at 0.01% → stable-protection", () => {
-    assert.equal(hookForPairAndFee("USDC", "EURC", 100), "stable-protection");
-    assert.equal(hookForPairAndFee("EURC", "USDC", 100), "stable-protection");
+    assert.equal(hookForPairAndFee("USDC", "EURC", 100, ARC_TESTNET_CHAIN_ID), "stable-protection");
+    assert.equal(hookForPairAndFee("EURC", "USDC", 100, ARC_TESTNET_CHAIN_ID), "stable-protection");
   });
 
   it("USDC/EURC at 0.30% → no hook (the reported bug pool)", () => {
-    assert.equal(hookForPairAndFee("USDC", "EURC", 3000), null);
+    assert.equal(hookForPairAndFee("USDC", "EURC", 3000, ARC_TESTNET_CHAIN_ID), null);
   });
 
   it("cirBTC pairs at 0.05% → dynamic-fee, other tiers → no hook", () => {
-    assert.equal(hookForPairAndFee("USDC", "cirBTC", 500), "dynamic-fee");
-    assert.equal(hookForPairAndFee("EURC", "cirBTC", 500), "dynamic-fee");
-    assert.equal(hookForPairAndFee("USDC", "cirBTC", 3000), null);
+    assert.equal(hookForPairAndFee("USDC", "cirBTC", 500, ARC_TESTNET_CHAIN_ID), "dynamic-fee");
+    assert.equal(hookForPairAndFee("EURC", "cirBTC", 500, ARC_TESTNET_CHAIN_ID), "dynamic-fee");
+    assert.equal(hookForPairAndFee("USDC", "cirBTC", 3000, ARC_TESTNET_CHAIN_ID), null);
   });
 
   it("is the inverse of feeForHook for canonical pools", () => {
@@ -28,12 +29,12 @@ describe("hookForPairAndFee", () => {
 
 describe("tryDeriveAddCtx hook recovery", () => {
   it("recovers no-hook for a 0.30% USDC/EURC pool", () => {
-    const ctx = tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: "0.30%" });
+    const ctx = tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: "0.30%" }, ARC_TESTNET_CHAIN_ID);
     assert.deepEqual(ctx, { tokenA: "USDC", tokenB: "EURC", fee: 3000, hook: null });
   });
 
   it("recovers stable-protection for a 0.01% USDC/EURC pool", () => {
-    const ctx = tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: "0.01%" });
+    const ctx = tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: "0.01%" }, ARC_TESTNET_CHAIN_ID);
     assert.deepEqual(ctx, {
       tokenA: "USDC",
       tokenB: "EURC",
@@ -43,7 +44,13 @@ describe("tryDeriveAddCtx hook recovery", () => {
   });
 
   it("returns null for unsupported pairs / fee tiers", () => {
-    assert.equal(tryDeriveAddCtx({ symbol: "WETH-DAI", feeTier: "0.30%" }), null);
-    assert.equal(tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: null }), null);
+    assert.equal(
+      tryDeriveAddCtx({ symbol: "WETH-DAI", feeTier: "0.30%" }, ARC_TESTNET_CHAIN_ID),
+      null,
+    );
+    assert.equal(
+      tryDeriveAddCtx({ symbol: "USDC-EURC", feeTier: null }, ARC_TESTNET_CHAIN_ID),
+      null,
+    );
   });
 });

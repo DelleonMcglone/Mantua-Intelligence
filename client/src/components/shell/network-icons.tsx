@@ -15,10 +15,17 @@ interface LogoProps {
   size?: number;
 }
 
+/** Base's official mark — "the Square": a solid Base-blue (#0000FF)
+ *  squircle (5% radius, 60% smoothing). Path taken verbatim from
+ *  base/brand-kit `logo/TheSquare/Digital/Base_square_blue.svg`; per the
+ *  brand guide it is never recolored, gradiented, or re-rounded. */
 export function BaseLogo({ size = 16 }: LogoProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <rect x="2" y="2" width="28" height="28" rx="7" fill="#0000ff" />
+    <svg width={size} height={size} viewBox="0 0 1280 1280" aria-hidden="true" focusable="false">
+      <path
+        fill="#0000FF"
+        d="M0,101.12c0-34.64,0-51.95,6.53-65.28,6.25-12.76,16.56-23.07,29.32-29.32C49.17,0,66.48,0,101.12,0h1077.76c34.63,0,51.96,0,65.28,6.53,12.75,6.25,23.06,16.56,29.32,29.32,6.52,13.32,6.52,30.64,6.52,65.28v1077.76c0,34.63,0,51.96-6.52,65.28-6.26,12.75-16.57,23.06-29.32,29.32-13.32,6.52-30.65,6.52-65.28,6.52H101.12c-34.64,0-51.95,0-65.28-6.52-12.76-6.26-23.07-16.57-29.32-29.32-6.53-13.32-6.53-30.65-6.53-65.28V101.12Z"
+      />
     </svg>
   );
 }
@@ -85,9 +92,8 @@ export function CircleLogo({ size = 16 }: LogoProps) {
 
 export function NetworkLogo({ network, size = 16 }: { network: NetworkKey; size?: number }) {
   switch (network) {
-    // `network` is a single-value union today; the switch is kept so adding
-    // a NetworkKey forces a new case here.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    case "base":
+      return <BaseLogo size={size} />;
     case "arc":
       return <ArcLogo size={size} />;
   }

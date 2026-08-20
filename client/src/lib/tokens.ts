@@ -8,6 +8,7 @@
 
 import {
   ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
   DEFAULT_CHAIN_ID,
   type SupportedTestnetChainId,
   CHAIN_INFO,
@@ -22,14 +23,21 @@ export const NETWORK: "mainnet" | "testnet" =
     : "testnet";
 export const IS_MAINNET = NETWORK === "mainnet";
 
-/** The single active chain id (Arc Testnet). */
+/**
+ * LEGACY Arc pin — predates multi-chain. Do NOT use in new code; read the
+ * selected chain from `useCurrentChainId()` instead. Kept Arc-pinned so
+ * unmigrated consumers don't silently flip chains.
+ */
 export const ACTIVE_CHAIN_ID: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID;
 
-/** Block-explorer base + `/tx/` prefix for the active chain (ArcScan). */
+/** LEGACY Arc explorer pin — prefer `getExplorerTxUrl(chainId, hash)`. */
 export const EXPLORER_URL = CHAIN_INFO[ARC_TESTNET_CHAIN_ID].explorerUrl;
 export const EXPLORER_TX = `${EXPLORER_URL}/tx/`;
 
 const V4_POSITION_MANAGER_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}`> = {
+  // Base Sepolia — the canonical Uniswap v4 PositionManager. Server
+  // mirror: server/src/lib/v4-contracts.ts V4_BY_CHAIN[baseSepolia].
+  [BASE_SEPOLIA_CHAIN_ID]: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
   // StableProtection hero stack — deployed against PoolManager 0x15B5…0a59
   // via deploy/arc-hero-periphery (block 46501208). Server mirror:
   // server/src/lib/v4-contracts.ts V4_BY_CHAIN[arc].
@@ -93,7 +101,32 @@ const TOKENS_ARC_TESTNET = {
 
 export type TokenSymbol = keyof typeof TOKENS_ARC_TESTNET;
 
+// Base Sepolia token set — Circle's official testnet USDC/EURC (real
+// tokens, not mocks). ETH is the gas token there and is not listed as a
+// tradeable entry; cirBTC has no Base Sepolia deployment.
+const TOKENS_BASE_SEPOLIA = {
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    decimals: 6,
+    coingeckoId: "usd-coin",
+    native: false,
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+  EURC: {
+    symbol: "EURC",
+    name: "Euro Coin",
+    address: "0x808456652fdb597867f38412077A9182bf77359F",
+    decimals: 6,
+    coingeckoId: "euro-coin",
+    native: false,
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+} as const satisfies Record<string, Token>;
+
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
+  [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
   [ARC_TESTNET_CHAIN_ID]: TOKENS_ARC_TESTNET,
 };
 

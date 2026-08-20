@@ -149,7 +149,11 @@ export function TestnetSwapPanel({
   const [tokenIn, setTokenIn] = useState<TokenSymbol>(seedIn);
   const [tokenOut, setTokenOut] = useState<TokenSymbol>(seedOut === seedIn ? "EURC" : seedOut);
   const [amount, setAmount] = useState(initialAmount ?? "");
-  const pairHook = useMemo(() => recommendedHookForPair(tokenIn, tokenOut), [tokenIn, tokenOut]);
+  const chainId = useCurrentChainId();
+  const pairHook = useMemo(
+    () => recommendedHookForPair(tokenIn, tokenOut, chainId),
+    [tokenIn, tokenOut, chainId],
+  );
   const [venue, setVenue] = useState<SwapVenue>(initialVenue ?? "hook");
   const [destination, setDestination] = useState<BridgeDestination>(
     () =>
@@ -172,7 +176,6 @@ export function TestnetSwapPanel({
   const swap = useTestnetSwap();
   const bridge = useBridge();
   const portfolio = usePortfolio();
-  const chainId = useCurrentChainId();
 
   // Pairs without a recommended hook offer only No Hook | Bridge; normalize
   // the default "hook" selection onto "none" so the switcher highlights.
@@ -240,7 +243,7 @@ export function TestnetSwapPanel({
   }
 
   const hookName: HookName | null = hook === "none" ? null : hook;
-  const hookIncompatible = hookCompatibilityError(tokenIn, tokenOut, hookName);
+  const hookIncompatible = hookCompatibilityError(tokenIn, tokenOut, hookName, chainId);
 
   const amountInRaw = safeParse(tokenIn, amount);
   const quote = useTestnetQuote({

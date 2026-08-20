@@ -20,6 +20,9 @@ const schema = z.object({
    *  private endpoint (Alchemy/QuickNode) in production for headroom. */
   ARC_RPC_URL: z.url().default("https://rpc.testnet.arc.network"),
 
+  /** Base Sepolia RPC URL — server-side viem reads/writes on 84532. */
+  BASE_SEPOLIA_RPC_URL: z.url().default("https://sepolia.base.org"),
+
   /** The Graph decentralized-network API key. Required for /api/positions
    *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
    *  Mantua-opened positions are returned). */

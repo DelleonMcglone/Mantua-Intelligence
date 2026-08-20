@@ -8,7 +8,8 @@ import { ACTIVE_CHAIN_ID } from "../lib/constants.ts";
 import { logger } from "../lib/logger.ts";
 import { ZERO_ADDRESS } from "../lib/tokens.ts";
 import { getRequestContext } from "../lib/request-context.ts";
-import { baseRpcClient } from "../lib/rpc-client.ts";
+import { getRpcClient } from "../lib/rpc-client.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "../lib/chains.ts";
 import { buildRemoveLiquidityCalldata } from "../lib/v4-remove-liquidity.ts";
 import { decodePositionInfo } from "../lib/v4-position-info.ts";
 import { POSITION_MANAGER_VIEW_ABI, getV4StackForHook } from "../lib/v4-contracts.ts";
@@ -39,17 +40,18 @@ interface ResolvedPosition {
 async function resolveByTokenId(
   tokenId: string,
   walletAddress: string,
-  hookAddress?: string | null,
+  hookAddress: string | null | undefined,
+  chainId: SupportedTestnetChainId,
 ): Promise<ResolvedPosition | { error: string; code: string; status: number }> {
   const tokenIdBig = BigInt(tokenId);
   // tokenIds are NOT unique across PositionManagers — each Mantua hook has
   // its own PM (hero/no-hook 0x47AD…, Dynamic Fee 0xDa1b…). Resolve the PM
   // from the position's pool hook the client passes; default to the hero
   // stack for no-hook positions.
-  const positionManager = getV4StackForHook(hookAddress ?? ZERO_ADDRESS).positionManager;
+  const positionManager = getV4StackForHook(hookAddress ?? ZERO_ADDRESS, chainId).positionManager;
   let owner: `0x${string}`;
   try {
-    owner = await baseRpcClient.readContract({
+    owner = await getRpcClient(chainId).readContract({
       address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "ownerOf",
@@ -70,13 +72,13 @@ async function resolveByTokenId(
     };
   }
   const [poolAndInfo, liquidity] = await Promise.all([
-    baseRpcClient.readContract({
+    getRpcClient(chainId).readContract({
       address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "getPoolAndPositionInfo",
       args: [tokenIdBig],
     }),
-    baseRpcClient.readContract({
+    getRpcClient(chainId).readContract({
       address: positionManager,
       abi: POSITION_MANAGER_VIEW_ABI,
       functionName: "getPositionLiquidity",
@@ -117,11 +119,13 @@ liquidityRemoveRouter.post(
     }
     try {
       let pos: ResolvedPosition;
+      const chainId = parsed.data.chainId ?? ARC_TESTNET_CHAIN_ID;
       if (parsed.data.tokenId) {
         const result = await resolveByTokenId(
           parsed.data.tokenId,
           ctx.walletAddress,
           parsed.data.hookAddress,
+          chainId,
         );
         if ("error" in result) {
           res.status(result.status).json({ error: result.error, code: result.code });
@@ -187,13 +191,16 @@ liquidityRemoveRouter.post(
         };
       }
 
-      const slot0 = await readSlot0({
-        currency0: pos.token0,
-        currency1: pos.token1,
-        fee: pos.fee,
-        tickSpacing: pos.tickSpacing,
-        hooks: pos.hookAddress ?? ZERO_ADDRESS,
-      });
+      const slot0 = await readSlot0(
+        {
+          currency0: pos.token0,
+          currency1: pos.token1,
+          fee: pos.fee,
+          tickSpacing: pos.tickSpacing,
+          hooks: pos.hookAddress ?? ZERO_ADDRESS,
+        },
+        chainId,
+      );
       if (!slot0) {
         res.status(400).json({
           error: "Pool not initialized on-chain",
@@ -206,6 +213,7 @@ liquidityRemoveRouter.post(
       const liquidityToRemove = (totalLiquidity * BigInt(parsed.data.percentage)) / 100n;
 
       const result = buildRemoveLiquidityCalldata({
+        chainId,
         tokenId: BigInt(pos.tokenId),
         liquidityToRemove,
         positionLiquidity: totalLiquidity,

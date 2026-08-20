@@ -151,7 +151,7 @@ export function buildAddLiquidityCalldata(args: BuildAddLiquidityArgs): BuildAdd
 
   return {
     // Route to the PositionManager for this pool's hook stack.
-    to: getV4StackForHook(key.hooks).positionManager,
+    to: getV4StackForHook(key.hooks, chainId).positionManager,
     data,
     value,
     liquidity: liquidity.toString(),

@@ -1,6 +1,6 @@
 import { createPublicClient, fallback, http } from "viem";
-import { arcTestnet } from "viem/chains";
-import { type SupportedTestnetChainId } from "./chains.ts";
+import { arcTestnet, baseSepolia } from "viem/chains";
+import { BASE_SEPOLIA_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { env } from "../env.ts";
 
 /**
@@ -38,18 +38,24 @@ const arcClient = createPublicClient({
   ),
 });
 
+const baseSepoliaClient = createPublicClient({
+  chain: baseSepolia,
+  batch: { multicall: { wait: 16 } },
+  transport: fallback([
+    http(env.BASE_SEPOLIA_RPC_URL, { batch: true, retryCount: 1, retryDelay: 300 }),
+  ]),
+});
+
 /**
- * Default single-chain RPC client. Mantua runs on Arc Testnet only, so
- * every read targets Arc. The `baseRpcClient` name is retained as a
- * legacy alias for the many call sites that import it; it now points at
- * the Arc client. Prefer `getRpcClient(chainId)` in new code.
+ * Legacy **Arc** alias — the name predates the Arc migration and does NOT
+ * mean Base. Every import of `baseRpcClient` reads Arc Testnet (sports
+ * markets, agent Arc flows). Use `getRpcClient(chainId)` in new code.
  */
 export const baseRpcClient = arcClient;
 
-export function getRpcClient(_chainId: SupportedTestnetChainId) {
-  // Arc is the only supported chain; the param is kept for call-site
-  // compatibility and future multi-chain reintroduction.
-  return arcClient;
+/** Per-chain public client: 84532 → Base Sepolia, 5042002 → Arc. */
+export function getRpcClient(chainId: SupportedTestnetChainId) {
+  return chainId === BASE_SEPOLIA_CHAIN_ID ? baseSepoliaClient : arcClient;
 }
 
 /**

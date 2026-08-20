@@ -42,7 +42,7 @@ export async function readSlot0(
       // Each hook lives on its own PoolManager + StateView; resolve by the
       // pool's hook (no-hook → hero stack).
       const [sqrtPriceX96, tick, protocolFee, lpFee] = await getRpcClient(chainId).readContract({
-        address: getV4StackForHook(key.hooks).stateView,
+        address: getV4StackForHook(key.hooks, chainId).stateView,
         abi: STATE_VIEW_ABI,
         functionName: "getSlot0",
         args: [poolId],

@@ -2,12 +2,15 @@ import { encodeAbiParameters, encodeFunctionData } from "viem";
 import { getAmountsForLiquidity } from "./amounts-for-liquidity.ts";
 import { getSqrtRatioAtTick } from "./tick-math.ts";
 import { Action, encodeActions, encodeSweep, encodeUnlockData } from "./v4-actions.ts";
+import type { SupportedTestnetChainId } from "./chains.ts";
 import { POSITION_MANAGER_MODIFY_LIQUIDITIES_ABI, getV4StackForHook } from "./v4-contracts.ts";
 
 const SLIPPAGE_DENOM = 10_000n;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
 export interface BuildRemoveLiquidityArgs {
+  /** Target chain — picks the right PositionManager. Defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
   tokenId: bigint;
   liquidityToRemove: bigint;
   positionLiquidity: bigint;
@@ -121,7 +124,7 @@ export function buildRemoveLiquidityCalldata(
   });
 
   return {
-    to: getV4StackForHook(args.hookAddress ?? ZERO).positionManager,
+    to: getV4StackForHook(args.hookAddress ?? ZERO, args.chainId).positionManager,
     data,
     amount0Min: amount0Min.toString(),
     amount1Min: amount1Min.toString(),
@@ -139,6 +142,8 @@ export function buildRemoveLiquidityCalldata(
  */
 export function buildCollectFeesCalldata(args: {
   tokenId: bigint;
+  /** Target chain — picks the right PositionManager. Defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
   currency0: `0x${string}`;
   currency1: `0x${string}`;
   hookAddress?: `0x${string}` | null;
@@ -165,7 +170,7 @@ export function buildCollectFeesCalldata(args: {
   });
 
   return {
-    to: getV4StackForHook(args.hookAddress ?? ZERO).positionManager,
+    to: getV4StackForHook(args.hookAddress ?? ZERO, args.chainId).positionManager,
     data,
     value: "0",
   };

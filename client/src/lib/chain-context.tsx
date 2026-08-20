@@ -1,19 +1,24 @@
 /* eslint-disable react-refresh/only-export-components -- context module: Provider component + useCurrentChainId/useChainContext hooks live together. */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWallets } from "@privy-io/react-auth";
 import {
-  ARC_TESTNET_CHAIN_ID,
+  DEFAULT_CHAIN_ID,
   isSupportedTestnetChainId,
   type SupportedTestnetChainId,
 } from "./chains.ts";
 
 interface ChainContextValue {
-  /** Currently active chain for all reads/writes. Mantua is Arc-only, so
-   *  this is always Arc Testnet; it still mirrors the connected wallet's
-   *  chainId so consumers can detect a wallet that's on the wrong chain. */
+  /** Currently active chain for all reads/writes (Base Sepolia default). */
   chainId: SupportedTestnetChainId;
-  /** Switch the connected wallet to a supported chain (Arc). Kept for
-   *  flows that nudge a mis-configured wallet back onto Arc. */
+  /** Switch the app + connected wallet to a supported chain. */
   setChainId: (id: SupportedTestnetChainId) => Promise<void>;
   /** True while a `wallet.switchChain` call is in flight (user
    *  approval dialog open in their wallet). */
@@ -25,29 +30,43 @@ const ChainContext = createContext<ChainContextValue | null>(null);
 const STORAGE_KEY = "mantua.selectedChainId";
 
 function readStoredChainId(): SupportedTestnetChainId {
-  if (typeof window === "undefined") return ARC_TESTNET_CHAIN_ID;
+  if (typeof window === "undefined") return DEFAULT_CHAIN_ID;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return ARC_TESTNET_CHAIN_ID;
+    if (!raw) return DEFAULT_CHAIN_ID;
     const n = Number(raw);
     if (isSupportedTestnetChainId(n)) return n;
-    return ARC_TESTNET_CHAIN_ID;
+    return DEFAULT_CHAIN_ID;
   } catch {
-    return ARC_TESTNET_CHAIN_ID;
+    return DEFAULT_CHAIN_ID;
+  }
+}
+
+function hasStoredChainId(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw !== null && isSupportedTestnetChainId(Number(raw));
+  } catch {
+    return false;
   }
 }
 
 /**
- * Provider for the active chain. Mantua runs on Arc Testnet only, so
- * `chainId` is effectively constant; the provider still tracks the
- * connected wallet's chainId so flows can switch a mis-configured
- * wallet back onto Arc. Drives the per-chain token list and the
- * chainId param sent on pool-create / add-liquidity / swap requests.
+ * Provider for the active chain (Base Sepolia default, Arc Testnet
+ * selectable). Drives the per-chain token list, the chainId param sent
+ * on pool-create / add-liquidity / swap requests, and the wallet's
+ * chain via `wallet.switchChain`.
  */
 export function ChainProvider({ children }: { children: React.ReactNode }) {
   const { wallets } = useWallets();
   const [chainId, setChainIdState] = useState<SupportedTestnetChainId>(() => readStoredChainId());
   const [switching, setSwitching] = useState(false);
+  // Once the user has an explicit selection (stored, or picked this
+  // session), the selector is the source of truth and the wallet-mirror
+  // effect below stops overriding it — otherwise a slow/failed
+  // `switchChain` snaps the UI back to the wallet's old chain.
+  const userSelectedRef = useRef<boolean>(hasStoredChainId());
 
   // Pick the wallet the user is connected through. Privy's first entry
   // is the primary; same convention used elsewhere in the codebase.
@@ -55,11 +74,11 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
     return wallets.find((w) => w.walletClientType === "privy") ?? wallets.at(0);
   }, [wallets]);
 
-  // Pull initial chainId from the wallet on first mount so the
-  // selector shows the wallet's actual chain (not just our persisted
-  // pick). If the wallet is on an unsupported chain, fall back to the
-  // stored pick.
+  // Initial sync only: with no explicit selection, adopt the wallet's
+  // chain so the selector reflects reality. After a user pick, the
+  // selection drives the wallet — not the other way round.
   useEffect(() => {
+    if (userSelectedRef.current) return;
     if (!wallet?.chainId) return;
     const eip = wallet.chainId.startsWith("eip155:")
       ? Number(wallet.chainId.slice("eip155:".length))
@@ -74,10 +93,8 @@ export function ChainProvider({ children }: { children: React.ReactNode }) {
 
   const setChainId = useCallback(
     async (next: SupportedTestnetChainId) => {
-      // Guards re-selecting the current chain; always-equal today because
-      // SupportedTestnetChainId is a single literal, but defensive for growth.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (next === chainId) return;
+      userSelectedRef.current = true;
       if (!wallet) {
         // No wallet yet — just remember the selection; we'll switch
         // once the user connects.
@@ -123,8 +140,8 @@ export function useCurrentChainId(): SupportedTestnetChainId {
   const ctx = useContext(ChainContext);
   if (!ctx) {
     // Sensible fallback outside the provider — keeps tests + storybook
-    // happy and means non-provider code paths default to Arc Testnet.
-    return ARC_TESTNET_CHAIN_ID;
+    // happy and means non-provider code paths default to Base Sepolia.
+    return DEFAULT_CHAIN_ID;
   }
   return ctx.chainId;
 }

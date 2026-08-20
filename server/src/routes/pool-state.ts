@@ -26,8 +26,16 @@ poolStateRouter.get("/api/pool-state", async (req: Request, res: Response) => {
     return;
   }
   try {
-    const { key } = buildPoolKey(parsed.data.tokenA, parsed.data.tokenB, parsed.data.fee);
-    const slot0 = await readSlot0(key);
+    const { chainId } = parsed.data;
+    const { key } = buildPoolKey(
+      parsed.data.tokenA,
+      parsed.data.tokenB,
+      parsed.data.fee,
+      undefined,
+      null,
+      chainId,
+    );
+    const slot0 = await readSlot0(key, chainId);
     if (!slot0) {
       res.json({ exists: false });
       return;

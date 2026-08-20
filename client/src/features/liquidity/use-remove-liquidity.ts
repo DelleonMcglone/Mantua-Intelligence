@@ -1,15 +1,10 @@
 import { useState } from "react";
-import { hardenProvider } from "@/lib/privy/wallet-client.ts";
+import { hardenProvider, publicClientFor } from "@/lib/privy/wallet-client.ts";
 import { useWallets } from "@privy-io/react-auth";
-import { createPublicClient, createWalletClient, custom } from "viem";
-import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "@/lib/chain.ts";
-import { ARC_TESTNET_CHAIN_ID, getRpcTransport } from "@/lib/chains.ts";
+import { createWalletClient, custom } from "viem";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { CHAIN_INFO } from "@/lib/chains.ts";
 import { ApiError, api } from "@/lib/api.ts";
-
-const publicClient = createPublicClient({
-  chain: ACTIVE_CHAIN,
-  transport: getRpcTransport(ARC_TESTNET_CHAIN_ID),
-});
 
 export interface RemoveArgs {
   /** Either the DB UUID (Mantua-tracked) … */
@@ -44,6 +39,7 @@ interface RemoveState {
 }
 
 export function useRemoveLiquidity() {
+  const chainId = useCurrentChainId();
   const { wallets } = useWallets();
   const [state, setState] = useState<RemoveState>({ status: "idle" });
 
@@ -52,33 +48,34 @@ export function useRemoveLiquidity() {
       const wallet = wallets.find((w) => w.walletClientType === "privy") ?? wallets[0];
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime defensive
       if (!wallet) throw new Error("No wallet connected");
-      if (wallet.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
-        await wallet.switchChain(ACTIVE_CHAIN_ID);
+      if (wallet.chainId !== `eip155:${String(chainId)}`) {
+        await wallet.switchChain(chainId);
       }
       const owner = wallet.address as `0x${string}`;
       const provider = await wallet.getEthereumProvider();
       const walletClient = createWalletClient({
         account: owner,
-        chain: ACTIVE_CHAIN,
-        transport: custom(hardenProvider(provider)),
+        chain: CHAIN_INFO[chainId].viemChain,
+        transport: custom(hardenProvider(provider, chainId)),
       });
 
       setState({ status: "preparing" });
       const calldata = await api.post<CalldataRes>("/api/liquidity/remove/calldata", {
         ...args,
+        chainId,
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1200,
       });
 
       setState({ status: "signing" });
       const txHash = await walletClient.sendTransaction({
         account: owner,
-        chain: ACTIVE_CHAIN,
+        chain: CHAIN_INFO[chainId].viemChain,
         to: calldata.to,
         data: calldata.data,
       });
       setState({ status: "pending", txHash });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClientFor(chainId).waitForTransactionReceipt({ hash: txHash });
       const outcome = receipt.status === "success" ? "success" : "failure";
 
       void api.post("/api/liquidity/remove/record", {

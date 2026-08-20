@@ -16,7 +16,12 @@
  *     official testnet tokens, WETH is the canonical OP-stack address.
  */
 
-import { ARC_TESTNET_CHAIN_ID, DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  DEFAULT_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -75,7 +80,35 @@ const TOKENS_ARC_TESTNET = {
 
 export type TokenSymbol = keyof typeof TOKENS_ARC_TESTNET;
 
+// Base Sepolia token set — Circle's official testnet USDC/EURC (real
+// tokens, not mocks). ETH is the gas token there; it is not listed as a
+// tradeable registry entry. cirBTC has no Base Sepolia deployment.
+// Mirror of client/src/lib/tokens.ts — keep both in sync.
+const TOKENS_BASE_SEPOLIA = {
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    decimals: 6,
+    coingeckoId: "usd-coin",
+    pythFeedId: "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+    native: false,
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+  EURC: {
+    symbol: "EURC",
+    name: "Euro Coin",
+    address: "0x808456652fdb597867f38412077A9182bf77359F",
+    decimals: 6,
+    coingeckoId: "euro-coin",
+    pythFeedId: "76fa85158bf14ede77087fe3ae472f66213f6ea2f5b411cb2de472794990fa5c",
+    native: false,
+    chainId: BASE_SEPOLIA_CHAIN_ID,
+  },
+} as const satisfies Record<string, Token>;
+
 const TOKENS_BY_CHAIN: Record<SupportedTestnetChainId, Record<string, Token>> = {
+  [BASE_SEPOLIA_CHAIN_ID]: TOKENS_BASE_SEPOLIA,
   [ARC_TESTNET_CHAIN_ID]: TOKENS_ARC_TESTNET,
 };
 

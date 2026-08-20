@@ -1,22 +1,51 @@
 import { useCallback } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { createPublicClient, createWalletClient, custom } from "viem";
-import { ACTIVE_CHAIN, ACTIVE_CHAIN_ID } from "../chain.ts";
-import { ARC_TESTNET_CHAIN_ID, getRpcTransport } from "../chains.ts";
+import { useCurrentChainId } from "../chain-context.tsx";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  CHAIN_INFO,
+  getRpcTransport,
+  type SupportedTestnetChainId,
+} from "../chains.ts";
 
 /**
- * Public viem client for read-only chain calls on Arc Testnet. Override
- * the default Arc RPC with a private endpoint via VITE_ARC_RPC_URL.
+ * Per-chain public viem clients for read-only chain calls. Arc uses the
+ * hardened proxy-first fallback transport; Base Sepolia hits its public
+ * RPC directly (see getRpcTransport).
  *
  * Bug fix: explicit `PublicClient` / `WalletClient` type annotations clash
  * with Privy's bundled (porto-vendored) viem under
  * `exactOptionalPropertyTypes: true`. Annotations removed; types are
  * inferred. Runtime behavior unchanged.
  */
-export const publicClient = createPublicClient({
-  chain: ACTIVE_CHAIN,
-  transport: getRpcTransport(ARC_TESTNET_CHAIN_ID),
-});
+function makePublicClient(chainId: SupportedTestnetChainId) {
+  return createPublicClient({
+    chain: CHAIN_INFO[chainId].viemChain,
+    transport: getRpcTransport(chainId),
+  });
+}
+
+type AppPublicClient = ReturnType<typeof makePublicClient>;
+
+const publicClients = new Map<SupportedTestnetChainId, AppPublicClient>();
+
+/** The read client for a chain (lazily created, cached). */
+export function publicClientFor(chainId: SupportedTestnetChainId): AppPublicClient {
+  let client = publicClients.get(chainId);
+  if (!client) {
+    client = makePublicClient(chainId);
+    publicClients.set(chainId, client);
+  }
+  return client;
+}
+
+/**
+ * LEGACY **Arc** read client — predates multi-chain. Sports-market reads
+ * (YES balances etc.) are Arc and keep using this; chain-aware code uses
+ * `publicClientFor(chainId)`.
+ */
+export const publicClient = publicClientFor(ARC_TESTNET_CHAIN_ID);
 
 interface Eip1193RequestArgs {
   method: string;
@@ -50,19 +79,24 @@ const PUBLIC_RPC_METHODS = new Set([
 
 /**
  * Wrap a Privy EIP-1193 provider so read-only RPC (eth_gasPrice /
- * eth_estimateGas / receipts…) goes through the hardened fallback transport
- * (3 Arc hosts, batching, retries) while signing + broadcast stay with the
+ * eth_estimateGas / receipts…) goes through the chain's hardened fallback
+ * transport (batching, retries) while signing + broadcast stay with the
  * wallet. Privy's provider proxies reads through a single upstream that
  * rate-limits under load ("Custom eth_gasPrice: Request is being rate
  * limited"), which made approve/write flows fail even when the app's own
  * read path was healthy. Use with viem's `custom()` transport, which only
- * needs `request`.
+ * needs `request`. `chainId` picks the read transport AND fills the tx
+ * chainId — it must be the chain the wallet is on.
  */
-export function hardenProvider(provider: RequestableProvider): RequestableProvider {
+export function hardenProvider(
+  provider: RequestableProvider,
+  chainId: SupportedTestnetChainId,
+): RequestableProvider {
+  const chainClient = publicClientFor(chainId);
   return {
     request: async (args: Eip1193RequestArgs) => {
       if (PUBLIC_RPC_METHODS.has(args.method)) {
-        return (publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>)(args);
+        return (chainClient.request as (a: Eip1193RequestArgs) => Promise<unknown>)(args);
       }
       // Take Privy's RPC out of the write path entirely. For JSON-RPC
       // accounts viem skips fee preparation, and Privy's embedded wallet
@@ -77,10 +111,10 @@ export function hardenProvider(provider: RequestableProvider): RequestableProvid
       if (args.method === "eth_sendTransaction" && Array.isArray(args.params)) {
         const [tx, ...restParams] = args.params as [Record<string, unknown>, ...unknown[]];
         const filled = { ...tx };
-        const pub = publicClient.request as (a: Eip1193RequestArgs) => Promise<unknown>;
+        const pub = chainClient.request as (a: Eip1193RequestArgs) => Promise<unknown>;
         try {
           if (!filled["gasPrice"] && !filled["maxFeePerGas"]) {
-            filled["gasPrice"] = `0x${(await publicClient.getGasPrice()).toString(16)}`;
+            filled["gasPrice"] = `0x${(await chainClient.getGasPrice()).toString(16)}`;
           }
           if (!filled["gas"]) {
             const est = (await pub({ method: "eth_estimateGas", params: [tx] })) as string;
@@ -94,7 +128,7 @@ export function hardenProvider(provider: RequestableProvider): RequestableProvid
             });
           }
           if (!filled["chainId"]) {
-            filled["chainId"] = `0x${ACTIVE_CHAIN_ID.toString(16)}`;
+            filled["chainId"] = `0x${chainId.toString(16)}`;
           }
           if (!filled["value"]) filled["value"] = "0x0";
         } catch {
@@ -127,26 +161,30 @@ export function hardenProvider(provider: RequestableProvider): RequestableProvid
 }
 
 /**
- * P2-013 — bridge from Privy's active wallet to a viem WalletClient.
- * Returns null if no wallet is connected. Caller is responsible for
- * waiting on the Privy `ready` flag before invoking.
+ * P2-013 — bridge from Privy's active wallet to a viem WalletClient on
+ * the currently SELECTED chain. Returns null if no wallet is connected.
+ * Caller is responsible for waiting on the Privy `ready` flag before
+ * invoking.
  *
- * Chain assertion: throws if the active wallet is on anything other than
- * Arc Testnet. The provider attempts an automatic switch first.
+ * Chain assertion: if the active wallet is on a different chain, an
+ * automatic `switchChain` to the selected chain is attempted first;
+ * failure throws naming the selected chain.
  */
-export function useArcWalletClient() {
+export function useChainWalletClient() {
   const { wallets } = useWallets();
+  const chainId = useCurrentChainId();
 
   return useCallback(async () => {
     const active = wallets.find((w) => w.walletClientType === "privy") ?? wallets.at(0);
     if (!active) return null;
 
-    if (active.chainId && active.chainId !== `eip155:${String(ACTIVE_CHAIN_ID)}`) {
+    const info = CHAIN_INFO[chainId];
+    if (active.chainId && active.chainId !== `eip155:${String(chainId)}`) {
       try {
-        await active.switchChain(ACTIVE_CHAIN_ID);
+        await active.switchChain(chainId);
       } catch {
         throw new Error(
-          `Wallet is on ${active.chainId}; Mantua only supports ${ACTIVE_CHAIN.name} (eip155:${String(ACTIVE_CHAIN_ID)}).`,
+          `Wallet is on ${active.chainId}; switch it to ${info.displayName} (eip155:${String(chainId)}) to continue.`,
         );
       }
     }
@@ -154,8 +192,11 @@ export function useArcWalletClient() {
     const provider = await active.getEthereumProvider();
     return createWalletClient({
       account: active.address as `0x${string}`,
-      chain: ACTIVE_CHAIN,
-      transport: custom(hardenProvider(provider)),
+      chain: info.viemChain,
+      transport: custom(hardenProvider(provider, chainId)),
     });
-  }, [wallets]);
+  }, [wallets, chainId]);
 }
+
+/** Deprecated alias — the client now follows the selected chain. */
+export const useArcWalletClient = useChainWalletClient;

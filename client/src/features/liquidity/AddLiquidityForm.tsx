@@ -99,7 +99,10 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   //   USDC/EURC          → Stable Protection | No Hook
   //   USDC|EURC / cirBTC  → Dynamic Fee       | No Hook
   // `useHook` defaults to on, so the recommended hook is the default.
-  const pairHook = useMemo(() => recommendedHookForPair(tokenA, tokenB), [tokenA, tokenB]);
+  const pairHook = useMemo(
+    () => recommendedHookForPair(tokenA, tokenB, chainId),
+    [tokenA, tokenB, chainId],
+  );
   // When locked onto an existing pool, honor that pool's actual hook
   // (ctx.hook is null for no-hook pools). Otherwise (create / chat flows)
   // default the recommended hook on, preserving prior behavior.
@@ -160,7 +163,7 @@ export function AddLiquidityForm({ ctx, onBack, onClose }: Props) {
   const amountARaw = safeParse(tokenA, amountA);
   const amountBRaw = safeParse(tokenB, amountB);
   const hookName: HookName | null = hook === "none" ? null : hook;
-  const hookIncompatible = hookCompatibilityError(tokenA, tokenB, hookName);
+  const hookIncompatible = hookCompatibilityError(tokenA, tokenB, hookName, chainId);
   const ready =
     tokenA !== tokenB && amountARaw !== "0" && amountBRaw !== "0" && hookIncompatible === null;
   const hookSummary = hook === "none" ? "No Hook" : HOOK_LABELS[hook];

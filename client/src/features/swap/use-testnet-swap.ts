@@ -222,7 +222,7 @@ export function useTestnetSwap() {
       const walletClient = createWalletClient({
         account: owner,
         chain: viemChain,
-        transport: custom(hardenProvider(provider)),
+        transport: custom(hardenProvider(provider, chainId)),
       }) as any;
 
       setState({ status: "quoting", message: "Building swap…" });

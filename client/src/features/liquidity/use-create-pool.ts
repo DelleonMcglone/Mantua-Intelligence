@@ -74,7 +74,7 @@ export function useCreatePool() {
       const walletClient = createWalletClient({
         account: wallet.address as `0x${string}`,
         chain,
-        transport: custom(hardenProvider(provider)),
+        transport: custom(hardenProvider(provider, chainId)),
       });
       const txHash = await walletClient.sendTransaction({
         account: wallet.address as `0x${string}`,

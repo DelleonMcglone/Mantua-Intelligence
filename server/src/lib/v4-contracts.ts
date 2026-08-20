@@ -10,7 +10,12 @@
  * addresses sourced from developers.uniswap.org/contracts/v4/deployments
  * 2026-04-28.
  */
-import { ARC_TESTNET_CHAIN_ID, DEFAULT_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  DEFAULT_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { MARKETS_PERIPHERY_ARC } from "./markets-contracts.ts";
 
 interface V4Addresses {
@@ -30,6 +35,16 @@ interface V4Addresses {
 // The DynamicFee hook lives on its OWN PoolManager (see
 // HOOK_DEPLOYMENTS_ARC); executing those needs their own periphery deploy.
 const V4_BY_CHAIN: Record<SupportedTestnetChainId, V4Addresses> = {
+  // Base Sepolia — the CANONICAL Uniswap v4 deployment (developers.uniswap.org
+  // /contracts/v4/deployments). Both Mantua hooks on Base Sepolia were
+  // deployed against this PoolManager, so one stack serves everything.
+  [BASE_SEPOLIA_CHAIN_ID]: {
+    poolManager: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
+    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
+    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
+    poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
+  },
   [ARC_TESTNET_CHAIN_ID]: {
     poolManager: "0x15B5f2c054b9DC788250131FCD1bcfCC34080a59",
     positionManager: "0x47AD8c1C78F9b07c81d833d924BbE36388A4ab78",
@@ -91,9 +106,11 @@ export const PERMIT2 = "0x000000000022d473030f116ddee9f6b43ac78ba3" as const;
  * registry to be per-hook. Hook resolution + pair gating work today.
  */
 const STABLE_PROTECTION_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [BASE_SEPOLIA_CHAIN_ID]: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
   [ARC_TESTNET_CHAIN_ID]: "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
 };
 const DYNAMIC_FEE_BY_CHAIN: Record<SupportedTestnetChainId, `0x${string}` | null> = {
+  [BASE_SEPOLIA_CHAIN_ID]: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
   [ARC_TESTNET_CHAIN_ID]: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
 };
 // Mantua ships two hooks: Stable Protection (USDC/EURC) and Dynamic Fee
@@ -183,11 +200,51 @@ export const HOOK_DEPLOYMENTS_ARC: Readonly<Record<HookName, HookDeployment>> = 
   },
 };
 
-const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+/**
+ * Base Sepolia hook deployments — unlike Arc, BOTH hooks were deployed
+ * against the canonical Uniswap v4 PoolManager, so the canonical periphery
+ * (PositionManager / StateView / V4Quoter) serves them all. Addresses from
+ * the hook repos' READMEs (DelleonMcglone/{stableprotection-hook,
+ * dynamic-fee}), cross-checked against docs/security/hook-deployments.md.
+ */
+export const HOOK_DEPLOYMENTS_BASE_SEPOLIA: Readonly<Record<HookName, HookDeployment>> = {
+  "stable-protection": {
+    poolManager: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+    hook: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
+    poolSwapTest: "0x8b5bcc363dde2614281ad875bad385e0a785d3b9",
+    poolModifyLiquidityTest: null,
+    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
+    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
+    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
+    token0: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // USDC (Circle)
+    token1: "0x808456652fdb597867f38412077A9182bf77359F", // EURC (Circle)
+    tokensAreMocks: false,
+  },
+  "dynamic-fee": {
+    poolManager: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+    hook: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
+    poolSwapTest: "0xF778eF19F4A0065430C55a7cD09d287368947C29",
+    poolModifyLiquidityTest: "0x9f12E9d064398e07153Ca7E1401C71343edB772B",
+    positionManager: "0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80",
+    stateView: "0x571291b572ed32ce6751a2cb2486ebee8defb9b4",
+    quoter: "0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba",
+    token0: "0x839Cc782708f1768F0F7591eA0c7D08290ba2a3c", // MOCK tWETH
+    token1: "0x8b6de320b93c2f8dEE5C9392A001E03CE6cc8Fe6", // MOCK tUSDC
+    tokensAreMocks: true,
+    aux: { tLINK: "0x16538c37818d580F7f919D4583D7935C8624567E" },
+  },
+};
 
-/** The default v4 stack for no-hook pools = the StableProtection ("hero")
- *  deployment. */
-const HERO_STACK: V4Addresses = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
+/** Per-chain hook deployment manifest. */
+export const HOOK_DEPLOYMENTS: Record<
+  SupportedTestnetChainId,
+  Readonly<Record<HookName, HookDeployment>>
+> = {
+  [BASE_SEPOLIA_CHAIN_ID]: HOOK_DEPLOYMENTS_BASE_SEPOLIA,
+  [ARC_TESTNET_CHAIN_ID]: HOOK_DEPLOYMENTS_ARC,
+};
+
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
 /**
  * Resolve the full v4 stack (PoolManager + periphery) for a pool by its
@@ -202,14 +259,23 @@ const HERO_STACK: V4Addresses = V4_BY_CHAIN[ARC_TESTNET_CHAIN_ID];
  *
  * The StableProtection hook resolves to the hero stack itself, so existing
  * StableProtection/no-hook flows are byte-for-byte unchanged.
+ *
+ * `chainId` defaults to the server DEFAULT (Arc) so legacy callers keep
+ * their behavior; chain-aware code passes it explicitly. On Base Sepolia
+ * every hook shares the canonical PoolManager, so everything resolves to
+ * the canonical stack.
  */
-export function getV4StackForHook(hookAddress: string): V4Addresses {
+export function getV4StackForHook(
+  hookAddress: string,
+  chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
+): V4Addresses {
   const lower = hookAddress.toLowerCase();
-  if (lower === ZERO_ADDR) return HERO_STACK;
-  // Dynamic Market Hook — its own PoolManager + periphery (DM-112: market
-  // pools route directly). Registered here so the shared quote/calldata
-  // builders work on market pools without special-casing callers.
-  if (lower === DYNAMIC_MARKET_ARC.hook.toLowerCase()) {
+  const defaultStack = V4_BY_CHAIN[chainId];
+  if (lower === ZERO_ADDR) return defaultStack;
+  // Dynamic Market Hook — on Arc it has its own PoolManager + periphery
+  // (DM-112: market pools route directly). Registered here so the shared
+  // quote/calldata builders work on market pools without special-casing.
+  if (chainId === ARC_TESTNET_CHAIN_ID && lower === DYNAMIC_MARKET_ARC.hook.toLowerCase()) {
     return {
       poolManager: DYNAMIC_MARKET_ARC.poolManager,
       positionManager: MARKETS_PERIPHERY_ARC.positionManager,
@@ -219,11 +285,11 @@ export function getV4StackForHook(hookAddress: string): V4Addresses {
     };
   }
   for (const name of HOOK_NAMES) {
-    const d = HOOK_DEPLOYMENTS_ARC[name];
+    const d = HOOK_DEPLOYMENTS[chainId][name];
     if (d.hook.toLowerCase() === lower) {
       if (!d.positionManager || !d.stateView || !d.quoter) {
         throw new Error(
-          `Hook "${name}" periphery is not deployed on Arc yet — cannot route pool operations to it.`,
+          `Hook "${name}" periphery is not deployed on this chain yet — cannot route pool operations to it.`,
         );
       }
       return {
@@ -235,7 +301,7 @@ export function getV4StackForHook(hookAddress: string): V4Addresses {
       };
     }
   }
-  return HERO_STACK;
+  return defaultStack;
 }
 
 /** Legacy single-chain exports. Prefer `getHookAddress(name, chainId)`. */
@@ -674,4 +740,15 @@ export const DYNAMIC_MARKET_ARC: DynamicMarketDeployment = {
   hook: "0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0",
   operator: "0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3",
   keeper: "0x4EF85782DE0826BeaF9B40Cc534C9aAf849312C3",
+};
+
+/**
+ * Per-chain Dynamic Market deployments. Arc is live; the Base Sepolia
+ * entry is filled by the Base deployment of the same stack (see
+ * deploy/dynamic-market/README.md) — `undefined` until then.
+ */
+export const DYNAMIC_MARKET_BY_CHAIN: Partial<
+  Record<SupportedTestnetChainId, DynamicMarketDeployment>
+> = {
+  [ARC_TESTNET_CHAIN_ID]: DYNAMIC_MARKET_ARC,
 };

@@ -1,5 +1,5 @@
 import type { PrivyClientConfig } from "@privy-io/react-auth";
-import { arcTestnet } from "../chains.ts";
+import { arcTestnet, baseSepolia } from "../chains.ts";
 import { cleanEnv } from "../env.ts";
 
 /**
@@ -8,12 +8,12 @@ import { cleanEnv } from "../env.ts";
  *    Apple and passkey are dropped per the sports-pivot plan.
  *  - D-006 ACCEPTED: createOnLogin = 'users-without-wallets'
  *  - D-007 ACCEPTED: WalletConnect enabled with project ID
- *  - Mantua's entire app surface (swaps, pools, liquidity) runs on Arc
- *    Testnet (5042002) only — Circle's USDC-gas chain and the default
- *    chain. No cross-chain bridging, so Arc is the only supported chain.
+ *  - Two supported chains: Base Sepolia (84532, the default) and Arc
+ *    Testnet (5042002). Privy only signs for chains in this list, so the
+ *    selector's `wallet.switchChain` depends on both being here.
  */
-const DEFAULT_CHAIN = arcTestnet;
-const SUPPORTED_CHAINS = [arcTestnet];
+const DEFAULT_CHAIN = baseSepolia;
+const SUPPORTED_CHAINS = [baseSepolia, arcTestnet];
 
 export const privyConfig: PrivyClientConfig = {
   appearance: {

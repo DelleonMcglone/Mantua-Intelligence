@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSupportedTestnetChainId } from "../lib/chains.ts";
 
 /**
  * Two input modes:
@@ -25,6 +26,8 @@ export const calldataSchema = z
       .regex(/^0x[a-fA-F0-9]{40}$/)
       .nullable()
       .optional(),
+    /** Target chain — omitted means Arc (back-compat). */
+    chainId: z.number().int().refine(isSupportedTestnetChainId, "Unsupported chainId").optional(),
     /** Percentage 1..100 (whole numbers). */
     percentage: z.number().int().min(1).max(100),
     slippageBps: z.number().int().min(0).max(500).default(50),

@@ -5,6 +5,7 @@ import { PanelSubHeader } from "@/components/shell/PanelSubHeader.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { IS_MAINNET, type TokenSymbol } from "@/lib/tokens.ts";
 import { NetworkLogo } from "@/components/shell/network-icons.tsx";
+import { networkKeyForChain } from "@/lib/chains.ts";
 import { useTokenPrices } from "./use-token-prices.ts";
 import { TokenPairIcon } from "./TokenPairIcon.tsx";
 import { usePools } from "./use-pools.ts";
@@ -30,7 +31,7 @@ const STABLES = new Set(["USDC", "USDT", "DAI", "USDP", "FRAX", "TUSD"]);
 const MAJORS = new Set(["ETH", "WETH", "cbBTC", "WBTC", "BTC"]);
 const RWAS = new Set(["EURC", "EURS", "AGEUR"]);
 
-type PoolNetwork = "arc";
+type PoolNetwork = "base" | "arc";
 
 interface DerivedPool extends PoolSummary {
   pair: { a: string; b: string };
@@ -59,8 +60,9 @@ function classifyPool(p: PoolSummary): DerivedPool {
   // Hook metadata isn't part of the pool data yet — keep "No Hook" for
   // now; will light up once Mantua-managed pools land in the response.
   const hookLabel = "No Hook";
-  // Remote (DefiLlama) pools are Base; local testnet pools carry chainId.
-  return { ...p, pair: { a, b }, category, hookLabel, hasHook: false, network: "arc" };
+  // Remote (DefiLlama) pools are Base ecosystem data; local testnet
+  // pools carry their own chainId and are tagged where they're built.
+  return { ...p, pair: { a, b }, category, hookLabel, hasHook: false, network: "base" };
 }
 
 /**
@@ -202,7 +204,7 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
           category,
           hookLabel,
           hasHook: p.hook !== null,
-          network: "arc",
+          network: networkKeyForChain(p.chainId),
         };
       });
     return [...local, ...remote];
@@ -336,16 +338,15 @@ export function LiquidityListPage({ onSelectPool, onCreate, onClose }: Props) {
               <span className="text-right">APR</span>
             </div>
             <div className="flex-1 overflow-auto">
-              {(["arc"] as const).map((net) => {
-                // Single network (Arc) today — all pools belong to this group.
-                const group = filtered.slice(0, 50);
+              {(["base", "arc"] as const).map((net) => {
+                const group = filtered.filter((p) => p.network === net).slice(0, 50);
                 if (group.length === 0) return null;
                 return (
                   <div key={net}>
                     <div className="flex items-center gap-2 pt-3 pb-1.5">
                       <NetworkLogo network={net} size={14} />
                       <span className="text-[11px] text-text-mute uppercase tracking-wide font-medium">
-                        Arc
+                        {net === "base" ? "Base" : "Arc"}
                       </span>
                     </div>
                     <ul>

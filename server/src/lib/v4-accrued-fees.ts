@@ -34,7 +34,7 @@ export async function readAccruedFees(
   tickUpper: number,
   chainId: SupportedTestnetChainId = DEFAULT_CHAIN_ID,
 ): Promise<AccruedFees> {
-  const stack = getV4StackForHook(key.hooks);
+  const stack = getV4StackForHook(key.hooks, chainId);
   const poolId = computePoolId(key);
   const client = getRpcClient(chainId);
 

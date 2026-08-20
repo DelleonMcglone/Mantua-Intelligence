@@ -529,7 +529,7 @@ export async function quoteExactInputV4(args: OnchainQuoteArgs): Promise<Onchain
 
   try {
     const { result } = await getRpcClient(chainId).simulateContract({
-      address: getV4StackForHook(key.hooks).quoter,
+      address: getV4StackForHook(key.hooks, chainId).quoter,
       abi: V4_QUOTER_ABI,
       functionName: "quoteExactInputSingle",
       args: [
@@ -588,7 +588,7 @@ export interface SwapCalldataResult {
  * checking is on the caller).
  */
 export function buildPoolSwapTestCalldata(args: SwapCalldataArgs): SwapCalldataResult {
-  const poolSwapTest = getV4StackForHook(args.poolKey.hooks).poolSwapTest;
+  const poolSwapTest = getV4StackForHook(args.poolKey.hooks, args.chainId).poolSwapTest;
   if (!poolSwapTest) {
     throw new Error("PoolSwapTest is not deployed for this pool's hook stack");
   }

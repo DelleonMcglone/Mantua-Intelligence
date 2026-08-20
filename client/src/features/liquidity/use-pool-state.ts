@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 import type { FeeTier } from "./fee-tiers.ts";
 
@@ -37,7 +38,11 @@ export function usePoolState(
   tokenB: TokenSymbol | null,
   fee: FeeTier | null,
 ): State {
-  const currentKey = tokenA && tokenB && fee !== null ? `${tokenA}|${tokenB}|${String(fee)}` : null;
+  const chainId = useCurrentChainId();
+  const currentKey =
+    tokenA && tokenB && fee !== null
+      ? `${String(chainId)}|${tokenA}|${tokenB}|${String(fee)}`
+      : null;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 
   useEffect(() => {
@@ -45,7 +50,7 @@ export function usePoolState(
     let cancelled = false;
     void api
       .get<ApiRes>(
-        `/api/pool-state?tokenA=${tokenA ?? ""}&tokenB=${tokenB ?? ""}&fee=${String(fee)}`,
+        `/api/pool-state?tokenA=${tokenA ?? ""}&tokenB=${tokenB ?? ""}&fee=${String(fee)}&chainId=${String(chainId)}`,
       )
       .then((res) => {
         if (cancelled) return;
