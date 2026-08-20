@@ -1,4 +1,5 @@
 import { keccak256, encodeAbiParameters } from "viem";
+import { ARC_TESTNET_CHAIN_ID } from "./chains.ts";
 
 /**
  * Market ID scheme — B0-004.
@@ -33,6 +34,14 @@ export interface MarketIdInput {
    * order the provider happened to return teams in.
    */
   outcomeIndex: number;
+  /**
+   * Chain the market lives on. Arc (the original scheme) is hashed
+   * WITHOUT the chain id so every already-deployed Arc market keeps its
+   * exact id; any other chain mixes its id into the hash, which keeps
+   * `market_id` primary keys distinct across chains without a schema
+   * migration of historical rows.
+   */
+  chainId?: number;
 }
 
 /**
@@ -56,6 +65,15 @@ export function computeMarketId(input: MarketIdInput): `0x${string}` {
       `outcomeIndex must be a non-negative integer, got ${String(input.outcomeIndex)}`,
     );
   }
+  const chainId = input.chainId ?? ARC_TESTNET_CHAIN_ID;
+  if (chainId !== ARC_TESTNET_CHAIN_ID) {
+    return keccak256(
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "string" }, { type: "uint8" }, { type: "uint256" }],
+        [eventId, input.marketType, input.outcomeIndex, BigInt(chainId)],
+      ),
+    );
+  }
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "string" }, { type: "uint8" }],
@@ -68,12 +86,25 @@ export function computeMarketId(input: MarketIdInput): `0x${string}` {
  * The two market IDs of a binary moneyline — the YES side of each
  * outcome. Home is index 0, away is index 1.
  */
-export function moneylineMarketIds(providerEventId: string): {
+export function moneylineMarketIds(
+  providerEventId: string,
+  chainId?: number,
+): {
   home: `0x${string}`;
   away: `0x${string}`;
 } {
   return {
-    home: computeMarketId({ providerEventId, marketType: "moneyline", outcomeIndex: 0 }),
-    away: computeMarketId({ providerEventId, marketType: "moneyline", outcomeIndex: 1 }),
+    home: computeMarketId({
+      providerEventId,
+      marketType: "moneyline",
+      outcomeIndex: 0,
+      ...(chainId !== undefined ? { chainId } : {}),
+    }),
+    away: computeMarketId({
+      providerEventId,
+      marketType: "moneyline",
+      outcomeIndex: 1,
+      ...(chainId !== undefined ? { chainId } : {}),
+    }),
   };
 }

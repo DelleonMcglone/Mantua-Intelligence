@@ -23,6 +23,13 @@ const schema = z.object({
   /** Base Sepolia RPC URL — server-side viem reads/writes on 84532. */
   BASE_SEPOLIA_RPC_URL: z.url().default("https://sepolia.base.org"),
 
+  /** Market signer/operator key for Base Sepolia (0x9215…024d). Optional —
+   *  without it, market minting/resolution runs on Arc only. */
+  BASE_MARKET_SIGNER_PRIVATE_KEY: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{64}$/)
+    .optional(),
+
   /** The Graph decentralized-network API key. Required for /api/positions
    *  to surface pre-Mantua v4 positions; absence degrades gracefully (only
    *  Mantua-opened positions are returned). */

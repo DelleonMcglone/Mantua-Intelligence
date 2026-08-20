@@ -12,15 +12,16 @@
 
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { arcTestnet } from "viem/chains";
+import { arcTestnet, baseSepolia } from "viem/chains";
 import { env } from "../../env.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "../chains.ts";
 import { logger } from "../logger.ts";
-import { baseRpcClient } from "../rpc-client.ts";
+import { getRpcClient } from "../rpc-client.ts";
 import {
   ERC20_APPROVE_ABI,
   LP_ROUTER_ABI,
-  MARKETS_ARC,
-  MARKETS_PERIPHERY_ARC,
+  MARKETS_BY_CHAIN,
+  MARKETS_PERIPHERY_BY_CHAIN,
   MARKET_ABI,
   MARKET_FACTORY_ABI,
   MARKET_SPLIT_ABI,
@@ -29,17 +30,39 @@ import {
   RESOLVER_CONTRACT_ABI,
   STATE_VIEW_ABI,
 } from "../markets-contracts.ts";
-import { DYNAMIC_MARKET_ARC } from "../v4-contracts.ts";
+import { DYNAMIC_MARKET_BY_CHAIN } from "../v4-contracts.ts";
 import { planMarketPool } from "./market-pool.ts";
 import type { PlannedMarket } from "./ingest.ts";
 import type { ResolutionPlan, ResolutionSubmitter } from "./resolution.ts";
 
-/** Null when no signer key is configured — callers degrade to planning. */
-export function marketSignerWallet() {
-  const key = env.MARKET_SIGNER_PRIVATE_KEY;
+/** Null when the chain's signer key is not configured — callers degrade
+ *  to planning. Arc signs with MARKET_SIGNER_PRIVATE_KEY; Base Sepolia
+ *  with BASE_MARKET_SIGNER_PRIVATE_KEY (a different operator key). */
+export function marketSignerWallet(chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID) {
+  const key =
+    chainId === ARC_TESTNET_CHAIN_ID
+      ? env.MARKET_SIGNER_PRIVATE_KEY
+      : env.BASE_MARKET_SIGNER_PRIVATE_KEY;
   if (!key) return null;
   const account = privateKeyToAccount(key as `0x${string}`);
-  return createWalletClient({ account, chain: arcTestnet, transport: http(env.ARC_RPC_URL) });
+  return chainId === ARC_TESTNET_CHAIN_ID
+    ? createWalletClient({ account, chain: arcTestnet, transport: http(env.ARC_RPC_URL) })
+    : createWalletClient({
+        account,
+        chain: baseSepolia,
+        transport: http(env.BASE_SEPOLIA_RPC_URL),
+      });
+}
+
+/** The chain's markets/periphery/dynamic-market config, or throw. */
+function marketsCfg(chainId: SupportedTestnetChainId) {
+  const markets = MARKETS_BY_CHAIN[chainId];
+  const periphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+  const dm = DYNAMIC_MARKET_BY_CHAIN[chainId];
+  if (!markets || !periphery || !dm) {
+    throw new Error(`Sports markets are not deployed on chain ${String(chainId)}`);
+  }
+  return { markets, periphery, dm };
 }
 
 /**
@@ -90,9 +113,10 @@ const SEED_TICK = 11_520;
 async function writeAndWait(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
   request: unknown,
+  chainId: SupportedTestnetChainId,
 ): Promise<void> {
   const tx = await wallet.writeContract(request as never);
-  await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+  await getRpcClient(chainId).waitForTransactionReceipt({ hash: tx });
 }
 
 /**
@@ -108,12 +132,15 @@ async function seedPoolLiquidity(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
   marketAddress: `0x${string}`,
   plan: ReturnType<typeof planMarketPool>,
+  chainId: SupportedTestnetChainId,
 ): Promise<boolean> {
   const seed = BigInt(env.MARKET_SEED_USDC);
   if (seed === 0n) return false;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
 
-  const liquidity = await baseRpcClient.readContract({
-    address: MARKETS_PERIPHERY_ARC.stateView,
+  const liquidity = await client.readContract({
+    address: cfg.periphery.stateView,
     abi: STATE_VIEW_ABI,
     functionName: "getLiquidity",
     args: [plan.poolId],
@@ -121,39 +148,35 @@ async function seedPoolLiquidity(
   if (liquidity > 0n) return false;
 
   const approveThenCall = async (token: `0x${string}`, spender: `0x${string}`, amount: bigint) => {
-    const { request } = await baseRpcClient.simulateContract({
+    const { request } = await client.simulateContract({
       account: wallet.account,
       address: token,
       abi: ERC20_APPROVE_ABI,
       functionName: "approve",
       args: [spender, amount],
     });
-    await writeAndWait(wallet, request);
+    await writeAndWait(wallet, request, chainId);
   };
 
   // 1. Split seed USDC into YES + NO (NO stays with the signer; only the
   //    YES/USDC pool exists — DM-101's complementary market covers NO).
-  await approveThenCall(MARKETS_ARC.collateral, marketAddress, seed);
-  const { request: splitReq } = await baseRpcClient.simulateContract({
+  await approveThenCall(cfg.markets.collateral, marketAddress, seed);
+  const { request: splitReq } = await client.simulateContract({
     account: wallet.account,
     address: marketAddress,
     abi: MARKET_SPLIT_ABI,
     functionName: "split",
     args: [seed],
   });
-  await writeAndWait(wallet, splitReq);
+  await writeAndWait(wallet, splitReq, chainId);
 
   // 2. LP: approve both sides to the liquidity router and add.
   const yesToken = plan.yesIsToken0 ? plan.key.currency0 : plan.key.currency1;
-  await approveThenCall(yesToken, MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest, seed);
-  await approveThenCall(
-    MARKETS_ARC.collateral,
-    MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest,
-    seed,
-  );
-  const { request: lpReq } = await baseRpcClient.simulateContract({
+  await approveThenCall(yesToken, cfg.periphery.poolModifyLiquidityTest, seed);
+  await approveThenCall(cfg.markets.collateral, cfg.periphery.poolModifyLiquidityTest, seed);
+  const { request: lpReq } = await client.simulateContract({
     account: wallet.account,
-    address: MARKETS_PERIPHERY_ARC.poolModifyLiquidityTest,
+    address: cfg.periphery.poolModifyLiquidityTest,
     abi: LP_ROUTER_ABI,
     functionName: "modifyLiquidity",
     args: [
@@ -167,7 +190,7 @@ async function seedPoolLiquidity(
       "0x",
     ],
   });
-  await writeAndWait(wallet, lpReq);
+  await writeAndWait(wallet, lpReq, chainId);
   return true;
 }
 
@@ -182,39 +205,37 @@ async function bootstrapMarketPool(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
   marketAddress: `0x${string}`,
   m: PlannedMarket,
+  chainId: SupportedTestnetChainId,
 ): Promise<{
   opened: boolean;
   plan: ReturnType<typeof planMarketPool>;
   yesToken: `0x${string}`;
   noToken: `0x${string}`;
 }> {
-  const yesToken = await baseRpcClient.readContract({
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
+  const yesToken = await client.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
     functionName: "yesToken",
   });
-  const noToken = await baseRpcClient.readContract({
+  const noToken = await client.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
     functionName: "noToken",
   });
-  const plan = planMarketPool(
-    yesToken,
-    MARKETS_ARC.collateral,
-    DYNAMIC_MARKET_ARC.hook,
-    m.openingProbability,
-  );
+  const plan = planMarketPool(yesToken, cfg.markets.collateral, cfg.dm.hook, m.openingProbability);
 
-  const registered = await baseRpcClient.readContract({
-    address: DYNAMIC_MARKET_ARC.registry,
+  const registered = await client.readContract({
+    address: cfg.dm.registry,
     abi: REGISTRY_ABI,
     functionName: "isRegistered",
     args: [plan.poolId],
   });
   if (!registered) {
-    const { request } = await baseRpcClient.simulateContract({
+    const { request } = await client.simulateContract({
       account: wallet.account,
-      address: DYNAMIC_MARKET_ARC.registry,
+      address: cfg.dm.registry,
       abi: REGISTRY_ABI,
       functionName: "registerPool",
       args: [
@@ -226,19 +247,19 @@ async function bootstrapMarketPool(
       ],
     });
     const tx = await wallet.writeContract(request);
-    await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+    await client.waitForTransactionReceipt({ hash: tx });
   }
 
   try {
-    const { request } = await baseRpcClient.simulateContract({
+    const { request } = await client.simulateContract({
       account: wallet.account,
-      address: DYNAMIC_MARKET_ARC.poolManager,
+      address: cfg.dm.poolManager,
       abi: POOL_MANAGER_INIT_ABI,
       functionName: "initialize",
       args: [plan.key, plan.sqrtPriceX96],
     });
     const tx = await wallet.writeContract(request);
-    await baseRpcClient.waitForTransactionReceipt({ hash: tx });
+    await client.waitForTransactionReceipt({ hash: tx });
     logger.info(
       { marketId: m.marketId, poolId: plan.poolId, probability: m.openingProbability },
       "markets: pool opened at implied probability",
@@ -257,9 +278,12 @@ async function bootstrapMarketPool(
  */
 export async function createMarketsOnChain(
   planned: readonly PlannedMarket[],
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
 ): Promise<MarketCreationSummary | null> {
-  const wallet = marketSignerWallet();
+  const wallet = marketSignerWallet(chainId);
   if (!wallet) return null;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
 
   const now = Math.floor(Date.now() / 1000);
   const todo = creatableMarkets(planned, now);
@@ -276,8 +300,8 @@ export async function createMarketsOnChain(
 
   for (const m of todo) {
     try {
-      let marketAddress = await baseRpcClient.readContract({
-        address: MARKETS_ARC.factory,
+      let marketAddress = await client.readContract({
+        address: cfg.markets.factory,
         abi: MARKET_FACTORY_ABI,
         functionName: "marketOf",
         args: [m.marketId],
@@ -285,17 +309,17 @@ export async function createMarketsOnChain(
       if (marketAddress !== "0x0000000000000000000000000000000000000000") {
         summary.existed += 1;
       } else {
-        const { request } = await baseRpcClient.simulateContract({
+        const { request } = await client.simulateContract({
           account: wallet.account,
-          address: MARKETS_ARC.factory,
+          address: cfg.markets.factory,
           abi: MARKET_FACTORY_ABI,
           functionName: "createMarketIfAbsent",
           args: [m.marketId, BigInt(m.kickoffTimestamp), m.label],
         });
         const txHash = await wallet.writeContract(request);
-        await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
-        marketAddress = await baseRpcClient.readContract({
-          address: MARKETS_ARC.factory,
+        await client.waitForTransactionReceipt({ hash: txHash });
+        marketAddress = await client.readContract({
+          address: cfg.markets.factory,
           abi: MARKET_FACTORY_ABI,
           functionName: "marketOf",
           args: [m.marketId],
@@ -306,9 +330,11 @@ export async function createMarketsOnChain(
       }
       // Pool bootstrap + seed run for existing markets too — a
       // half-completed earlier sweep heals on the next tick.
-      const boot = await bootstrapMarketPool(wallet, marketAddress, m);
+      const boot = await bootstrapMarketPool(wallet, marketAddress, m, chainId);
       if (boot.opened) summary.poolsOpened += 1;
-      if (await seedPoolLiquidity(wallet, marketAddress, boot.plan)) summary.poolsSeeded += 1;
+      if (await seedPoolLiquidity(wallet, marketAddress, boot.plan, chainId)) {
+        summary.poolsSeeded += 1;
+      }
       summary.details.push({
         marketId: m.marketId,
         providerEventId: m.providerEventId,
@@ -335,24 +361,28 @@ export async function createMarketsOnChain(
  * contract (idempotent sweep); resolve/void simulate first so a revert is a
  * clean per-market failure for `executeResolution` to isolate.
  */
-export function liveResolutionSubmitter(): ResolutionSubmitter | null {
-  const wallet = marketSignerWallet();
+export function liveResolutionSubmitter(
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): ResolutionSubmitter | null {
+  const wallet = marketSignerWallet(chainId);
   if (!wallet) return null;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
 
   const write = async (
     functionName: "freeze" | "resolve" | "voidMarket",
     args: readonly unknown[],
   ): Promise<string> => {
-    const { request } = await baseRpcClient.simulateContract({
+    const { request } = await client.simulateContract({
       account: wallet.account,
-      address: MARKETS_ARC.resolver,
+      address: cfg.markets.resolver,
       abi: RESOLVER_CONTRACT_ABI,
       functionName,
       // viem's tuple-typed args don't unify across the three overloads here.
       args: args as never,
     });
     const txHash = await wallet.writeContract(request);
-    await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
+    await client.waitForTransactionReceipt({ hash: txHash });
     return txHash;
   };
 
@@ -379,15 +409,20 @@ export function liveResolutionSubmitter(): ResolutionSubmitter | null {
  * simulation per market per tick and reports as failures. `marketOf` reads
  * batch through the client's multicall, so this is one call, not N.
  */
-export async function filterPlanToExistingMarkets(plan: ResolutionPlan): Promise<ResolutionPlan> {
+export async function filterPlanToExistingMarkets(
+  plan: ResolutionPlan,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<ResolutionPlan> {
   const ids = [...new Set([...plan.freezes, ...plan.submissions.map((s) => s.marketId)])];
   if (ids.length === 0) return plan;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
 
   const exists = new Map<string, boolean>();
   await Promise.all(
     ids.map(async (id) => {
-      const addr = await baseRpcClient.readContract({
-        address: MARKETS_ARC.factory,
+      const addr = await client.readContract({
+        address: cfg.markets.factory,
         abi: MARKET_FACTORY_ABI,
         functionName: "marketOf",
         args: [id],

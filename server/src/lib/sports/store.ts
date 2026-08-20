@@ -170,6 +170,7 @@ export async function upsertMarketRows(
   db: DB,
   provider: string,
   details: readonly OnChainMarketDetail[],
+  chainId = 5042002,
 ): Promise<number> {
   let written = 0;
   for (const d of details) {
@@ -188,6 +189,7 @@ export async function upsertMarketRows(
         eventId,
         marketType: "moneyline",
         outcomeIndex: d.outcomeIndex,
+        chainId,
         yesToken: d.yesToken,
         noToken: d.noToken,
         poolId: d.poolId,

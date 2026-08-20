@@ -48,6 +48,16 @@ const HOOKS: HookConfig[] = [
     rpcUrl: "https://sepolia.base.org",
     expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
   },
+  {
+    name: "DynamicMarketHook",
+    repo: "DelleonMcglone/Mantua-Intelligence",
+    pinnedCommit: "07f6f169fb79172c01f4a7d1dd68e9850a132ace",
+    address: "0xff94F6319d3A67682147c997D1323D0f0B1768c0",
+    chainId: 84532,
+    chainName: "Base Sepolia",
+    rpcUrl: "https://sepolia.base.org",
+    expectedPermissions: ["BEFORE_INITIALIZE", "BEFORE_ADD_LIQUIDITY", "BEFORE_SWAP", "AFTER_SWAP"],
+  },
 ];
 
 /** Uniswap v4 Hooks.sol permission flags (lower 14 bits of hook address). */
@@ -155,18 +165,21 @@ function renderMarkdown(results: VerifyResult[]): string {
   lines.push("");
   lines.push(`Last run: ${new Date().toISOString()}`);
   lines.push("");
-  lines.push("| Hook | Chain | Address | Deployed | Bytecode size | Bytecode hash | Permissions | Match |");
+  lines.push(
+    "| Hook | Chain | Address | Deployed | Bytecode size | Bytecode hash | Permissions | Match |",
+  );
   lines.push("|---|---|---|---|---:|---|---|---|");
   for (const r of results) {
     const chain = `${r.hook.chainName} (${String(r.hook.chainId)})`;
     const addr = `\`${r.hook.address}\``;
     const dep = r.deployed ? "✅" : "❌";
     const size = r.deployed ? `${String(r.bytecodeLength)} B` : "—";
-    const hash = r.bytecodeHash ? `\`${r.bytecodeHash.slice(0, 18)}…\`` : r.error ?? "—";
+    const hash = r.bytecodeHash ? `\`${r.bytecodeHash.slice(0, 18)}…\`` : (r.error ?? "—");
     const perms = r.permissions.length > 0 ? r.permissions.join(", ") : "—";
-    const match =
-      r.permissionsMatch === null ? "n/a" : r.permissionsMatch ? "✅" : "❌";
-    lines.push(`| \`${r.hook.name}\` | ${chain} | ${addr} | ${dep} | ${size} | ${hash} | ${perms} | ${match} |`);
+    const match = r.permissionsMatch === null ? "n/a" : r.permissionsMatch ? "✅" : "❌";
+    lines.push(
+      `| \`${r.hook.name}\` | ${chain} | ${addr} | ${dep} | ${size} | ${hash} | ${perms} | ${match} |`,
+    );
   }
   lines.push("");
   lines.push("## Pinned source commits");

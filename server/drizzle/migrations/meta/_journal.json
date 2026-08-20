@@ -57,6 +57,13 @@
       "when": 1787443200000,
       "tag": "0007_agent_wallets_per_chain",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787450400000,
+      "tag": "0008_markets_chain_id",
+      "breakpoints": true
     }
   ]
 }

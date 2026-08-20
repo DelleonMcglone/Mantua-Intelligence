@@ -1,4 +1,9 @@
 import { parseAbi } from "viem";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 
 /**
  * The deployed sports-market settlement layer on Arc Testnet (B4 wiring,
@@ -40,6 +45,64 @@ export const MARKETS_PERIPHERY_ARC = {
   positionDescriptor: "0x52e8c370Ff772408b925f8524f49BFd1B96Beb93",
   positionManager: "0xd288EE632fb58101211C7c87b3FCF44328C6866d",
 } as const;
+
+export interface MarketsDeployment {
+  factory: `0x${string}`;
+  resolver: `0x${string}`;
+  collateral: `0x${string}`;
+}
+
+export interface MarketsPeriphery {
+  poolSwapTest: `0x${string}`;
+  poolModifyLiquidityTest: `0x${string}`;
+  stateView: `0x${string}`;
+  quoter: `0x${string}`;
+  positionDescriptor: `0x${string}` | null;
+  positionManager: `0x${string}`;
+}
+
+/**
+ * Base Sepolia markets layer, deployed 2026-08-20 by 0x9215…024d
+ * (contracts/broadcast/DeployMarkets.s.sol/84532). Probed post-deploy:
+ * `resolver.factory()` == this factory. Collateral is Circle's Base
+ * Sepolia USDC.
+ */
+export const MARKETS_BASE_SEPOLIA: MarketsDeployment = {
+  factory: "0x9aB104e89F8de7bc240a134Dc6adBCe7124D3d84",
+  resolver: "0x0FEAf3BA53E9F163c8060F4d437bcC77F86E4270",
+  collateral: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+};
+
+/** Per-chain markets settlement layer. */
+export const MARKETS_BY_CHAIN: Partial<Record<SupportedTestnetChainId, MarketsDeployment>> = {
+  [BASE_SEPOLIA_CHAIN_ID]: MARKETS_BASE_SEPOLIA,
+  [ARC_TESTNET_CHAIN_ID]: MARKETS_ARC,
+};
+
+/**
+ * Base Sepolia market-pool periphery, deployed 2026-08-20 against the
+ * Dynamic Market PoolManager 0x53AA…fDCa. All five functional contracts
+ * probed on-chain: `poolManager()`/`manager()` == that PoolManager.
+ */
+export const MARKETS_PERIPHERY_BASE_SEPOLIA: MarketsPeriphery = {
+  poolSwapTest: "0x4357c1d769fc94278ae85b36e22dd494cca078b4",
+  poolModifyLiquidityTest: "0x37fbd7e25de3259340e0879ec15f19c56abcc55b",
+  stateView: "0xc352dc25d3ab4748cce6600efb3d5edf42613a45",
+  quoter: "0xbb91b69d888afb30eebd373023480d2007d37cd6",
+  positionDescriptor: "0x5f30b3ff7b65e3c06a02a2e120c9a2478ea26be9",
+  positionManager: "0x275dc77b579b56eb493732f177b1109141ad9a67",
+};
+
+/**
+ * Per-chain market-pool periphery (the Dynamic Market PoolManager's
+ * routers/lens).
+ */
+export const MARKETS_PERIPHERY_BY_CHAIN: Partial<
+  Record<SupportedTestnetChainId, MarketsPeriphery>
+> = {
+  [BASE_SEPOLIA_CHAIN_ID]: MARKETS_PERIPHERY_BASE_SEPOLIA,
+  [ARC_TESTNET_CHAIN_ID]: MARKETS_PERIPHERY_ARC,
+};
 
 export const MARKET_FACTORY_ABI = parseAbi([
   "function createMarketIfAbsent(bytes32 marketId, uint64 startsAt, string label) returns (address market, bool created)",

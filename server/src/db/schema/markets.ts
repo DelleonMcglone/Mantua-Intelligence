@@ -139,6 +139,8 @@ export const markets = pgTable(
     marketType: varchar("market_type", { length: 16 }).notNull().default("moneyline"),
     /** Which outcome the YES token represents. Moneyline: 0 home, 1 away. */
     outcomeIndex: smallint("outcome_index").notNull(),
+    /** Chain this market lives on (5042002 = Arc, 84532 = Base Sepolia). */
+    chainId: integer("chain_id").notNull().default(5042002),
     /** OPEN | FROZEN | RESOLVED | SETTLED | INVALID — see the lifecycle spec. */
     state: varchar("state", { length: 16 }).notNull().default("OPEN"),
     yesToken: varchar("yes_token", { length: 42 }),
@@ -153,7 +155,12 @@ export const markets = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    unique("markets_event_type_outcome_uq").on(t.eventId, t.marketType, t.outcomeIndex),
+    unique("markets_event_type_outcome_chain_uq").on(
+      t.eventId,
+      t.marketType,
+      t.outcomeIndex,
+      t.chainId,
+    ),
     index("markets_state_idx").on(t.state),
     index("markets_event_idx").on(t.eventId),
   ],

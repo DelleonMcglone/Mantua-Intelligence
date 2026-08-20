@@ -229,3 +229,39 @@ event MarketFeeUpdated(PoolId indexed poolId, Breakdown breakdown, uint24 effect
 `liquidityPremium`, `eventRiskPremium`, `deviationPremium`, and
 `directionalAdjustment`. It is emitted as a struct rather than seven flat
 parameters so adding a premium later does not change the signature.
+
+---
+
+## Base Sepolia deploy (2026-08-20)
+
+Deployed by `mantua-deployer-2` (deployer/operator/keeper
+`0x9215594bdA3fE6c029155566B9c9DA75dFC1024D`) — a fresh key created after
+the original Arc keystore passphrase was lost; the server signs Base
+market operations with `BASE_MARKET_SIGNER_PRIVATE_KEY`.
+
+| Contract            | Address                                      |
+| ------------------- | -------------------------------------------- |
+| PoolManager         | `0x53AA23D6B81562E75505EA25e015650a2BB8fDCa` |
+| MarketStateRegistry | `0x1c03020a160ad4558414235c90F305F010Baf086` |
+| DynamicMarketHook   | `0xff94F6319d3A67682147c997D1323D0f0B1768c0` |
+| MarketFactory       | `0x9aB104e89F8de7bc240a134Dc6adBCe7124D3d84` |
+| Resolver            | `0x0FEAf3BA53E9F163c8060F4d437bcC77F86E4270` |
+| USDC (collateral)   | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+
+Periphery (against the PoolManager above): PoolSwapTest
+`0x4357c1d769fc94278ae85b36e22dd494cca078b4`, PoolModifyLiquidityTest
+`0x37fbd7e25de3259340e0879ec15f19c56abcc55b`, StateView
+`0xc352dc25d3ab4748cce6600efb3d5edf42613a45`, V4Quoter
+`0xbb91b69d888afb30eebd373023480d2007d37cd6`, PositionDescriptor
+`0x5f30b3ff7b65e3c06a02a2e120c9a2478ea26be9`, PositionManager
+`0x275dc77b579b56eb493732f177b1109141ad9a67`.
+
+Verified on-chain post-deploy: `hook & 0x3FFF == 0x28C0`,
+`hook.poolManager()` == PoolManager, `registry.operator()` == deployer,
+`resolver.factory()` == MarketFactory, and every periphery contract's
+`poolManager()`/`manager()` == PoolManager. NOTE: the Foundry receipt
+labels were scrambled (same quirk as the Arc deploy) — the mapping above
+is from the simulation logs + on-chain probes. Server registration:
+`DYNAMIC_MARKET_BY_CHAIN[84532]`, `MARKETS_BY_CHAIN[84532]`,
+`MARKETS_PERIPHERY_BY_CHAIN[84532]`. Base market ids mix the chain id
+into the hash (see `server/src/lib/market-id.ts`).

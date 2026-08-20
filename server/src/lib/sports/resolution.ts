@@ -48,10 +48,23 @@ export interface ResolutionPlan {
 }
 
 /** Both market ids for one game, in outcome-index order (home, away). */
-export function marketIdsFor(providerEventId: string): [`0x${string}`, `0x${string}`] {
+export function marketIdsFor(
+  providerEventId: string,
+  chainId?: number,
+): [`0x${string}`, `0x${string}`] {
   return [
-    computeMarketId({ providerEventId, marketType: "moneyline", outcomeIndex: 0 }),
-    computeMarketId({ providerEventId, marketType: "moneyline", outcomeIndex: 1 }),
+    computeMarketId({
+      providerEventId,
+      marketType: "moneyline",
+      outcomeIndex: 0,
+      ...(chainId !== undefined ? { chainId } : {}),
+    }),
+    computeMarketId({
+      providerEventId,
+      marketType: "moneyline",
+      outcomeIndex: 1,
+      ...(chainId !== undefined ? { chainId } : {}),
+    }),
   ];
 }
 
@@ -66,8 +79,9 @@ export function marketIdsFor(providerEventId: string): [`0x${string}`, `0x${stri
 export function marketActionsFor(
   providerEventId: string,
   winningOutcomeIndex: number,
+  chainId?: number,
 ): MarketSubmission[] {
-  const [homeMarket, awayMarket] = marketIdsFor(providerEventId);
+  const [homeMarket, awayMarket] = marketIdsFor(providerEventId, chainId);
   const homeWon = winningOutcomeIndex === 0;
   return [
     {
@@ -86,8 +100,8 @@ export function marketActionsFor(
 }
 
 /** Void both of a game's markets — a called-off game has no winning side. */
-export function voidActionsFor(providerEventId: string): MarketSubmission[] {
-  return marketIdsFor(providerEventId).map((marketId) => ({
+export function voidActionsFor(providerEventId: string, chainId?: number): MarketSubmission[] {
+  return marketIdsFor(providerEventId, chainId).map((marketId) => ({
     marketId,
     providerEventId,
     kind: "void" as const,
@@ -122,6 +136,7 @@ export function planResolution(
   primary: ProviderSlate,
   secondary: ProviderSlate | null,
   nowSeconds: number = Math.floor(Date.now() / 1000),
+  chainId?: number,
 ): ResolutionPlan {
   const plan: ResolutionPlan = { freezes: [], submissions: [], held: [] };
 
@@ -133,7 +148,7 @@ export function planResolution(
       event.startsAt <= nowSeconds &&
       (event.status === "scheduled" || event.status === "in_progress")
     ) {
-      plan.freezes.push(...marketIdsFor(event.providerEventId));
+      plan.freezes.push(...marketIdsFor(event.providerEventId, chainId));
     }
 
     const settlement = decideSettlement(event, primary.delayed);
@@ -146,7 +161,7 @@ export function planResolution(
     }
 
     if (settlement.kind === "void") {
-      plan.submissions.push(...voidActionsFor(event.providerEventId));
+      plan.submissions.push(...voidActionsFor(event.providerEventId, chainId));
       continue;
     }
 
@@ -171,7 +186,7 @@ export function planResolution(
     }
 
     plan.submissions.push(
-      ...marketActionsFor(event.providerEventId, settlement.winningOutcomeIndex),
+      ...marketActionsFor(event.providerEventId, settlement.winningOutcomeIndex, chainId),
     );
   }
 

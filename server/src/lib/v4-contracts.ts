@@ -16,7 +16,7 @@ import {
   DEFAULT_CHAIN_ID,
   type SupportedTestnetChainId,
 } from "./chains.ts";
-import { MARKETS_PERIPHERY_ARC } from "./markets-contracts.ts";
+import { MARKETS_PERIPHERY_BY_CHAIN } from "./markets-contracts.ts";
 
 interface V4Addresses {
   poolManager: `0x${string}`;
@@ -272,16 +272,18 @@ export function getV4StackForHook(
   const lower = hookAddress.toLowerCase();
   const defaultStack = V4_BY_CHAIN[chainId];
   if (lower === ZERO_ADDR) return defaultStack;
-  // Dynamic Market Hook — on Arc it has its own PoolManager + periphery
+  // Dynamic Market Hook — each chain has its own PoolManager + periphery
   // (DM-112: market pools route directly). Registered here so the shared
   // quote/calldata builders work on market pools without special-casing.
-  if (chainId === ARC_TESTNET_CHAIN_ID && lower === DYNAMIC_MARKET_ARC.hook.toLowerCase()) {
+  const dm = DYNAMIC_MARKET_BY_CHAIN[chainId];
+  const dmPeriphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+  if (dm && dmPeriphery && lower === dm.hook.toLowerCase()) {
     return {
-      poolManager: DYNAMIC_MARKET_ARC.poolManager,
-      positionManager: MARKETS_PERIPHERY_ARC.positionManager,
-      stateView: MARKETS_PERIPHERY_ARC.stateView,
-      quoter: MARKETS_PERIPHERY_ARC.quoter,
-      poolSwapTest: MARKETS_PERIPHERY_ARC.poolSwapTest,
+      poolManager: dm.poolManager,
+      positionManager: dmPeriphery.positionManager,
+      stateView: dmPeriphery.stateView,
+      quoter: dmPeriphery.quoter,
+      poolSwapTest: dmPeriphery.poolSwapTest,
     };
   }
   for (const name of HOOK_NAMES) {
@@ -743,12 +745,23 @@ export const DYNAMIC_MARKET_ARC: DynamicMarketDeployment = {
 };
 
 /**
- * Per-chain Dynamic Market deployments. Arc is live; the Base Sepolia
- * entry is filled by the Base deployment of the same stack (see
- * deploy/dynamic-market/README.md) — `undefined` until then.
+ * Base Sepolia Dynamic Market stack, deployed 2026-08-20 from the
+ * `mantua-deployer-2` keystore (deployer/operator/keeper 0x9215…024d).
+ * Verified on-chain: hook address carries permission bits 0x28C0 and its
+ * poolManager() points at this PoolManager.
  */
+export const DYNAMIC_MARKET_BASE_SEPOLIA: DynamicMarketDeployment = {
+  poolManager: "0x53AA23D6B81562E75505EA25e015650a2BB8fDCa",
+  registry: "0x1c03020a160ad4558414235c90F305F010Baf086",
+  hook: "0xff94F6319d3A67682147c997D1323D0f0B1768c0",
+  operator: "0x9215594bdA3fE6c029155566B9c9DA75dFC1024D",
+  keeper: "0x9215594bdA3fE6c029155566B9c9DA75dFC1024D",
+};
+
+/** Per-chain Dynamic Market deployments. */
 export const DYNAMIC_MARKET_BY_CHAIN: Partial<
   Record<SupportedTestnetChainId, DynamicMarketDeployment>
 > = {
+  [BASE_SEPOLIA_CHAIN_ID]: DYNAMIC_MARKET_BASE_SEPOLIA,
   [ARC_TESTNET_CHAIN_ID]: DYNAMIC_MARKET_ARC,
 };

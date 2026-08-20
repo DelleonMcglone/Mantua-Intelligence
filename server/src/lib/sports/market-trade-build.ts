@@ -7,13 +7,14 @@
  */
 
 import { parseAbi } from "viem";
-import { baseRpcClient } from "../rpc-client.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "../chains.ts";
+import { getRpcClient } from "../rpc-client.ts";
 import { computeMarketId } from "../market-id.ts";
 import { buildPoolSwapTestCalldata } from "../v4-onchain-swap.ts";
-import { DYNAMIC_MARKET_ARC } from "../v4-contracts.ts";
+import { DYNAMIC_MARKET_BY_CHAIN } from "../v4-contracts.ts";
 import {
-  MARKETS_ARC,
-  MARKETS_PERIPHERY_ARC,
+  MARKETS_BY_CHAIN,
+  MARKETS_PERIPHERY_BY_CHAIN,
   MARKET_ABI,
   MARKET_FACTORY_ABI,
 } from "../markets-contracts.ts";
@@ -53,14 +54,24 @@ export async function buildMarketTrade(args: {
   outcomeIndex: 0 | 1;
   direction: "buy" | "sell";
   amountRaw: bigint;
+  chainId?: SupportedTestnetChainId;
 }): Promise<BuiltMarketTrade> {
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
+  const markets = MARKETS_BY_CHAIN[chainId];
+  const periphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+  const dm = DYNAMIC_MARKET_BY_CHAIN[chainId];
+  if (!markets || !periphery || !dm) {
+    throw new Error(`Sports markets are not deployed on chain ${String(chainId)}`);
+  }
+  const client = getRpcClient(chainId);
   const marketId = computeMarketId({
     providerEventId: args.providerEventId,
     marketType: "moneyline",
     outcomeIndex: args.outcomeIndex,
+    chainId,
   });
-  const marketAddress = await baseRpcClient.readContract({
-    address: MARKETS_ARC.factory,
+  const marketAddress = await client.readContract({
+    address: markets.factory,
     abi: MARKET_FACTORY_ABI,
     functionName: "marketOf",
     args: [marketId],
@@ -68,18 +79,18 @@ export async function buildMarketTrade(args: {
   if (marketAddress === "0x0000000000000000000000000000000000000000") {
     throw new NoMarketError(args.providerEventId);
   }
-  const yesToken = await baseRpcClient.readContract({
+  const yesToken = await client.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
     functionName: "yesToken",
   });
-  const plan = planMarketPool(yesToken, MARKETS_ARC.collateral, DYNAMIC_MARKET_ARC.hook, 0.5);
+  const plan = planMarketPool(yesToken, markets.collateral, dm.hook, 0.5);
 
   const inputIsYes = args.direction === "sell";
   const zeroForOne = inputIsYes ? plan.yesIsToken0 : !plan.yesIsToken0;
 
-  const { result } = await baseRpcClient.simulateContract({
-    address: MARKETS_PERIPHERY_ARC.quoter,
+  const { result } = await client.simulateContract({
+    address: periphery.quoter,
     abi: V4_QUOTER_ABI,
     functionName: "quoteExactInputSingle",
     args: [{ poolKey: plan.key, zeroForOne, exactAmount: args.amountRaw, hookData: "0x" }],
@@ -90,6 +101,7 @@ export async function buildMarketTrade(args: {
     poolKey: plan.key,
     zeroForOne,
     amountInRaw: args.amountRaw,
+    chainId,
   });
 
   const usdc = args.direction === "buy" ? args.amountRaw : amountOut;
@@ -98,7 +110,7 @@ export async function buildMarketTrade(args: {
 
   return {
     ...calldata,
-    inputToken: inputIsYes ? yesToken : MARKETS_ARC.collateral,
+    inputToken: inputIsYes ? yesToken : markets.collateral,
     marketId,
     marketAddress,
     yesToken,

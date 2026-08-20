@@ -5,8 +5,9 @@ import { marketFills } from "../db/schema/index.ts";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
-import { baseRpcClient } from "../lib/rpc-client.ts";
-import { MARKETS_PERIPHERY_ARC } from "../lib/markets-contracts.ts";
+import { getRpcClient } from "../lib/rpc-client.ts";
+import { ARC_TESTNET_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
+import { MARKETS_PERIPHERY_BY_CHAIN } from "../lib/markets-contracts.ts";
 
 export const marketFillsRouter = Router();
 
@@ -16,6 +17,8 @@ const bodySchema = z.object({
   direction: z.enum(["buy", "sell"]),
   tokensRaw: z.string().regex(/^\d{1,30}$/),
   usdcRaw: z.string().regex(/^\d{1,30}$/),
+  /** Chain the fill happened on — omitted means Arc (back-compat). */
+  chainId: z.number().int().refine(isSupportedTestnetChainId, "Unsupported chainId").optional(),
 });
 
 /**
@@ -42,15 +45,22 @@ marketFillsRouter.post(
     const { txHash, marketId, direction, tokensRaw, usdcRaw } = parsed.data;
 
     try {
+      const chainId = parsed.data.chainId ?? ARC_TESTNET_CHAIN_ID;
+      const periphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+      if (!periphery) {
+        res.status(400).json({ error: "Markets not deployed on this chain", code: "BAD_CHAIN" });
+        return;
+      }
+      const client = getRpcClient(chainId);
       const [receipt, tx] = await Promise.all([
-        baseRpcClient.getTransactionReceipt({ hash: txHash as `0x${string}` }),
-        baseRpcClient.getTransaction({ hash: txHash as `0x${string}` }),
+        client.getTransactionReceipt({ hash: txHash as `0x${string}` }),
+        client.getTransaction({ hash: txHash as `0x${string}` }),
       ]);
       if (receipt.status !== "success") {
         res.status(422).json({ error: "Transaction did not succeed", code: "TX_FAILED" });
         return;
       }
-      if (tx.to?.toLowerCase() !== MARKETS_PERIPHERY_ARC.poolSwapTest.toLowerCase()) {
+      if (tx.to?.toLowerCase() !== periphery.poolSwapTest.toLowerCase()) {
         res.status(422).json({ error: "Not a market trade", code: "WRONG_TARGET" });
         return;
       }

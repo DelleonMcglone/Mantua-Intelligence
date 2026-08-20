@@ -56,7 +56,11 @@ export interface PlannedMarket {
  * rejects a kickoff at or before now (a market born frozen could never trade),
  * so planning one would only generate a guaranteed revert.
  */
-export function planMarkets(event: ProviderEvent, nowSeconds: number): PlannedMarket[] {
+export function planMarkets(
+  event: ProviderEvent,
+  nowSeconds: number,
+  chainId?: number,
+): PlannedMarket[] {
   if (event.status !== "scheduled") return [];
   if (event.startsAt <= nowSeconds) return [];
 
@@ -77,6 +81,7 @@ export function planMarkets(event: ProviderEvent, nowSeconds: number): PlannedMa
       providerEventId: event.providerEventId,
       marketType: "moneyline",
       outcomeIndex: side.outcomeIndex,
+      ...(chainId !== undefined ? { chainId } : {}),
     }),
     providerEventId: event.providerEventId,
     league: event.league,
@@ -89,8 +94,12 @@ export function planMarkets(event: ProviderEvent, nowSeconds: number): PlannedMa
 }
 
 /** Plan every market for a slate. Deterministic, so re-running is a no-op. */
-export function planSlate(events: readonly ProviderEvent[], nowSeconds: number): PlannedMarket[] {
-  return events.flatMap((e) => planMarkets(e, nowSeconds));
+export function planSlate(
+  events: readonly ProviderEvent[],
+  nowSeconds: number,
+  chainId?: number,
+): PlannedMarket[] {
+  return events.flatMap((e) => planMarkets(e, nowSeconds, chainId));
 }
 
 /** What the resolution service should do about one event. */
@@ -162,9 +171,10 @@ export async function refreshSlate(
   provider: SportsDataProvider,
   league: LeagueSlug,
   nowSeconds: number = Math.floor(Date.now() / 1000),
+  chainId?: number,
 ): Promise<SlateRefreshResult> {
   const slate = await provider.getSlate(league);
-  const marketsPlanned = planSlate(slate.events, nowSeconds);
+  const marketsPlanned = planSlate(slate.events, nowSeconds, chainId);
 
   if (slate.delayed) {
     logger.warn({ league, provider: slate.provider }, "sports: slate is delayed");

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { parseAbi } from "viem";
 import { api } from "@/lib/api.ts";
-import { publicClient, useArcWalletClient } from "@/lib/privy/wallet-client.ts";
+import { publicClientFor, useChainWalletClient } from "@/lib/privy/wallet-client.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 
 const ERC20 = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -44,7 +45,8 @@ interface Args {
  * by the league page's trade sidebar.
  */
 export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabled }: Args) {
-  const getWallet = useArcWalletClient();
+  const getWallet = useChainWalletClient();
+  const chainId = useCurrentChainId();
   const [phase, setPhase] = useState<TradePhase>({ kind: "idle" });
 
   // Debounced re-quote on any input change.
@@ -59,6 +61,7 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
       setPhase({ kind: "quoting" });
       api
         .post<TradeCalldata>("/api/markets/trade/calldata", {
+          chainId,
           providerEventId: eventId,
           outcomeIndex,
           direction,
@@ -74,7 +77,7 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
     return () => {
       clearTimeout(timer);
     };
-  }, [enabled, eventId, outcomeIndex, direction, amount]);
+  }, [enabled, eventId, outcomeIndex, direction, amount, chainId]);
 
   const execute = async () => {
     if (phase.kind !== "quoted") return;
@@ -85,7 +88,7 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
       const owner = wallet.account.address;
 
       if (calldata.approvalTarget) {
-        const allowance = await publicClient.readContract({
+        const allowance = await publicClientFor(chainId).readContract({
           address: calldata.inputToken,
           abi: ERC20,
           functionName: "allowance",
@@ -99,7 +102,7 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
             functionName: "approve",
             args: [calldata.approvalTarget, MAX_UINT],
           });
-          await publicClient.waitForTransactionReceipt({ hash: approveTx });
+          await publicClientFor(chainId).waitForTransactionReceipt({ hash: approveTx });
         }
       }
 
@@ -110,13 +113,14 @@ export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabl
         value: BigInt(calldata.value),
       });
       setPhase({ kind: "confirming", calldata });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClientFor(chainId).waitForTransactionReceipt({ hash: txHash });
       if (receipt.status !== "success") throw new Error("Transaction reverted");
       setPhase({ kind: "done", txHash, calldata });
       // Record the fill for entry-price / P&L accounting. Fire-and-forget:
       // the server verifies the receipt before believing it.
       void api
         .post("/api/markets/fills", {
+          chainId,
           txHash,
           marketId: calldata.marketId,
           direction,

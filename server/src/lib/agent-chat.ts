@@ -988,9 +988,9 @@ async function executeTool(
       const amountRaw = BigInt(Math.round(amountNum * 1e6));
       if (direction === "buy") {
         // Buys spend USDC — enforce balance and the daily cap like any spend.
-        await requireAgentBalance(privyUserId, "USDC", String(amountNum));
+        await requireAgentBalance(privyUserId, "USDC", String(amountNum), chainId);
       }
-      const wallet = await getAgentWallet(privyUserId);
+      const wallet = await getAgentWallet(privyUserId, chainId);
       if (!wallet) throw new Error("No agent wallet provisioned — call manage_wallet first.");
       if (direction === "buy") await checkSpendingCap(wallet.address, amountNum);
       const result = await agentMarketTrade({
@@ -999,6 +999,7 @@ async function executeTool(
         outcomeIndex,
         direction,
         amountRaw,
+        chainId,
       });
       if (direction === "buy") await recordSpending(wallet.address, amountNum);
       return {
@@ -1009,7 +1010,7 @@ async function executeTool(
             ? `${(Number(result.quote.amountOut) / 1e6).toFixed(2)} YES`
             : `${(Number(result.quote.amountOut) / 1e6).toFixed(2)} USDC`,
         effectivePriceBps: result.quote.effectivePriceBps,
-        explorer: `https://testnet.arcscan.app/tx/${result.txHash}`,
+        explorer: `${getChainInfo(chainId).explorerUrl}/tx/${result.txHash}`,
       };
     }
     case "standing_intents": {

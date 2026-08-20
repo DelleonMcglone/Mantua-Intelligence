@@ -9,6 +9,7 @@
 
 import { executeAgentAbiCall, executeAgentCalldata } from "../circle/execute.ts";
 import { registerDynamicTargets } from "../circle/allowed-targets.ts";
+import type { SupportedTestnetChainId } from "../chains.ts";
 import { buildMarketTrade } from "./market-trade-build.ts";
 
 export interface AgentTradeResult {
@@ -23,12 +24,14 @@ export async function agentMarketTrade(args: {
   outcomeIndex: 0 | 1;
   direction: "buy" | "sell";
   amountRaw: bigint;
+  chainId?: SupportedTestnetChainId;
 }): Promise<AgentTradeResult> {
   const built = await buildMarketTrade({
     providerEventId: args.providerEventId,
     outcomeIndex: args.outcomeIndex,
     direction: args.direction,
     amountRaw: args.amountRaw,
+    ...(args.chainId !== undefined ? { chainId: args.chainId } : {}),
   });
 
   // The YES token and market address come from the factory via our own

@@ -6,7 +6,13 @@ import { executeResolution, planResolution } from "../lib/sports/resolution.ts";
 import {
   filterPlanToExistingMarkets,
   liveResolutionSubmitter,
+  marketSignerWallet,
 } from "../lib/sports/markets-onchain.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "../lib/chains.ts";
 import { drizzleResolutionLog } from "../lib/sports/resolution-store.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
@@ -38,36 +44,43 @@ cronResolutionRouter.get(
   "/api/cron/resolution",
   requireCronSecret,
   async (_req: Request, res: Response) => {
-    const submitter = liveResolutionSubmitter();
-    const log = submitter ? drizzleResolutionLog(db) : null;
     const plans: Record<string, unknown> = {};
     let failures = 0;
+
+    const chains: SupportedTestnetChainId[] = [ARC_TESTNET_CHAIN_ID];
+    if (marketSignerWallet(BASE_SEPOLIA_CHAIN_ID)) chains.push(BASE_SEPOLIA_CHAIN_ID);
 
     for (const league of LEAGUES) {
       try {
         const slate = await espn.getSlate(league);
-        const plan = planResolution(slate, null);
-        const planned = {
-          delayed: slate.delayed,
-          freezes: plan.freezes.length,
-          resolves: plan.submissions.filter((s) => s.kind === "resolve").length,
-          voids: plan.submissions.filter((s) => s.kind === "void").length,
-          held: plan.held,
-        };
-        if (submitter && log) {
-          // Only settle markets that were actually minted — games that
-          // finished before creation went live have nothing on-chain.
-          const live = await filterPlanToExistingMarkets(plan);
-          const summary = await executeResolution(live, submitter, log, slate.provider);
-          failures += summary.failures.length;
-          plans[league] = {
-            ...planned,
-            onChainMarkets: live.submissions.length + live.freezes.length,
-            executed: summary,
+        const perChain: Record<string, unknown> = {};
+        for (const chainId of chains) {
+          const submitter = liveResolutionSubmitter(chainId);
+          const log = submitter ? drizzleResolutionLog(db) : null;
+          const plan = planResolution(slate, null, Math.floor(Date.now() / 1000), chainId);
+          const planned = {
+            delayed: slate.delayed,
+            freezes: plan.freezes.length,
+            resolves: plan.submissions.filter((s) => s.kind === "resolve").length,
+            voids: plan.submissions.filter((s) => s.kind === "void").length,
+            held: plan.held,
           };
-        } else {
-          plans[league] = planned;
+          if (submitter && log) {
+            // Only settle markets that were actually minted — games that
+            // finished before creation went live have nothing on-chain.
+            const live = await filterPlanToExistingMarkets(plan, chainId);
+            const summary = await executeResolution(live, submitter, log, slate.provider);
+            failures += summary.failures.length;
+            perChain[String(chainId)] = {
+              ...planned,
+              onChainMarkets: live.submissions.length + live.freezes.length,
+              executed: summary,
+            };
+          } else {
+            perChain[String(chainId)] = planned;
+          }
         }
+        plans[league] = perChain;
       } catch (err) {
         failures += 1;
         logger.error({ league, err }, "resolution: pass failed");
@@ -75,7 +88,7 @@ cronResolutionRouter.get(
       }
     }
 
-    if (!submitter) {
+    if (!marketSignerWallet(ARC_TESTNET_CHAIN_ID)) {
       res.status(503).json({
         error: "Resolution submission disabled — set MARKET_SIGNER_PRIVATE_KEY",
         code: "RESOLUTION_DISABLED",

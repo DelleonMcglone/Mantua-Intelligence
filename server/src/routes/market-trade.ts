@@ -4,6 +4,7 @@ import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
 import { NoMarketError, buildMarketTrade } from "../lib/sports/market-trade-build.ts";
+import { isSupportedTestnetChainId } from "../lib/chains.ts";
 
 export const marketTradeRouter = Router();
 
@@ -20,6 +21,8 @@ const bodySchema = z.object({
     .refine((v) => BigInt(v) > 0n && BigInt(v) <= 100_000_000_000n, {
       message: "amount out of range",
     }),
+  /** Execution chain — omitted means Arc (back-compat). */
+  chainId: z.number().int().refine(isSupportedTestnetChainId, "Unsupported chainId").optional(),
 });
 
 /**
@@ -48,6 +51,7 @@ marketTradeRouter.post(
         outcomeIndex: parsed.data.outcomeIndex,
         direction: parsed.data.direction,
         amountRaw: BigInt(parsed.data.amountRaw),
+        ...(parsed.data.chainId !== undefined ? { chainId: parsed.data.chainId } : {}),
       });
       res.json(built);
     } catch (err) {

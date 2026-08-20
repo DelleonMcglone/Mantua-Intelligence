@@ -4,8 +4,13 @@ import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { refreshSlate } from "../lib/sports/ingest.ts";
 import { upsertEvents, upsertMarketRows } from "../lib/sports/store.ts";
-import { createMarketsOnChain } from "../lib/sports/markets-onchain.ts";
+import { createMarketsOnChain, marketSignerWallet } from "../lib/sports/markets-onchain.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "../lib/chains.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
 
 export const cronSportsSyncRouter = Router();
@@ -15,6 +20,13 @@ const espn = new EspnProvider();
 
 /** The covered leagues, per DM-105. Promotion is a data change elsewhere. */
 const LEAGUES: readonly LeagueSlug[] = ["nfl", "wnba"];
+
+/** Chains markets mint on — Arc always; Base once its signer is configured. */
+function marketChains(): SupportedTestnetChainId[] {
+  const chains: SupportedTestnetChainId[] = [ARC_TESTNET_CHAIN_ID];
+  if (marketSignerWallet(BASE_SEPOLIA_CHAIN_ID)) chains.push(BASE_SEPOLIA_CHAIN_ID);
+  return chains;
+}
 
 /**
  * GET /api/cron/sports-sync — B3-005's slate-refresh pass. For each covered
@@ -39,29 +51,32 @@ cronSportsSyncRouter.get(
     const results: Record<string, unknown> = {};
     let failures = 0;
 
+    const chains = marketChains();
     for (const league of LEAGUES) {
       try {
-        const refresh = await refreshSlate(espn, league);
-        const persisted = await upsertEvents(db, refresh.provider, league, refresh.events);
-
-        const creation = await createMarketsOnChain(refresh.marketsPlanned);
-        // Markets rows must exist before settlement can log (FK): persist
-        // everything the sweep touched, every tick.
-        const marketRows = creation
-          ? await upsertMarketRows(db, refresh.provider, creation.details)
-          : 0;
-
-        results[league] = {
-          marketRowsPersisted: marketRows,
-          provider: refresh.provider,
-          delayed: refresh.delayed,
-          eventsSeen: refresh.events.length,
-          inserted: persisted.inserted,
-          updated: persisted.updated,
-          sideConflicts: persisted.sideConflicts,
-          marketsPlanned: refresh.marketsPlanned.length,
-          marketsOnChain: creation ?? "disabled (no MARKET_SIGNER_PRIVATE_KEY)",
-        };
+        const perChain: Record<string, unknown> = {};
+        let eventsPersisted: unknown = null;
+        for (const chainId of chains) {
+          // Market ids are chain-distinct (market-id.ts), so each chain
+          // gets its own plan against the same slate fetch (provider-cached).
+          const refresh = await refreshSlate(espn, league, Math.floor(Date.now() / 1000), chainId);
+          if (eventsPersisted === null) {
+            eventsPersisted = await upsertEvents(db, refresh.provider, league, refresh.events);
+          }
+          const creation = await createMarketsOnChain(refresh.marketsPlanned, chainId);
+          // Markets rows must exist before settlement can log (FK): persist
+          // everything the sweep touched, every tick.
+          const marketRows = creation
+            ? await upsertMarketRows(db, refresh.provider, creation.details, chainId)
+            : 0;
+          perChain[String(chainId)] = {
+            marketRowsPersisted: marketRows,
+            delayed: refresh.delayed,
+            marketsPlanned: refresh.marketsPlanned.length,
+            marketsOnChain: creation ?? "disabled (no signer for this chain)",
+          };
+        }
+        results[league] = { events: eventsPersisted, chains: perChain };
       } catch (err) {
         failures += 1;
         logger.error({ league, err }, "sports-sync: league failed");
