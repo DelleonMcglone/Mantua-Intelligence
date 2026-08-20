@@ -6,7 +6,7 @@ import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { executeAgentAbiCall, executeAgentCalldata } from "./circle/execute.ts";
-import { ACTIVE_CHAIN_ID } from "./constants.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
@@ -23,7 +23,7 @@ import type { FeeTier } from "./v4-contracts.ts";
  * actually created at. Two gas-sponsored Circle txs: approve the input ERC-20
  * to the swap router, then execute the swap calldata.
  */
-const AGENT_NETWORK = "arc-testnet" as const;
+const AGENT_NETWORK = "arc-testnet";
 
 // No-hook pools: the quoter auto-resolves to the tier the pool was created at,
 // so this is just the starting probe.
@@ -35,6 +35,8 @@ export interface AgentSwapArgs {
   tokenOut: TokenSymbol;
   /** Decimal-string amount in the human-readable units of `tokenIn`. */
   amountIn: string;
+  /** Execution chain — defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface AgentSwapResult {
@@ -46,7 +48,7 @@ export interface AgentSwapResult {
   amountInRaw: string;
   amountOutRaw: string;
   usdValue: number;
-  network: typeof AGENT_NETWORK;
+  network: string;
 }
 
 export interface AgentSwapQuote {
@@ -66,10 +68,12 @@ export async function quoteAgentSwap(args: {
   tokenIn: TokenSymbol;
   tokenOut: TokenSymbol;
   amountIn: string;
+  chainId?: SupportedTestnetChainId;
 }): Promise<AgentSwapQuote> {
   const { tokenIn, tokenOut, amountIn } = args;
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
   if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");
-  const amountAtomic = parseUnits(amountIn, getToken(tokenIn).decimals);
+  const amountAtomic = parseUnits(amountIn, getToken(tokenIn, chainId).decimals);
   if (amountAtomic <= 0n) throw new Error("amountIn must be positive");
   const quote = await quoteExactInputV4({
     tokenIn,
@@ -77,6 +81,7 @@ export async function quoteAgentSwap(args: {
     fee: DEFAULT_PROBE_FEE,
     hook: null,
     amountInRaw: amountAtomic,
+    chainId,
   });
   return {
     tokenIn,
@@ -88,31 +93,34 @@ export async function quoteAgentSwap(args: {
 
 export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwapResult> {
   const { privyUserId, tokenIn, tokenOut, amountIn } = args;
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
   if (tokenIn === tokenOut) throw new Error("tokenIn and tokenOut must differ");
 
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
-  const inDef = getToken(tokenIn);
+  const inDef = getToken(tokenIn, chainId);
   const amountAtomic = parseUnits(amountIn, inDef.decimals);
   if (amountAtomic <= 0n) throw new Error("amountIn must be positive");
 
   const usdValue = await tokenAmountUsd(tokenIn, amountAtomic);
   await checkSpendingCap(wallet.address, usdValue);
 
-  // Quote on Arc (no hook); the tier is auto-resolved to the live pool.
-  // chainId omitted — both builders default to Arc (the only supported chain).
+  // Quote the no-hook pool on the execution chain; the tier is
+  // auto-resolved to the live pool.
   const quote = await quoteExactInputV4({
     tokenIn,
     tokenOut,
     fee: DEFAULT_PROBE_FEE,
     hook: null,
     amountInRaw: amountAtomic,
+    chainId,
   });
   const swap = buildPoolSwapTestCalldata({
     poolKey: quote.poolKey,
     zeroForOne: quote.zeroForOne,
     amountInRaw: amountAtomic,
+    chainId,
   });
 
   // Approve the input ERC-20 to the swap router, then execute the swap. Native
@@ -147,7 +155,7 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
       walletAddress: wallet.address,
       action: "swap",
       txHash,
-      chainId: ACTIVE_CHAIN_ID,
+      chainId,
       params: {
         tokenIn,
         tokenOut,
@@ -162,13 +170,13 @@ export async function swapFromAgentWallet(args: AgentSwapArgs): Promise<AgentSwa
 
   return {
     txHash,
-    explorerUrl: explorerTxUrl(txHash),
+    explorerUrl: explorerTxUrl(txHash, chainId),
     agentAddress: wallet.address,
     tokenIn,
     tokenOut,
     amountInRaw: amountAtomic.toString(),
     amountOutRaw: quote.amountOut,
     usdValue,
-    network: AGENT_NETWORK,
+    network: chainId === ARC_TESTNET_CHAIN_ID ? AGENT_NETWORK : "base-sepolia",
   };
 }

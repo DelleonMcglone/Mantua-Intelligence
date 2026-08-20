@@ -7,6 +7,8 @@ import { chatMessages, chatSessions } from "../db/schema/chat.ts";
 import { users } from "../db/schema/users.ts";
 import { logger } from "./logger.ts";
 import { TOKEN_SYMBOLS, getToken, type TokenSymbol } from "./tokens.ts";
+import { ARC_TESTNET_CHAIN_ID, getChainInfo, type SupportedTestnetChainId } from "./chains.ts";
+import { getRpcClient } from "./rpc-client.ts";
 import { getOrCreateAgentWallet, getAgentWallet, updateAgentWalletCap } from "./agent-wallet.ts";
 import { sendFromAgentWallet } from "./agent-send.ts";
 import { swapFromAgentWallet, quoteAgentSwap } from "./agent-swap.ts";
@@ -25,7 +27,6 @@ import {
 import { fundAgentWallet } from "./agent-fund.ts";
 import { bridgeFromAgentWallet } from "./agent-bridge.ts";
 import { getUserPortfolio } from "./user-portfolio.ts";
-import { baseRpcClient } from "./rpc-client.ts";
 import { getAgentPortfolio } from "./agent-portfolio.ts";
 import { isFeeTier, type FeeTier } from "./v4-contracts.ts";
 import { getTradeSignals, SIGNAL_THRESHOLDS, type TradeSignals } from "./agent-signals.ts";
@@ -130,7 +131,7 @@ interface ToolStep {
   error?: string;
 }
 
-const SYSTEM_PROMPT = `You are Mantua's autonomous on-chain agent. You operate a server-custodied Circle wallet on Arc Testnet (Circle's USDC-gas chain) on behalf of the signed-in user, and you converse in plain language.
+const SYSTEM_PROMPT = `You are Mantua's autonomous on-chain agent. You operate server-custodied Circle wallets on Arc Testnet (Circle's USDC-gas chain) and Base Sepolia on behalf of the signed-in user, and you converse in plain language. Wallet actions run on the ACTIVE CHAIN named in the system context; each chain has its own agent wallet address and balances.
 
 Behaviour:
 - You execute actions AUTONOMOUSLY. Do NOT ask for confirmation before swapping or sending — just do it and report the result. The user's daily USD spending cap is the safety guardrail; if an action would breach it the tool returns an error, which you relay plainly.
@@ -675,10 +676,11 @@ async function requireAgentBalance(
   privyUserId: string,
   symbol: TokenSymbol,
   amount: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
 ): Promise<void> {
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) return; // provisioning errors surface from the tool itself
-  const t = getToken(symbol);
+  const t = getToken(symbol, chainId);
   let needed: bigint;
   try {
     needed = parseUnits(amount, t.decimals);
@@ -686,9 +688,10 @@ async function requireAgentBalance(
     return; // malformed amounts fail in the tool's own validation
   }
   const owner = wallet.address as `0x${string}`;
+  const client = getRpcClient(chainId);
   const have = t.native
-    ? await baseRpcClient.getBalance({ address: owner })
-    : await baseRpcClient.readContract({
+    ? await client.getBalance({ address: owner })
+    : await client.readContract({
         address: t.address,
         abi: BALANCE_ABI,
         functionName: "balanceOf",
@@ -709,10 +712,12 @@ async function executeTool(
   input: ToolInput,
   /** The user's current turn message — the force override is attested against it in code. */
   userMessage: string,
+  /** The user's selected chain — write tools execute here (sports stay Arc). */
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
 ): Promise<unknown> {
   switch (name) {
     case "get_portfolio": {
-      const p = await getAgentPortfolio(privyUserId);
+      const p = await getAgentPortfolio(privyUserId, 50, chainId);
       return {
         address: p.address,
         balances: p.balances.map((b) => ({
@@ -732,7 +737,7 @@ async function executeTool(
         const w = await updateAgentWalletCap(privyUserId, cap);
         return { address: w.address, dailyCapUsd: w.dailyCapUsd, status: w.status };
       }
-      const w = await getAgentWallet(privyUserId);
+      const w = await getAgentWallet(privyUserId, chainId);
       if (!w) throw new Error("No agent wallet provisioned.");
       return { address: w.address, dailyCapUsd: w.dailyCapUsd, status: w.status };
     }
@@ -741,7 +746,7 @@ async function executeTool(
       if (!isTokenSymbol(tokenIn) || !isTokenSymbol(tokenOut)) {
         throw new Error(`tokens must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
       }
-      const q = await quoteAgentSwap({ tokenIn, tokenOut, amountIn: String(amountIn) });
+      const q = await quoteAgentSwap({ tokenIn, tokenOut, amountIn: String(amountIn), chainId });
       return {
         tokenIn: q.tokenIn,
         tokenOut: q.tokenOut,
@@ -939,12 +944,13 @@ async function executeTool(
           return { guardHeld: true, ...resolved };
         }
       }
-      await requireAgentBalance(privyUserId, tokenIn, String(amountIn));
+      await requireAgentBalance(privyUserId, tokenIn, String(amountIn), chainId);
       const r = await swapFromAgentWallet({
         privyUserId,
         tokenIn,
         tokenOut,
         amountIn: String(amountIn),
+        chainId,
       });
       // Pool state just changed — retry pending intents on this pair now
       // instead of waiting for the next cron tick.
@@ -1028,12 +1034,13 @@ async function executeTool(
       if (!isTokenSymbol(token)) {
         throw new Error(`token must be one of: ${TOKEN_SYMBOLS.join(", ")}`);
       }
-      await requireAgentBalance(privyUserId, token, String(amount));
+      await requireAgentBalance(privyUserId, token, String(amount), chainId);
       const r = await sendFromAgentWallet({
         privyUserId,
         to,
         symbol: token,
         amount: String(amount),
+        chainId,
       });
       return {
         txHash: r.txHash,
@@ -1053,7 +1060,7 @@ async function executeTool(
       return await runAnalyze(parsed.data, symbol);
     }
     case "get_positions": {
-      const list = await listAgentPositions(privyUserId);
+      const list = await listAgentPositions(privyUserId, chainId);
       return {
         positions: list.map((p) => ({
           id: p.id,
@@ -1075,13 +1082,14 @@ async function executeTool(
       const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
       if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
       const fee: FeeTier = feeRaw;
-      await requireAgentBalance(privyUserId, tokenA, amountA);
-      await requireAgentBalance(privyUserId, tokenB, amountB);
+      await requireAgentBalance(privyUserId, tokenA, amountA, chainId);
+      await requireAgentBalance(privyUserId, tokenB, amountB, chainId);
       const addResult = await addLiquidityFromAgentWallet({
         privyUserId,
         tokenA,
         tokenB,
         fee,
+        chainId,
         hook: null, // no hooks — agent only manages no-hook pools
         amountA,
         amountB,
@@ -1103,6 +1111,7 @@ async function executeTool(
         privyUserId,
         positionId,
         percentage,
+        chainId,
         slippageBps: 50,
         deadlineSeconds: Math.floor(Date.now() / 1000) + 1800,
       });
@@ -1133,10 +1142,10 @@ async function executeTool(
       return { available: true, ...result };
     }
     case "fund_wallet": {
-      const w = await getAgentWallet(privyUserId);
+      const w = await getAgentWallet(privyUserId, chainId);
       if (!w) throw new Error("No agent wallet provisioned.");
       try {
-        const r = await fundAgentWallet(privyUserId);
+        const r = await fundAgentWallet(privyUserId, chainId);
         return { requested: true, agentAddress: r.agentAddress, network: r.blockchain };
       } catch {
         return {
@@ -1193,7 +1202,7 @@ async function executeTool(
       }
       const feeRaw = typeof input["fee"] === "number" ? input["fee"] : 3000;
       if (!isFeeTier(feeRaw)) throw new Error("fee must be one of 100, 500, 3000, 10000.");
-      return await createPoolFromAgentWallet({ privyUserId, tokenA, tokenB, fee: feeRaw });
+      return await createPoolFromAgentWallet({ privyUserId, tokenA, tokenB, fee: feeRaw, chainId });
     }
     case "market_research": {
       const focus = typeof input["focus"] === "string" ? input["focus"] : "all";
@@ -1355,12 +1364,16 @@ export async function* runAgentChat(params: {
   walletAddress?: string | undefined;
   sessionId?: string | undefined;
   message: string;
+  /** The user's selected chain (from the app's chain selector). */
+  chainId?: SupportedTestnetChainId | undefined;
 }): AsyncGenerator<AgentChatEvent> {
   const { privyUserId, walletAddress, message } = params;
+  const chainId = params.chainId ?? ARC_TESTNET_CHAIN_ID;
   const client = getAnthropic();
 
-  // Ensure the agent wallet exists so swap/send have something to act on.
-  await getOrCreateAgentWallet(privyUserId, walletAddress);
+  // Ensure the agent wallet exists ON THE ACTIVE CHAIN so swap/send have
+  // something to act on (a Base Sepolia wallet is provisioned on first use).
+  await getOrCreateAgentWallet(privyUserId, walletAddress, chainId);
 
   const userDbId = await resolveUserId(privyUserId);
   if (!userDbId) {
@@ -1398,7 +1411,13 @@ export async function* runAgentChat(params: {
     const stream = client.messages.stream({
       model: MODEL,
       max_tokens: 4096,
-      system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+        {
+          type: "text",
+          text: `Active chain for this conversation: ${getChainInfo(chainId).displayName} (chain id ${String(chainId)}). Wallet actions (swap, send, liquidity, pools, portfolio, funding) execute on this chain. Sports markets and market trades settle on Arc Testnet regardless of the active chain.`,
+        },
+      ],
       tools: TOOLS,
       messages,
     });
@@ -1423,7 +1442,7 @@ export async function* runAgentChat(params: {
       const args = (tu.input ?? {}) as Record<string, unknown>;
       yield { type: "tool_start", id: tu.id, tool: tu.name, args };
       try {
-        const data = await executeTool(privyUserId, walletAddress, tu.name, args, message);
+        const data = await executeTool(privyUserId, walletAddress, tu.name, args, message, chainId);
         steps.push({ tool: tu.name, args, ok: true, data });
         yield { type: "tool_result", id: tu.id, tool: tu.name, ok: true, data };
         toolResults.push({

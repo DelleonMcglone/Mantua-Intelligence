@@ -1,10 +1,16 @@
-import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
+import {
+  AgentWalletNotFoundError,
+  circleBlockchainFor,
+  getAgentWallet,
+  type CircleBlockchain,
+} from "./agent-wallet.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { getCircleClient } from "./circle/client.ts";
 
 export interface AgentFundResult {
   agentAddress: string;
-  blockchain: "ARC-TESTNET";
-  requested: { usdc: boolean };
+  blockchain: CircleBlockchain;
+  requested: { usdc: boolean; native: boolean };
 }
 
 /**
@@ -16,17 +22,25 @@ export interface AgentFundResult {
  * itself is sponsored by Circle Gas Station, so this is only about giving the
  * agent token balances to trade/transfer with.
  */
-export async function fundAgentWallet(privyUserId: string): Promise<AgentFundResult> {
-  const wallet = await getAgentWallet(privyUserId);
+export async function fundAgentWallet(
+  privyUserId: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<AgentFundResult> {
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
+  const blockchain = circleBlockchainFor(chainId);
+  // On Base Sepolia gas is ETH, so request a native drip alongside USDC
+  // (Arc sponsors gas via Gas Station and uses USDC natively).
+  const native = blockchain === "BASE-SEPOLIA";
   await (
     await getCircleClient()
   ).requestTestnetTokens({
     address: wallet.address,
-    blockchain: "ARC-TESTNET",
+    blockchain,
     usdc: true,
+    ...(native ? { native: true } : {}),
   });
 
-  return { agentAddress: wallet.address, blockchain: "ARC-TESTNET", requested: { usdc: true } };
+  return { agentAddress: wallet.address, blockchain, requested: { usdc: true, native } };
 }

@@ -36,7 +36,7 @@ interface ApiErrorBody {
  * caller can show auth/unavailable errors.
  */
 export async function streamAgentChat(
-  params: { message: string; sessionId?: string | undefined },
+  params: { message: string; sessionId?: string | undefined; chainId?: number | undefined },
   onEvent: (event: AgentChatEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -50,6 +50,7 @@ export async function streamAgentChat(
     body: JSON.stringify({
       message: params.message,
       ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+      ...(params.chainId ? { chainId: params.chainId } : {}),
     }),
     ...(signal ? { signal } : {}),
   });

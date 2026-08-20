@@ -77,9 +77,36 @@ export async function getDailySpend(
 }
 
 /**
+ * Sibling agent wallets for cross-chain cap sharing: if `address` is one
+ * of a user's per-chain agent wallets, return ALL of that user's agent
+ * wallet addresses so today's spend aggregates across chains — otherwise
+ * two per-chain wallets would silently double the daily cap.
+ */
+async function capAddressGroup(lower: string): Promise<string[]> {
+  const owner = (
+    await db
+      .select({ userId: agentWallets.userId })
+      .from(agentWallets)
+      .where(eq(agentWallets.address, lower))
+      .limit(1)
+  ).at(0);
+  if (!owner) return [lower];
+  const rows = await db
+    .select({ address: agentWallets.address })
+    .from(agentWallets)
+    .where(eq(agentWallets.userId, owner.userId));
+  const addrs = new Set(rows.map((r) => r.address.toLowerCase()));
+  addrs.add(lower);
+  return [...addrs];
+}
+
+/**
  * P1-001 — assert that `usdAmount` would not push the wallet over its
  * configured cap or the hard absolute ceiling. Read-only; does NOT increment
  * the ledger. Call `recordSpending` after the on-chain receipt confirms.
+ *
+ * For agent wallets the spend aggregates across every chain's wallet of
+ * the same user — one shared daily cap, not one per chain.
  *
  * Enforced on every network unless SPENDING_CAP_ENFORCEMENT=off.
  */
@@ -96,7 +123,12 @@ export async function checkSpendingCap(address: string, usdAmount: number): Prom
       { usdAmount, hardCeiling: HARD_DAILY_CAP_USD },
     );
   }
-  const [cap, spent] = await Promise.all([getDailyCap(address), getDailySpend(address)]);
+  const group = await capAddressGroup(address.toLowerCase());
+  const [cap, ...spends] = await Promise.all([
+    getDailyCap(address),
+    ...group.map((a) => getDailySpend(a)),
+  ]);
+  const spent = spends.reduce((s, v) => s + v, 0);
   if (spent + usdAmount > cap) {
     throw new SafetyError(
       "spending_cap_exceeded",

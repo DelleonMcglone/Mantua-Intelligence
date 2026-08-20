@@ -6,10 +6,9 @@ import { users } from "../db/schema/users.ts";
 import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { executeAgentAbiCall, executeAgentCalldata } from "./circle/execute.ts";
-import { DEFAULT_CHAIN_ID } from "./chains.ts";
-import { ACTIVE_CHAIN_ID } from "./constants.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { buildPoolKey } from "./pool-key.ts";
-import { baseRpcClient } from "./rpc-client.ts";
+import { getRpcClient } from "./rpc-client.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, getTokens, type TokenSymbol, ZERO_ADDRESS } from "./tokens.ts";
 import { getUsdPrice, tokenAmountUsd } from "./usd-pricing.ts";
@@ -96,10 +95,11 @@ async function ensureMintApprovals(
   owner: Address,
   token: Address,
   positionManager: Address,
+  chainId: SupportedTestnetChainId,
 ): Promise<void> {
   if (token === ZERO_ADDRESS) return;
 
-  const erc20Allowance = await baseRpcClient.readContract({
+  const erc20Allowance = await getRpcClient(chainId).readContract({
     address: token,
     abi: ERC20_ABI,
     functionName: "allowance",
@@ -114,7 +114,7 @@ async function ensureMintApprovals(
     });
   }
 
-  const [permit2Amount, permit2Expiration] = await baseRpcClient.readContract({
+  const [permit2Amount, permit2Expiration] = await getRpcClient(chainId).readContract({
     address: PERMIT2,
     abi: PERMIT2_ALLOWANCE_ABI,
     functionName: "allowance",
@@ -142,6 +142,8 @@ export interface AgentAddLiquidityArgs {
   amountB: string;
   slippageBps: number;
   deadlineSeconds: number;
+  /** Execution chain — defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface AgentAddLiquidityResult {
@@ -173,14 +175,15 @@ export async function addLiquidityFromAgentWallet(
   args: AgentAddLiquidityArgs,
 ): Promise<AgentAddLiquidityResult> {
   const { privyUserId, tokenA, tokenB, fee, amountA, amountB, slippageBps, deadlineSeconds } = args;
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
   const hook = args.hook ?? null;
   if (tokenA === tokenB) throw new Error("tokenA and tokenB must differ");
 
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
-  const tA = getToken(tokenA);
-  const tB = getToken(tokenB);
+  const tA = getToken(tokenA, chainId);
+  const tB = getToken(tokenB, chainId);
   const amountARaw = parseUnits(amountA, tA.decimals);
   const amountBRaw = parseUnits(amountB, tB.decimals);
   if (amountARaw <= 0n || amountBRaw <= 0n) throw new Error("Both amounts must be positive");
@@ -189,14 +192,13 @@ export async function addLiquidityFromAgentWallet(
     (await tokenAmountUsd(tokenA, amountARaw)) + (await tokenAmountUsd(tokenB, amountBRaw));
   await checkSpendingCap(wallet.address, usdValue);
 
-  const hookAddress = hook
-    ? (getHookAddress(hook, DEFAULT_CHAIN_ID) ?? ZERO_ADDRESS)
-    : ZERO_ADDRESS;
-  const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook);
-  const slot0 = await readSlot0(key);
+  const hookAddress = hook ? (getHookAddress(hook, chainId) ?? ZERO_ADDRESS) : ZERO_ADDRESS;
+  const { key } = buildPoolKey(tokenA, tokenB, fee, hookAddress, hook, chainId);
+  const slot0 = await readSlot0(key, chainId);
   if (!slot0) throw new Error("Pool not initialized — create it first");
 
   const calldata = buildAddLiquidityCalldata({
+    chainId,
     tokenA,
     tokenB,
     fee,
@@ -220,12 +222,14 @@ export async function addLiquidityFromAgentWallet(
     wallet.address as Address,
     calldata.currency0,
     calldata.to,
+    chainId,
   );
   await ensureMintApprovals(
     wallet.circleWalletId,
     wallet.address as Address,
     calldata.currency1,
     calldata.to,
+    chainId,
   );
 
   const { txHash } = await executeAgentCalldata({
@@ -234,7 +238,7 @@ export async function addLiquidityFromAgentWallet(
     callData: calldata.data,
   });
 
-  const receipt = await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
+  const receipt = await getRpcClient(chainId).waitForTransactionReceipt({ hash: txHash });
   const tokenId = extractMintedTokenId(receipt.logs, wallet.address, calldata.to);
 
   await recordSpending(wallet.address, usdValue);
@@ -251,7 +255,7 @@ export async function addLiquidityFromAgentWallet(
       walletAddress: wallet.address,
       action: "add_liquidity",
       txHash,
-      chainId: ACTIVE_CHAIN_ID,
+      chainId,
       params: {
         tokenA,
         tokenB,
@@ -291,7 +295,7 @@ export async function addLiquidityFromAgentWallet(
 
   return {
     txHash,
-    explorerUrl: explorerTxUrl(txHash),
+    explorerUrl: explorerTxUrl(txHash, chainId),
     agentAddress: wallet.address,
     tokenId,
     liquidity: calldata.liquidity,
@@ -311,6 +315,8 @@ export interface AgentRemoveLiquidityArgs {
   percentage: number;
   slippageBps: number;
   deadlineSeconds: number;
+  /** Execution chain — defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface AgentRemoveLiquidityResult {
@@ -327,8 +333,9 @@ export async function removeLiquidityFromAgentWallet(
   args: AgentRemoveLiquidityArgs,
 ): Promise<AgentRemoveLiquidityResult> {
   const { privyUserId, positionId, percentage, slippageBps, deadlineSeconds } = args;
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
 
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
   const userRows = await db
@@ -361,13 +368,16 @@ export async function removeLiquidityFromAgentWallet(
   if (!pos || pos.status !== "open") throw new Error("Position not found or already closed");
   if (!pos.tokenId) throw new Error("Position has no on-chain tokenId");
 
-  const slot0 = await readSlot0({
-    currency0: pos.token0 as Address,
-    currency1: pos.token1 as Address,
-    fee: pos.fee,
-    tickSpacing: pos.tickSpacing,
-    hooks: (pos.hookAddress ?? ZERO_ADDRESS) as Address,
-  });
+  const slot0 = await readSlot0(
+    {
+      currency0: pos.token0 as Address,
+      currency1: pos.token1 as Address,
+      fee: pos.fee,
+      tickSpacing: pos.tickSpacing,
+      hooks: (pos.hookAddress ?? ZERO_ADDRESS) as Address,
+    },
+    chainId,
+  );
   if (!slot0) throw new Error("Pool not initialized on-chain");
 
   const totalLiquidity = BigInt(pos.liquidity);
@@ -375,6 +385,7 @@ export async function removeLiquidityFromAgentWallet(
   const isFullExit = percentage >= 100;
 
   const calldata = buildRemoveLiquidityCalldata({
+    chainId,
     tokenId: BigInt(pos.tokenId),
     liquidityToRemove,
     positionLiquidity: totalLiquidity,
@@ -396,14 +407,14 @@ export async function removeLiquidityFromAgentWallet(
     to: calldata.to,
     callData: calldata.data,
   });
-  await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
+  await getRpcClient(chainId).waitForTransactionReceipt({ hash: txHash });
 
   await db.insert(portfolioTransactions).values({
     userId: user.id,
     walletAddress: wallet.address,
     action: "remove_liquidity",
     txHash,
-    chainId: ACTIVE_CHAIN_ID,
+    chainId,
     params: {
       positionId,
       liquidityRemoved: liquidityToRemove.toString(),
@@ -428,7 +439,7 @@ export async function removeLiquidityFromAgentWallet(
 
   return {
     txHash,
-    explorerUrl: explorerTxUrl(txHash),
+    explorerUrl: explorerTxUrl(txHash, chainId),
     agentAddress: wallet.address,
     positionId,
     liquidityRemoved: liquidityToRemove.toString(),
@@ -454,7 +465,10 @@ export interface AgentPositionSummary {
  * `get_positions` chat tool and the remove-by-id flow. Token addresses are
  * mapped back to Arc symbols where known.
  */
-export async function listAgentPositions(privyUserId: string): Promise<AgentPositionSummary[]> {
+export async function listAgentPositions(
+  privyUserId: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<AgentPositionSummary[]> {
   const userRows = await db
     .select({ id: users.id })
     .from(users)
@@ -477,7 +491,7 @@ export async function listAgentPositions(privyUserId: string): Promise<AgentPosi
     .innerJoin(pools, eq(positions.poolId, pools.id))
     .where(and(eq(positions.userId, user.id), eq(positions.status, "open")));
 
-  const tokens = getTokens(DEFAULT_CHAIN_ID);
+  const tokens = getTokens(chainId);
   const byAddr = new Map<string, string>();
   for (const sym of Object.keys(tokens)) byAddr.set(tokens[sym].address.toLowerCase(), sym);
 
@@ -499,6 +513,8 @@ export interface AgentCreatePoolArgs {
   tokenA: TokenSymbol;
   tokenB: TokenSymbol;
   fee: FeeTier;
+  /** Execution chain — defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface AgentCreatePoolResult {
@@ -520,7 +536,8 @@ export interface AgentCreatePoolResult {
 export async function createPoolFromAgentWallet(
   args: AgentCreatePoolArgs,
 ): Promise<AgentCreatePoolResult> {
-  const wallet = await getAgentWallet(args.privyUserId);
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
+  const wallet = await getAgentWallet(args.privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(args.privyUserId);
   if (args.tokenA === args.tokenB) throw new Error("tokenA and tokenB must differ.");
 
@@ -530,10 +547,10 @@ export async function createPoolFromAgentWallet(
     args.fee,
     ZERO_ADDRESS,
     null,
-    DEFAULT_CHAIN_ID,
+    chainId,
   );
 
-  const existing = await readSlot0(key);
+  const existing = await readSlot0(key, chainId);
   if (existing) {
     return { alreadyExists: true, tokenA: args.tokenA, tokenB: args.tokenB, fee: args.fee };
   }
@@ -544,8 +561,8 @@ export async function createPoolFromAgentWallet(
   const [pA, pB] = await Promise.all([getUsdPrice(args.tokenA), getUsdPrice(args.tokenB)]);
   if (!pA || !pB) throw new Error("Live USD prices unavailable — cannot derive an init price.");
   const SCALE = 1_000_000;
-  const tokA = getToken(args.tokenA, DEFAULT_CHAIN_ID);
-  const tokB = getToken(args.tokenB, DEFAULT_CHAIN_ID);
+  const tokA = getToken(args.tokenA, chainId);
+  const tokB = getToken(args.tokenB, chainId);
   const rawA = 10n ** BigInt(tokA.decimals) * BigInt(Math.round(pB * SCALE));
   const rawB = 10n ** BigInt(tokB.decimals) * BigInt(Math.round(pA * SCALE));
   const sqrtPriceX96 = encodeSqrtPriceX96(
@@ -559,7 +576,7 @@ export async function createPoolFromAgentWallet(
   });
   const { txHash } = await executeAgentCalldata({
     walletId: wallet.circleWalletId,
-    to: getV4StackForHook(key.hooks).poolManager,
+    to: getV4StackForHook(key.hooks, chainId).poolManager,
     callData,
   });
 
@@ -569,6 +586,6 @@ export async function createPoolFromAgentWallet(
     tokenB: args.tokenB,
     fee: args.fee,
     txHash,
-    explorerUrl: explorerTxUrl(txHash),
+    explorerUrl: explorerTxUrl(txHash, chainId),
   };
 }

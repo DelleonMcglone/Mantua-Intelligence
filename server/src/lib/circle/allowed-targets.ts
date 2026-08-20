@@ -21,9 +21,10 @@
  */
 
 import { env } from "../../env.ts";
+import { SUPPORTED_TESTNET_CHAIN_IDS } from "../chains.ts";
 import { MARKETS_ARC, MARKETS_PERIPHERY_ARC } from "../markets-contracts.ts";
-import { TOKENS } from "../tokens.ts";
-import { HOOK_DEPLOYMENTS_ARC, PERMIT2, V4_POOL_MANAGER } from "../v4-contracts.ts";
+import { getTokens } from "../tokens.ts";
+import { HOOK_DEPLOYMENTS, PERMIT2, getV4Addresses } from "../v4-contracts.ts";
 
 export class TargetNotAllowedError extends Error {
   constructor(target: string) {
@@ -41,20 +42,29 @@ function buildAllowlist(): Set<string> {
     if (addr && addr.startsWith("0x")) targets.add(addr.toLowerCase());
   };
 
-  for (const token of Object.values(TOKENS)) add(token.address);
-
-  add(V4_POOL_MANAGER);
   add(PERMIT2);
-  for (const stack of Object.values(HOOK_DEPLOYMENTS_ARC)) {
-    add(stack.poolManager);
-    add(stack.hook);
-    add(stack.poolSwapTest);
-    add(stack.poolModifyLiquidityTest);
-    add(stack.positionManager);
-    add(stack.stateView);
-    add(stack.quoter);
-    add(stack.token0);
-    add(stack.token1);
+  // Both chains' registries feed one flat allowlist — the Circle walletId
+  // already pins the execution chain, so cross-listing is harmless while
+  // keeping the single choke point simple.
+  for (const chainId of SUPPORTED_TESTNET_CHAIN_IDS) {
+    for (const token of Object.values(getTokens(chainId))) add(token.address);
+    const v4 = getV4Addresses(chainId);
+    add(v4.poolManager);
+    add(v4.positionManager);
+    add(v4.stateView);
+    add(v4.quoter);
+    add(v4.poolSwapTest);
+    for (const stack of Object.values(HOOK_DEPLOYMENTS[chainId])) {
+      add(stack.poolManager);
+      add(stack.hook);
+      add(stack.poolSwapTest);
+      add(stack.poolModifyLiquidityTest);
+      add(stack.positionManager);
+      add(stack.stateView);
+      add(stack.quoter);
+      add(stack.token0);
+      add(stack.token1);
+    }
   }
 
   // ERC-8004/8183 agentic-commerce registry, when configured.

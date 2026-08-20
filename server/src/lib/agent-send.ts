@@ -1,5 +1,11 @@
 import { type Address, parseUnits } from "viem";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  getChainInfo,
+  getExplorerTxUrl,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
 import { executeAgentAbiCall } from "./circle/execute.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken, type TokenSymbol } from "./tokens.ts";
@@ -15,8 +21,9 @@ import { tokenAmountUsd } from "./usd-pricing.ts";
  * spending-cap.ts, which keys on wallet address and treats agent wallets
  * transparently.
  */
-const AGENT_NETWORK = "arc-testnet" as const;
-const ARC_EXPLORER_TX = "https://testnet.arcscan.app/tx/";
+function agentNetworkName(chainId: SupportedTestnetChainId): string {
+  return getChainInfo(chainId).displayName.toLowerCase().replace(/\s+/g, "-");
+}
 
 export interface AgentSendArgs {
   privyUserId: string;
@@ -24,6 +31,8 @@ export interface AgentSendArgs {
   symbol: TokenSymbol;
   /** Decimal-string amount in human-readable units, e.g. "1.5". */
   amount: string;
+  /** Execution chain — defaults to Arc. */
+  chainId?: SupportedTestnetChainId;
 }
 
 export interface AgentSendResult {
@@ -34,21 +43,25 @@ export interface AgentSendResult {
   to: Address;
   agentAddress: string;
   usdValue: number;
-  network: typeof AGENT_NETWORK;
+  network: string;
   explorerUrl: string;
 }
 
-export function explorerTxUrl(txHash: string): string {
-  return `${ARC_EXPLORER_TX}${txHash}`;
+export function explorerTxUrl(
+  txHash: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): string {
+  return getExplorerTxUrl(chainId, txHash);
 }
 
 export async function sendFromAgentWallet(args: AgentSendArgs): Promise<AgentSendResult> {
   const { privyUserId, to, symbol, amount } = args;
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
 
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
-  const token = getToken(symbol);
+  const token = getToken(symbol, chainId);
   const amountAtomic = parseUnits(amount, token.decimals);
   if (amountAtomic <= 0n) {
     throw new Error("amount must be positive");
@@ -84,7 +97,7 @@ export async function sendFromAgentWallet(args: AgentSendArgs): Promise<AgentSen
     to,
     agentAddress: wallet.address,
     usdValue,
-    network: AGENT_NETWORK,
-    explorerUrl: explorerTxUrl(txHash),
+    network: agentNetworkName(chainId),
+    explorerUrl: explorerTxUrl(txHash, chainId),
   };
 }

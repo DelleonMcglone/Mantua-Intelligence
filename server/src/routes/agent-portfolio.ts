@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getAgentPortfolio } from "../lib/agent-portfolio.ts";
+import { ARC_TESTNET_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
 import { AgentWalletNotFoundError } from "../lib/agent-wallet.ts";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -17,8 +18,10 @@ agentPortfolioRouter.get(
       res.status(401).json({ error: "Authentication required.", code: "UNAUTHENTICATED" });
       return;
     }
+    const rawChain = Number(req.query.chainId);
+    const chainId = isSupportedTestnetChainId(rawChain) ? rawChain : ARC_TESTNET_CHAIN_ID;
     try {
-      const portfolio = await getAgentPortfolio(privyUserId);
+      const portfolio = await getAgentPortfolio(privyUserId, 50, chainId);
       res.json(portfolio);
     } catch (err) {
       if (err instanceof AgentWalletNotFoundError) {

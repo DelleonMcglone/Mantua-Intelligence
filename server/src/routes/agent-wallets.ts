@@ -12,6 +12,7 @@ import { logAudit } from "../lib/audit.ts";
 import { setAutoRebalance } from "../lib/agent-rebalance.ts";
 import { CircleUnavailableError } from "../lib/circle/client.ts";
 import { HARD_DAILY_CAP_USD } from "../lib/constants.ts";
+import { ARC_TESTNET_CHAIN_ID, isSupportedTestnetChainId } from "../lib/chains.ts";
 import { logger } from "../lib/logger.ts";
 import { getRequestContext } from "../lib/request-context.ts";
 import { requireAuth } from "../middleware/auth.ts";
@@ -52,8 +53,10 @@ agentWalletsRouter.post(
       return;
     }
     const ctx = getRequestContext(req);
+    const rawChain = Number((req.body as { chainId?: unknown } | undefined)?.chainId);
+    const chainId = isSupportedTestnetChainId(rawChain) ? rawChain : ARC_TESTNET_CHAIN_ID;
     try {
-      const wallet = await getOrCreateAgentWallet(privyUserId, req.walletAddress);
+      const wallet = await getOrCreateAgentWallet(privyUserId, req.walletAddress, chainId);
       await logAudit({
         ...ctx,
         action: "agent_wallet_provision",

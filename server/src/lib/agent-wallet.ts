@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { agentWallets, type AgentWallet } from "../db/schema/agent.ts";
 import { users } from "../db/schema/users.ts";
@@ -8,8 +8,22 @@ import { recordFirstSeen } from "./wallet-age.ts";
 
 export { deriveAgentAccountName };
 
-/** Blockchain id Circle uses for Arc Testnet. */
-const ARC_TESTNET = "ARC-TESTNET" as const;
+import {
+  ARC_TESTNET_CHAIN_ID,
+  BASE_SEPOLIA_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "./chains.ts";
+
+/** Circle blockchain ids per supported chain. */
+export type CircleBlockchain = "ARC-TESTNET" | "BASE-SEPOLIA";
+const CIRCLE_BLOCKCHAIN: Record<SupportedTestnetChainId, CircleBlockchain> = {
+  [ARC_TESTNET_CHAIN_ID]: "ARC-TESTNET",
+  [BASE_SEPOLIA_CHAIN_ID]: "BASE-SEPOLIA",
+};
+
+export function circleBlockchainFor(chainId: SupportedTestnetChainId): CircleBlockchain {
+  return CIRCLE_BLOCKCHAIN[chainId];
+}
 
 export class UserNotFoundError extends Error {
   constructor(privyUserId: string) {
@@ -52,7 +66,9 @@ export class AgentWalletNotFoundError extends Error {
 export async function getOrCreateAgentWallet(
   privyUserId: string,
   primaryAddress?: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
 ): Promise<AgentWallet> {
+  const blockchain = circleBlockchainFor(chainId);
   // Indexing into the array (rather than destructuring) gives TS the
   // correct `T | undefined` narrowing — drizzle's destructured-element
   // type is otherwise too loose and the `if (!x)` guard becomes a
@@ -81,7 +97,7 @@ export async function getOrCreateAgentWallet(
   const existingRows = await db
     .select()
     .from(agentWallets)
-    .where(eq(agentWallets.userId, user.id))
+    .where(and(eq(agentWallets.userId, user.id), eq(agentWallets.blockchain, blockchain)))
     .limit(1);
   const existing = existingRows.at(0);
   if (existing) return existing;
@@ -90,7 +106,7 @@ export async function getOrCreateAgentWallet(
   const created = await (
     await getCircleClient()
   ).createWallets({
-    blockchains: [ARC_TESTNET],
+    blockchains: [blockchain],
     count: 1,
     walletSetId,
     accountType: "SCA",
@@ -104,10 +120,11 @@ export async function getOrCreateAgentWallet(
     .insert(agentWallets)
     .values({
       userId: user.id,
+      blockchain,
       circleWalletId: wallet.id,
       address: wallet.address.toLowerCase(),
     })
-    .onConflictDoNothing({ target: agentWallets.userId })
+    .onConflictDoNothing({ target: [agentWallets.userId, agentWallets.blockchain] })
     .returning();
   const row = insertRows.at(0);
   if (row) return row;
@@ -115,7 +132,7 @@ export async function getOrCreateAgentWallet(
   const retryRows = await db
     .select()
     .from(agentWallets)
-    .where(eq(agentWallets.userId, user.id))
+    .where(and(eq(agentWallets.userId, user.id), eq(agentWallets.blockchain, blockchain)))
     .limit(1);
   const retry = retryRows.at(0);
   if (!retry) {
@@ -124,7 +141,10 @@ export async function getOrCreateAgentWallet(
   return retry;
 }
 
-export async function getAgentWallet(privyUserId: string): Promise<AgentWallet | null> {
+export async function getAgentWallet(
+  privyUserId: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<AgentWallet | null> {
   const userRows = await db
     .select({ id: users.id })
     .from(users)
@@ -135,9 +155,26 @@ export async function getAgentWallet(privyUserId: string): Promise<AgentWallet |
   const rows = await db
     .select()
     .from(agentWallets)
-    .where(eq(agentWallets.userId, user.id))
+    .where(
+      and(
+        eq(agentWallets.userId, user.id),
+        eq(agentWallets.blockchain, circleBlockchainFor(chainId)),
+      ),
+    )
     .limit(1);
   return rows.at(0) ?? null;
+}
+
+/** Every provisioned agent wallet for the user, across chains. */
+export async function getAgentWallets(privyUserId: string): Promise<AgentWallet[]> {
+  const userRows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.privyUserId, privyUserId))
+    .limit(1);
+  const user = userRows.at(0);
+  if (!user) return [];
+  return db.select().from(agentWallets).where(eq(agentWallets.userId, user.id));
 }
 
 /**
@@ -169,6 +206,7 @@ export async function updateAgentWalletCap(
   const user = userRows.at(0);
   if (!user) throw new UserNotFoundError(privyUserId);
 
+  // The cap is the user's cap — apply to every chain's wallet row.
   const updateRows = await db
     .update(agentWallets)
     .set({ dailyCapUsd: dailyCapUsd.toFixed(2), updatedAt: sql`now()` })

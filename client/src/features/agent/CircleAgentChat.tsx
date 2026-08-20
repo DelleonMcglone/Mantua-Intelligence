@@ -9,6 +9,7 @@ import {
 import { ArrowLeft, Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
 import {
   Banner,
@@ -111,6 +112,7 @@ const uid = () => {
 
 export function CircleAgentChat({ onClose, initialMessage }: Props) {
   const agent = useAgentPortfolio();
+  const chainId = useCurrentChainId();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const sessionIdRef = useRef<string | undefined>(undefined);
@@ -181,7 +183,7 @@ export function CircleAgentChat({ onClose, initialMessage }: Props) {
       };
 
       streamAgentChat(
-        { message: text, sessionId: sessionIdRef.current },
+        { message: text, sessionId: sessionIdRef.current, chainId },
         onEvent,
         controller.signal,
       )
@@ -203,7 +205,7 @@ export function CircleAgentChat({ onClose, initialMessage }: Props) {
           abortRef.current = null;
         });
     },
-    [patchAssistant],
+    [patchAssistant, chainId],
   );
 
   // Always call the latest `send` from the window listener (no stale closure).

@@ -50,6 +50,13 @@
       "when": 1787270400000,
       "tag": "0006_market_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787443200000,
+      "tag": "0007_agent_wallets_per_chain",
+      "breakpoints": true
     }
   ]
 }

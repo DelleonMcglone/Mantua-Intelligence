@@ -3,8 +3,9 @@ import { type Address, parseAbi } from "viem";
 import { db } from "../db/client.ts";
 import { portfolioTransactions, type PortfolioTransaction } from "../db/schema/trading.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
-import { baseRpcClient } from "./rpc-client.ts";
-import { TOKENS, type TokenSymbol } from "./tokens.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
+import { getRpcClient } from "./rpc-client.ts";
+import { getTokens, type Token, type TokenSymbol } from "./tokens.ts";
 import { tokenAmountUsd } from "./usd-pricing.ts";
 import { readOnchainPositions } from "./v4-onchain-positions.ts";
 import { logger } from "./logger.ts";
@@ -57,18 +58,20 @@ export interface AgentPortfolio {
 export async function getAgentPortfolio(
   privyUserId: string,
   txLimit = 50,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
 ): Promise<AgentPortfolio> {
-  const wallet = await getAgentWallet(privyUserId);
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
 
   const agentAddress = wallet.address as Address;
-  const tokens = Object.entries(TOKENS) as [TokenSymbol, (typeof TOKENS)[TokenSymbol]][];
+  const client = getRpcClient(chainId);
+  const tokens = Object.entries(getTokens(chainId)) as [TokenSymbol, Token][];
 
   const balances = await Promise.all(
     tokens.map(async ([symbol, t]) => {
       const raw = t.native
-        ? await baseRpcClient.getBalance({ address: agentAddress })
-        : await baseRpcClient.readContract({
+        ? await client.getBalance({ address: agentAddress })
+        : await client.readContract({
             address: t.address,
             abi: ERC20_ABI,
             functionName: "balanceOf",
@@ -89,7 +92,7 @@ export async function getAgentPortfolio(
   // empty list on a read error rather than failing the whole portfolio.
   let positions: AgentPositionRow[] = [];
   try {
-    const onchain = await readOnchainPositions(agentAddress);
+    const onchain = await readOnchainPositions(agentAddress, chainId);
     positions = onchain.map((p) => ({
       tokenId: p.tokenId,
       tokenA: p.tokenA,

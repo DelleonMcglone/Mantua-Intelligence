@@ -9,6 +9,7 @@ import {
   boolean,
   integer,
   text,
+  unique,
 } from "drizzle-orm/pg-core";
 import { users } from "./users.ts";
 
@@ -20,13 +21,14 @@ export const agentWallets = pgTable(
       .default(sql`gen_random_uuid()`),
     userId: uuid("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" })
-      // One agent wallet per user — lets provisioning upsert on userId and
-      // makes the concurrent-provision race a no-op instead of a duplicate.
-      .unique(),
-    // Circle Developer-Controlled Wallets wallet id (the agent's Arc wallet).
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Circle blockchain id: "ARC-TESTNET" | "BASE-SEPOLIA". One wallet
+     *  row per (user, blockchain) — the walletId IS the chain selector on
+     *  Circle's transaction API. */
+    blockchain: varchar("blockchain", { length: 32 }).notNull().default("ARC-TESTNET"),
+    // Circle Developer-Controlled Wallets wallet id (chain-specific).
     circleWalletId: varchar("circle_wallet_id", { length: 128 }).notNull().unique(),
-    address: varchar("address", { length: 42 }).notNull().unique(),
+    address: varchar("address", { length: 42 }).notNull(),
     label: varchar("label", { length: 64 }),
     dailyCapUsd: numeric("daily_cap_usd", { precision: 20, scale: 2 }).notNull().default("100"),
     status: varchar("status", { length: 16 }).notNull().default("active"),
@@ -35,7 +37,11 @@ export const agentWallets = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("agent_wallets_user_idx").on(t.userId)],
+  (t) => [
+    index("agent_wallets_user_idx").on(t.userId),
+    unique("agent_wallets_user_chain_uq").on(t.userId, t.blockchain),
+    unique("agent_wallets_address_chain_uq").on(t.address, t.blockchain),
+  ],
 );
 
 export type AgentWallet = typeof agentWallets.$inferSelect;

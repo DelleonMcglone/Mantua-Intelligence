@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { env } from "../env.ts";
 import { runAgentChat, type AgentChatEvent } from "../lib/agent-chat.ts";
+import { isSupportedTestnetChainId } from "../lib/chains.ts";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
@@ -11,6 +12,8 @@ export const agentChatRouter = Router();
 const chatSchema = z.object({
   message: z.string().min(1).max(2000),
   sessionId: z.uuid().optional(),
+  /** The user's selected chain; omitted means Arc (back-compat). */
+  chainId: z.number().int().refine(isSupportedTestnetChainId, "Unsupported chainId").optional(),
 });
 
 /**
@@ -70,6 +73,7 @@ agentChatRouter.post(
         walletAddress: req.walletAddress,
         sessionId: parsed.data.sessionId,
         message: parsed.data.message,
+        chainId: parsed.data.chainId,
       })) {
         if (res.closed) break;
         write(event);

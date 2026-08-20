@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
 import { ApiError, api } from "@/lib/api.ts";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 
@@ -61,6 +62,7 @@ const POLL_MS = 30_000;
  */
 export function useAgentPortfolio(): AgentPortfolioState {
   const { authenticated, ready } = usePrivy();
+  const chainId = useCurrentChainId();
   const [state, setState] = useState<AgentPortfolioState>({
     agentAddress: null,
     balances: [],
@@ -89,7 +91,9 @@ export function useAgentPortfolio(): AgentPortfolioState {
 
     const tick = async () => {
       try {
-        const data = await api.get<AgentPortfolioResponse>("/api/agent/portfolio");
+        const data = await api.get<AgentPortfolioResponse>(
+          `/api/agent/portfolio?chainId=${String(chainId)}`,
+        );
         if (cancelled) return;
         setState({
           agentAddress: data.address,
@@ -130,7 +134,7 @@ export function useAgentPortfolio(): AgentPortfolioState {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, ready, refreshNonce]);
+  }, [authenticated, ready, refreshNonce, chainId]);
 
   if (!ready || !authenticated) {
     return {
