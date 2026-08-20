@@ -33,12 +33,16 @@ import {V4Quoter} from "@uniswap/v4-periphery/src/lens/V4Quoter.sol";
 ///         nothing (a returning run() breaks --broadcast serialization).
 contract DeployMarketPeriphery is Script {
     /// Dynamic-market PoolManager on Arc Testnet (deploy/dynamic-market/README.md).
-    IPoolManager constant POOL_MANAGER = IPoolManager(0xee196B3F83Fe6f57E074C399DBdeFe07e1407636);
+    /// Overridable via the POOL_MANAGER env var for other chains (e.g. the
+    /// Base Sepolia dynamic-market manager).
+    address constant DEFAULT_POOL_MANAGER = 0xee196B3F83Fe6f57E074C399DBdeFe07e1407636;
     IAllowanceTransfer constant PERMIT2 =
         IAllowanceTransfer(0x000000000022D473030F116dDEE9F6B43aC78BA3);
     uint256 constant UNSUBSCRIBE_GAS_LIMIT = 300_000;
 
     function run() external {
+        IPoolManager POOL_MANAGER =
+            IPoolManager(vm.envOr("POOL_MANAGER", DEFAULT_POOL_MANAGER));
         require(
             address(POOL_MANAGER).code.length > 0,
             "PoolManager has no code on this chain (wrong RPC?)"
