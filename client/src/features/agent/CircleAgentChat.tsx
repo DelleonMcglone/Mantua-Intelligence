@@ -869,9 +869,10 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
-        Hi — I'm your Circle agent on Arc. Tell me what to do in plain language and I'll handle it:
-        check balances, swap or send tokens, evaluate sports markets and place bets, or look up
-        market &amp; on-chain data. I act autonomously within your daily spending cap.
+        Hi — I'm your Circle agent. I act on the network you've selected (Base Sepolia or Arc). Tell
+        me what to do in plain language and I'll handle it: check balances, swap or send tokens,
+        evaluate sports markets and place bets, or look up market &amp; on-chain data. I act
+        autonomously within your daily spending cap.
       </div>
       <div
         style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflowX: "auto", paddingBottom: 2 }}
