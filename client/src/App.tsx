@@ -490,6 +490,9 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
             setRoute({ kind: "market", sport });
           }}
           onBack={home}
+          onAgent={(message) => {
+            setRoute({ kind: "agent", message });
+          }}
         />
       );
     case "trading":

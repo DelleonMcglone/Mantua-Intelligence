@@ -43,6 +43,13 @@
       "when": 1784300000000,
       "tag": "0005_agent_intents_backoff",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787270400000,
+      "tag": "0006_market_comments",
+      "breakpoints": true
     }
   ]
 }

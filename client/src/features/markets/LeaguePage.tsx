@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { getSport, SPORTS, type SportId } from "./sports.ts";
 import { useSlate, type SlateEvent } from "./use-slate.ts";
 import { useMarketTrade } from "./use-market-trade.ts";
+import { MarketDetail } from "./MarketDetail.tsx";
 
 const EXPLORER = "https://testnet.arcscan.app/tx/";
 
@@ -15,6 +16,8 @@ interface Props {
   onSelectSport: (id: SportId) => void;
   /** Back to the home page. */
   onBack: () => void;
+  /** Hand a matchup to the autonomous agent (detail view's Agent tab). */
+  onAgent: (message: string) => void;
   /** Deep-link: preselect this game (e.g. Close from the profile). */
   initialEventId?: string | undefined;
   /** Deep-link: open the sidebar on this direction. */
@@ -136,6 +139,7 @@ export function LeaguePage({
   sport,
   onSelectSport,
   onBack,
+  onAgent,
   initialEventId,
   initialDirection,
 }: Props) {
@@ -145,6 +149,9 @@ export function LeaguePage({
   const [week, setWeek] = useState<WeekOption>(() => weekOptions[1]);
   const { slates, loading } = useSlate(week.dates);
   const [selection, setSelection] = useState<Selection | null>(null);
+  // Matchup detail view (chart + comments/holders/positions/activity/agent)
+  // — opened by clicking a game row, replaces the list until Back.
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const slate = slates[active.id];
   const events = useMemo(() => slate?.events ?? [], [slate]);
@@ -164,6 +171,10 @@ export function LeaguePage({
       events.at(0);
     return first ? { event: first, outcomeIndex: 0 } : null;
   }, [selection, events, initialEventId]);
+
+  const detailEvent = detailId
+    ? (events.find((e) => e.providerEventId === detailId) ?? null)
+    : null;
 
   if (active.coverage === "soon")
     return <ComingSoon sport={sport} onSelectSport={onSelectSport} onBack={onBack} />;
@@ -204,15 +215,27 @@ export function LeaguePage({
             // A selection from another week is stale — let the default
             // re-pick from the new slate.
             setSelection(null);
+            setDetailId(null);
           }}
         />
       </div>
 
       <div className="mt-6 flex flex-col gap-8 lg:flex-row">
-        {/* Games list */}
+        {/* Games list, or the selected matchup's detail view */}
         <div className="min-w-0 flex-1">
-          {loading && !slate && <p className="text-[13px] text-text-dim">Loading games…</p>}
-          {!loading && events.length === 0 && (
+          {detailEvent && (
+            <MarketDetail
+              event={detailEvent}
+              onBack={() => {
+                setDetailId(null);
+              }}
+              onAgent={onAgent}
+            />
+          )}
+          {!detailEvent && loading && !slate && (
+            <p className="text-[13px] text-text-dim">Loading games…</p>
+          )}
+          {!detailEvent && !loading && events.length === 0 && (
             <div className="rounded-md border border-border-soft px-5 py-10 text-center">
               <p className="text-[14px] font-medium">
                 No {active.label} games{" "}
@@ -227,38 +250,43 @@ export function LeaguePage({
               </p>
             </div>
           )}
-          {slate?.delayed && (
+          {!detailEvent && slate?.delayed && (
             <div className="mb-3 rounded-sm border border-yellow/40 bg-yellow/10 px-3 py-1.5 text-[11px] text-yellow">
               Live data is delayed — scores and odds may lag the game.
             </div>
           )}
-          {[...groups.entries()].map(([day, dayEvents]) => (
-            <section key={day} className="mb-6">
-              <div className="mb-2 flex items-baseline justify-between">
-                <h2 className="text-[16px] font-semibold">{day}</h2>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-text-mute">
-                  Moneyline
-                </span>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {dayEvents.map((event) => (
-                  <GameRow
-                    key={event.providerEventId}
-                    event={event}
-                    selected={effective?.event.providerEventId === event.providerEventId}
-                    selectedOutcome={
-                      effective?.event.providerEventId === event.providerEventId
-                        ? effective.outcomeIndex
-                        : null
-                    }
-                    onPick={(outcomeIndex) => {
-                      setSelection({ event, outcomeIndex });
-                    }}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          {!detailEvent &&
+            [...groups.entries()].map(([day, dayEvents]) => (
+              <section key={day} className="mb-6">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <h2 className="text-[16px] font-semibold">{day}</h2>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-text-mute">
+                    Moneyline
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {dayEvents.map((event) => (
+                    <GameRow
+                      key={event.providerEventId}
+                      event={event}
+                      selected={effective?.event.providerEventId === event.providerEventId}
+                      selectedOutcome={
+                        effective?.event.providerEventId === event.providerEventId
+                          ? effective.outcomeIndex
+                          : null
+                      }
+                      onPick={(outcomeIndex) => {
+                        setSelection({ event, outcomeIndex });
+                      }}
+                      onOpen={() => {
+                        setSelection({ event, outcomeIndex: 0 });
+                        setDetailId(event.providerEventId);
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
         </div>
 
         {/* Trade sidebar */}
@@ -296,11 +324,14 @@ function GameRow({
   selected,
   selectedOutcome,
   onPick,
+  onOpen,
 }: {
   event: SlateEvent;
   selected: boolean;
   selectedOutcome: 0 | 1 | null;
   onPick: (outcome: 0 | 1) => void;
+  /** Open the matchup's detail view (chart, comments, holders, activity…). */
+  onOpen: () => void;
 }) {
   const live = event.status === "in_progress";
   const final = event.status === "final";
@@ -316,16 +347,16 @@ function GameRow({
   ];
 
   return (
-    // Clicking anywhere on the matchup selects it into the sidebar — the
-    // details view is public; only executing the trade needs login.
+    // Clicking anywhere on the matchup opens its detail view (chart,
+    // comments, holders, positions, activity, agent) and selects it into
+    // the sidebar; the price buttons quick-select without leaving the list.
+    // Browsing is public; only executing a trade needs login.
     <div
       role="button"
       tabIndex={0}
-      onClick={() => {
-        onPick(selectedOutcome ?? 0);
-      }}
+      onClick={onOpen}
       onKeyDown={(e) => {
-        if (e.key === "Enter") onPick(selectedOutcome ?? 0);
+        if (e.key === "Enter") onOpen();
       }}
       className={`cursor-pointer rounded-md border bg-panel-solid px-4 py-3 transition-colors hover:border-accent/30 ${selected ? "border-accent/40" : "border-border-soft"}`}
     >

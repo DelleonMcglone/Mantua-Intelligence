@@ -344,3 +344,25 @@ export const marketFills = pgTable(
 );
 
 export type MarketFill = typeof marketFills.$inferSelect;
+
+/**
+ * Comment thread on a game's market page (the Polymarket-style detail
+ * view). Keyed by the provider event id — not the market id — so one
+ * thread covers both outcome markets and survives market re-creation.
+ */
+export const marketComments = pgTable(
+  "market_comments",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    providerEventId: varchar("provider_event_id", { length: 128 }).notNull(),
+    /** The commenter's wallet address (their public identity here). */
+    address: varchar("address", { length: 42 }).notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("market_comments_event_idx").on(t.providerEventId, t.createdAt)],
+);
+
+export type MarketComment = typeof marketComments.$inferSelect;
