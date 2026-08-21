@@ -66,11 +66,11 @@ unset → the endpoint reports 503.
 
 1. **See the paywall** (no payment):
    ```bash
-   curl -i https://test-mantua.vercel.app/api/x402/analyst-brief
+   curl -i https://mantua.ai/api/x402/analyst-brief
    # → HTTP 402 with an accepts[] payment requirement (exact / eip155:84532 / USDC)
    ```
 2. **Agent-to-agent via chat**: tell the Mantua agent
-   `call the paid service at https://test-mantua.vercel.app/api/x402/analyst-brief`
+   `call the paid service at https://mantua.ai/api/x402/analyst-brief`
    — the agent (buyer) pays the Mantua service (seller): one agent paying
    another in USDC, end to end. (With the default buyer key, buyer = the
    seller's payout EOA, so the $0.01 round-trips.)
