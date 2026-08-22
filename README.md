@@ -231,8 +231,8 @@ across both):
   token**. RPC `https://rpc.testnet.arc.network`; explorer [ArcScan](https://testnet.arcscan.app).
 - **Arcscan (Blockscout) API** powers the agent's on-chain analysis tools (address activity,
   token holders, transaction decoding).
-- All hook stacks, tokens, and agent wallets are deployed on Arc (addresses
-  [below](#deployed-contracts-arc-testnet-5042002)).
+- Every hook stack, token registry, and agent wallet exists on Arc **and** on Base Sepolia
+  (addresses [below](#deployed-contracts)).
 
 ### Pyth Network
 
@@ -254,16 +254,19 @@ across both):
 
 ---
 
-## Network
+## Network details
 
-Mantua.AI runs on **Arc Testnet** Circle's stablecoin-native L1, where **USDC is the gas
-token**.
+| Network          | Chain ID  | RPC                               | Explorer                     |
+| ---------------- | --------- | --------------------------------- | ---------------------------- |
+| **Base Sepolia** | `84532`   | `https://sepolia.base.org`        | https://sepolia.basescan.org |
+| Arc Testnet      | `5042002` | `https://rpc.testnet.arc.network` | https://testnet.arcscan.app  |
 
-| Network     | Chain ID  | RPC                               | Explorer                    |
-| ----------- | --------- | --------------------------------- | --------------------------- |
-| Arc Testnet | `5042002` | `https://rpc.testnet.arc.network` | https://testnet.arcscan.app |
+Arc is Circle's stablecoin-native L1, where **USDC is the gas token**; Base Sepolia uses ETH
+for gas, and the Circle agent wallet's operations are gas-sponsored there.
 
 ### Tokens
+
+Arc Testnet:
 
 | Token   | Address                                      | Decimals | Notes                     |
 | ------- | -------------------------------------------- | -------- | ------------------------- |
@@ -271,6 +274,14 @@ token**.
 | EURC    | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6        | Circle EURC               |
 | cirBTC  | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` | 8        | BTC-pegged demo asset     |
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |          | Canonical (all chains)    |
+
+Base Sepolia:
+
+| Token   | Address                                      | Decimals | Notes                          |
+| ------- | -------------------------------------------- | -------- | ------------------------------ |
+| USDC    | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | 6        | Circle USDC, market collateral |
+| EURC    | `0x808456652fdb597867f38412077A9182bf77359F` | 6        | Circle EURC                    |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |          | Canonical (all chains)         |
 
 ---
 
@@ -282,11 +293,23 @@ contract deployed at a mined CREATE2 address, and each lives on its **own** v4 s
 - PositionManager + StateView + V4Quoter + PoolSwapTest). The app routes every pool's create /
   liquidity / swap / read to the stack of that pool's hook.
 
-| Hook                    | Surface           | Purpose                                                                                     | Status      |
-| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------- | ----------- |
-| **Dynamic Market Hook** | Prediction market | Adapts pricing, fees, liquidity, and risk parameters in real time from game state and flow  | Live on Arc |
-| **Stable Protection**   | Trading           | Monitors peg deviation across five zones, scaling LP fees to severity and halting past 5%   | Live on Arc |
-| **Dynamic Fee**         | Trading           | Nezlobin directional fees across five deviation zones, charging the toxic side of the trade | Live on Arc |
+| Hook                    | Surface           | Purpose                                                                                     | Live on             | Source                                                                           |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
+| **Dynamic Market Hook** | Prediction market | Adapts pricing, fees, liquidity, and risk parameters in real time from game state and flow  | Base Sepolia \| Arc | [`contracts/src/hooks/dynamic-market/`](contracts/src/hooks/dynamic-market)      |
+| **Stable Protection**   | Trading           | Monitors peg deviation across five zones, scaling LP fees to severity and halting past 5%   | Base Sepolia \| Arc | [stableprotection-hook](https://github.com/DelleonMcglone/stableprotection-hook) |
+| **Dynamic Fee**         | Trading           | Nezlobin directional fees across five deviation zones, charging the toxic side of the trade | Base Sepolia \| Arc | [dynamic-fee](https://github.com/DelleonMcglone/dynamic-fee)                     |
+
+The Dynamic Market Hook's eight Solidity modules live in this repo under
+[`contracts/src/hooks/dynamic-market/`](contracts/src/hooks/dynamic-market), alongside the
+market primitives in [`contracts/src/markets/`](contracts/src/markets) and the Foundry deploy
+scripts in [`contracts/script/`](contracts/script). Stable Protection and Dynamic Fee each
+have their own repository and are wired in here as **git submodules** under
+`contracts/hooks/`, so GitHub shows them as pointers rather than inline files — clone them
+with the repo:
+
+```bash
+git clone --recurse-submodules https://github.com/DelleonMcglone/Mantua-Intelligence.git
+```
 
 > The Dynamic Market Hook shipped against the authoritative spec in
 > [`docs/specs/dynamic-market-hook.md`](docs/specs/dynamic-market-hook.md): a 0.30%–5% adaptive
@@ -301,12 +324,18 @@ contract deployed at a mined CREATE2 address, and each lives on its **own** v4 s
 
 ---
 
-## Deployed Contracts (Arc Testnet `5042002`)
+## Deployed contracts
 
-All addresses are live on Arc Testnet and verifiable on [ArcScan](https://testnet.arcscan.app).
-Each hook has its own full v4 stack.
+Every hook and every market stack is deployed on **both** testnets. Addresses below are the
+live ones; the canonical machine-readable source is
+[`server/src/lib/v4-contracts.ts`](server/src/lib/v4-contracts.ts) and
+[`server/src/lib/markets-contracts.ts`](server/src/lib/markets-contracts.ts).
 
-### Dynamic Market Hook — sports prediction markets
+### Arc Testnet `5042002`
+
+Verifiable on [ArcScan](https://testnet.arcscan.app). Each hook has its own full v4 stack.
+
+#### Dynamic Market Hook — sports prediction markets
 
 | Contract                | Address                                      |
 | ----------------------- | -------------------------------------------- |
@@ -327,7 +356,7 @@ authority every market burns in as an immutable; the keys behind it rotate witho
 redeploying a single market. Deployment record:
 [`deploy/dynamic-market/README.md`](deploy/dynamic-market/README.md).
 
-### Stable Protection USDC/EURC
+#### Stable Protection USDC/EURC
 
 | Contract        | Address                                      |
 | --------------- | -------------------------------------------- |
@@ -338,7 +367,7 @@ redeploying a single market. Deployment record:
 | V4Quoter        | `0xd57545f0a2C3A721Fc3F1F4f3007b2aA021f4567` |
 | PoolSwapTest    | `0xeA44982cB8b71A9BF69bfe3F3f5b43E1790be4d1` |
 
-### Dynamic Fee USDC/cirBTC, EURC/cirBTC
+#### Dynamic Fee USDC/cirBTC, EURC/cirBTC
 
 | Contract        | Address                                      |
 | --------------- | -------------------------------------------- |
@@ -349,8 +378,80 @@ redeploying a single market. Deployment record:
 | V4Quoter        | `0x2CF521F13658FE57958D09B40Ee3420D974EE7eC` |
 | PoolSwapTest    | `0xAa096011E6604df33762d611cbBdaA0671F19Bdb` |
 
-The canonical source of truth for these addresses is
-[`server/src/lib/v4-contracts.ts`](server/src/lib/v4-contracts.ts) (`HOOK_DEPLOYMENTS_ARC`).
+#### Agent commerce
+
+| Contract                         | Address                                      |
+| -------------------------------- | -------------------------------------------- |
+| AgenticCommerce (ERC-8183 proxy) | `0x0747EEf0706327138c69792bF28Cd525089e4583` |
+
+### Base Sepolia `84532`
+
+Verifiable on [BaseScan](https://sepolia.basescan.org). Stable Protection and Dynamic Fee were
+deployed against the **canonical** Uniswap v4 PoolManager
+`0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408`, so they share one periphery stack; the Dynamic
+Market Hook runs on its own PoolManager, as on Arc.
+
+#### Dynamic Market Hook — sports prediction markets
+
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
+| DynamicMarketHook       | `0xff94F6319d3A67682147c997D1323D0f0B1768c0` |
+| PoolManager             | `0x53AA23D6B81562E75505EA25e015650a2BB8fDCa` |
+| MarketStateRegistry     | `0x1c03020a160ad4558414235c90F305F010Baf086` |
+| MarketFactory           | `0x9aB104e89F8de7bc240a134Dc6adBCe7124D3d84` |
+| Resolver                | `0x0FEAf3BA53E9F163c8060F4d437bcC77F86E4270` |
+| PositionManager         | `0x275dc77b579b56eb493732f177b1109141ad9a67` |
+| StateView               | `0xc352dc25d3ab4748cce6600efb3d5edf42613a45` |
+| V4Quoter                | `0xbb91b69d888afb30eebd373023480d2007d37cd6` |
+| PoolSwapTest            | `0x4357c1d769fc94278ae85b36e22dd494cca078b4` |
+| PoolModifyLiquidityTest | `0x37fbd7e25de3259340e0879ec15f19c56abcc55b` |
+| PositionDescriptor      | `0x5f30b3ff7b65e3c06a02a2e120c9a2478ea26be9` |
+
+Operator, keeper, and settlement signer: `0x9215594bdA3fE6c029155566B9c9DA75dFC1024D`.
+Market collateral is Circle USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. Deployment
+record: [`deploy/dynamic-market/README.md`](deploy/dynamic-market/README.md).
+
+#### Stable Protection USDC/EURC
+
+| Contract        | Address                                      |
+| --------------- | -------------------------------------------- |
+| Hook            | `0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0` |
+| PoolManager     | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` |
+| PositionManager | `0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80` |
+| StateView       | `0x571291b572ed32ce6751a2cb2486ebee8defb9b4` |
+| V4Quoter        | `0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba` |
+| PoolSwapTest    | `0x8b5bcc363dde2614281ad875bad385e0a785d3b9` |
+
+#### Dynamic Fee
+
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
+| Hook                    | `0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0` |
+| PoolManager             | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` |
+| PositionManager         | `0x4b2c77d209d3405f41a037ec6c77f7f5b8e2ca80` |
+| StateView               | `0x571291b572ed32ce6751a2cb2486ebee8defb9b4` |
+| V4Quoter                | `0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba` |
+| PoolSwapTest            | `0xF778eF19F4A0065430C55a7cD09d287368947C29` |
+| PoolModifyLiquidityTest | `0x9f12E9d064398e07153Ca7E1401C71343edB772B` |
+
+Its Base pools trade **mock** tokens from the hook repo's own deploy (tWETH
+`0x839Cc782708f1768F0F7591eA0c7D08290ba2a3c`, tUSDC `0x8b6de320b93c2f8dEE5C9392A001E03CE6cc8Fe6`),
+so the app lists no user-facing Dynamic Fee pairs on Base yet — Arc is where that hook's real
+pairs live.
+
+#### Agent commerce
+
+| Contract                         | Address                                      |
+| -------------------------------- | -------------------------------------------- |
+| AgenticCommerce (ERC-8183 proxy) | `0x49da1bdd06fafbadaf941a35d732800c89b2b7bb` |
+| AgenticCommerce implementation   | `0x4c49d46812ae1aafd06e1a9ebcaff7183ec1f9c9` |
+
+Deployment record:
+[`deploy/agentic-commerce-base/README.md`](deploy/agentic-commerce-base/README.md).
+
+All three hooks' permission bits and PoolManager wiring are re-verified on both chains by
+`npm run verify:hooks`, attested in
+[`docs/security/hook-deployments.md`](docs/security/hook-deployments.md).
 
 ---
 
@@ -363,8 +464,10 @@ server/      Express + TypeScript API (port 3001) calldata builders, quotes, age
              market id + probability utils, Drizzle schema
 contracts/   Foundry contracts: market primitives (MarketFactory, Market, OutcomeToken,
              Resolver, pool bootstrap), the Dynamic Market Hook (8 modules), full-lifecycle
-             E2E tests, and the deploy scripts (contracts/script/)
-deploy/      Foundry deploy scripts for the per-hook Arc v4 periphery + pool setup
+             E2E tests, and the deploy scripts (contracts/script/). The Stable Protection and
+             Dynamic Fee hooks are submodules under contracts/hooks/
+deploy/      Foundry deploy scripts + per-chain deployment records for the hook v4 periphery,
+             pool setup, and the agent-commerce escrow
 docs/        Architecture, specs, decision memos, task lists, legal drafts
 ```
 

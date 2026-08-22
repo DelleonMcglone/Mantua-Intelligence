@@ -1,4 +1,4 @@
-# Dynamic Market Hook — Arc Testnet deploy
+# Dynamic Market Hook — deploy runbook and records
 
 Deploys the Dynamic Market Hook stack: a dedicated Uniswap v4 `PoolManager`, the
 `MarketStateRegistry`, and the hook itself at a mined CREATE2 address.
@@ -6,9 +6,11 @@ Deploys the Dynamic Market Hook stack: a dedicated Uniswap v4 `PoolManager`, the
 **Spec:** [`docs/specs/dynamic-market-hook.md`](../../docs/specs/dynamic-market-hook.md)
 §37–§42.
 **Task:** B2-005.
-**Status: NOT DEPLOYED.** The script and the salt mine are written and tested;
-the broadcast has not been run because it needs a funded Arc deployer key. Every
-address below is blank until it has.
+**Status: LIVE on both testnets.** Arc Testnet (`5042002`) deployed 2026-08-17 —
+record under [Deployment record](#deployment-record); Base Sepolia (`84532`)
+deployed 2026-08-20 — record under
+[Base Sepolia deploy](#base-sepolia-deploy-2026-08-20). The runbook below is
+chain-agnostic: it is what you follow for the next chain.
 
 ---
 

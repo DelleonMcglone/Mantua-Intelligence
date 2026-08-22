@@ -27,6 +27,11 @@ interface HookConfig {
   expectedPermissions?: string[];
 }
 
+/** Public Base Sepolia endpoint. The default https://sepolia.base.org has
+ *  repeatedly returned 503 "no backend is currently healthy" during these
+ *  audits, which reads as a missing deployment in the report. */
+const BASE_SEPOLIA_RPC = "https://base-sepolia-rpc.publicnode.com";
+
 const HOOKS: HookConfig[] = [
   {
     name: "StableProtectionHook",
@@ -35,7 +40,7 @@ const HOOKS: HookConfig[] = [
     address: "0xe5e6a9E09Ad1e536788f0c142AD5bc69e8B020C0",
     chainId: 84532,
     chainName: "Base Sepolia",
-    rpcUrl: "https://sepolia.base.org",
+    rpcUrl: BASE_SEPOLIA_RPC,
     expectedPermissions: ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
   },
   {
@@ -45,7 +50,7 @@ const HOOKS: HookConfig[] = [
     address: "0x9788B8495ebcEC1C1D1436681B0F56C6fc0140c0",
     chainId: 84532,
     chainName: "Base Sepolia",
-    rpcUrl: "https://sepolia.base.org",
+    rpcUrl: BASE_SEPOLIA_RPC,
     expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
   },
   {
@@ -55,7 +60,37 @@ const HOOKS: HookConfig[] = [
     address: "0xff94F6319d3A67682147c997D1323D0f0B1768c0",
     chainId: 84532,
     chainName: "Base Sepolia",
-    rpcUrl: "https://sepolia.base.org",
+    rpcUrl: BASE_SEPOLIA_RPC,
+    expectedPermissions: ["BEFORE_INITIALIZE", "BEFORE_ADD_LIQUIDITY", "BEFORE_SWAP", "AFTER_SWAP"],
+  },
+  {
+    name: "StableProtectionHook",
+    repo: "DelleonMcglone/stableprotection-hook",
+    pinnedCommit: "8190d5032bea6a1e85fea969156eb708d1cef266",
+    address: "0xd1Deea248850BFc239Cb282b793b076357Cb20c0",
+    chainId: 5042002,
+    chainName: "Arc Testnet",
+    rpcUrl: "https://rpc.testnet.arc.network",
+    expectedPermissions: ["BEFORE_INITIALIZE", "BEFORE_SWAP", "AFTER_SWAP"],
+  },
+  {
+    name: "DynamicFee",
+    repo: "DelleonMcglone/dynamic-fee",
+    pinnedCommit: "d34af93025ae998474883eac81596edb7e37c159",
+    address: "0xA1Be807481F532c074380FCcF05be5e2A3ec80C0",
+    chainId: 5042002,
+    chainName: "Arc Testnet",
+    rpcUrl: "https://rpc.testnet.arc.network",
+    expectedPermissions: ["BEFORE_SWAP", "AFTER_SWAP"],
+  },
+  {
+    name: "DynamicMarketHook",
+    repo: "DelleonMcglone/Mantua-Intelligence",
+    pinnedCommit: "07f6f169fb79172c01f4a7d1dd68e9850a132ace",
+    address: "0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0",
+    chainId: 5042002,
+    chainName: "Arc Testnet",
+    rpcUrl: "https://rpc.testnet.arc.network",
     expectedPermissions: ["BEFORE_INITIALIZE", "BEFORE_ADD_LIQUIDITY", "BEFORE_SWAP", "AFTER_SWAP"],
   },
 ];
@@ -193,7 +228,7 @@ function renderMarkdown(results: VerifyResult[]): string {
   lines.push("## Notes");
   lines.push("");
   lines.push(
-    "Stable Protection and Dynamic Fee are Base Sepolia testnet deployments. Neither is on Base mainnet (8453); re-deployment to mainnet + a fresh run of this verification is a launch-gating step.",
+    "All three hooks run on both testnets Mantua supports: Base Sepolia (84532) and Arc Testnet (5042002). Nothing here is on Base mainnet (8453); re-deployment to mainnet + a fresh run of this verification is a launch-gating step.",
   );
   lines.push("");
   return lines.join("\n");
