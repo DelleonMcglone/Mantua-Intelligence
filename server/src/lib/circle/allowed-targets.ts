@@ -22,7 +22,7 @@
 
 import { env } from "../../env.ts";
 import { SUPPORTED_TESTNET_CHAIN_IDS } from "../chains.ts";
-import { MARKETS_ARC, MARKETS_PERIPHERY_ARC } from "../markets-contracts.ts";
+import { MARKETS_BY_CHAIN, MARKETS_PERIPHERY_BY_CHAIN } from "../markets-contracts.ts";
 import { getTokens } from "../tokens.ts";
 import { HOOK_DEPLOYMENTS, PERMIT2, getV4Addresses } from "../v4-contracts.ts";
 
@@ -67,17 +67,25 @@ function buildAllowlist(): Set<string> {
     }
   }
 
-  // ERC-8004/8183 agentic-commerce registry, when configured.
+  // ERC-8004/8183 agentic-commerce registry, when configured (per chain).
   add(env.AGENTIC_COMMERCE_ADDRESS);
+  add(env.BASE_AGENTIC_COMMERCE_ADDRESS);
 
-  // Sports-market settlement layer (B4, deployed 2026-08-17). Individual
-  // Market/outcome-token addresses are dynamic — agent flows that touch
-  // them will extend this via the markets registry, still through this
-  // single builder.
-  add(MARKETS_ARC.factory);
-  add(MARKETS_ARC.resolver);
-  add(MARKETS_ARC.collateral);
-  for (const addr of Object.values(MARKETS_PERIPHERY_ARC)) add(addr);
+  // Sports-market settlement layer, per chain. Individual Market/outcome-
+  // token addresses are dynamic — agent flows that touch them extend this
+  // via registerDynamicTargets, still through this single builder.
+  for (const chainId of SUPPORTED_TESTNET_CHAIN_IDS) {
+    const markets = MARKETS_BY_CHAIN[chainId];
+    if (markets) {
+      add(markets.factory);
+      add(markets.resolver);
+      add(markets.collateral);
+    }
+    const periphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+    if (periphery) {
+      for (const addr of Object.values(periphery) as (string | null)[]) add(addr);
+    }
+  }
 
   return targets;
 }

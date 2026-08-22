@@ -4,7 +4,8 @@ import { explorerTxUrl } from "./agent-send.ts";
 import { AgentWalletNotFoundError, getAgentWallet } from "./agent-wallet.ts";
 import { logAudit } from "./audit.ts";
 import { executeAgentAbiCall, executeAgentCalldata } from "./circle/execute.ts";
-import { baseRpcClient } from "./rpc-client.ts";
+import { getRpcClient } from "./rpc-client.ts";
+import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "./chains.ts";
 import { checkSpendingCap, recordSpending } from "./spending-cap.ts";
 import { getToken } from "./tokens.ts";
 
@@ -85,12 +86,16 @@ const AGENTIC_COMMERCE_ABI = [
   },
 ] as const;
 
-function commerceAddress(): `0x${string}` {
-  return env.AGENTIC_COMMERCE_ADDRESS as `0x${string}`;
+function commerceAddress(chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID): `0x${string}` {
+  if (chainId === ARC_TESTNET_CHAIN_ID) return env.AGENTIC_COMMERCE_ADDRESS as `0x${string}`;
+  if (!env.BASE_AGENTIC_COMMERCE_ADDRESS) {
+    throw new Error("Agent commerce is not deployed on Base Sepolia yet — switch to Arc.");
+  }
+  return env.BASE_AGENTIC_COMMERCE_ADDRESS as `0x${string}`;
 }
 
-async function requireWallet(privyUserId: string) {
-  const wallet = await getAgentWallet(privyUserId);
+async function requireWallet(privyUserId: string, chainId: SupportedTestnetChainId) {
+  const wallet = await getAgentWallet(privyUserId, chainId);
   if (!wallet) throw new AgentWalletNotFoundError(privyUserId);
   return wallet;
 }
@@ -111,8 +116,12 @@ export async function createJobFromAgentWallet(args: {
   description: string;
   hook?: `0x${string}` | undefined;
   expiresInSeconds?: number | undefined;
+  chainId?: SupportedTestnetChainId;
 }): Promise<CreateJobResult> {
-  const wallet = await requireWallet(args.privyUserId);
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
+  const contract = commerceAddress(chainId);
+  const client = getRpcClient(chainId);
+  const wallet = await requireWallet(args.privyUserId, chainId);
   const expiredAt = BigInt(
     Math.floor(Date.now() / 1000) + (args.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS),
   );
@@ -123,14 +132,14 @@ export async function createJobFromAgentWallet(args: {
   });
   const { txHash } = await executeAgentCalldata({
     walletId: wallet.circleWalletId,
-    to: commerceAddress(),
+    to: contract,
     callData,
   });
   // jobCounter increments on create; the new job's id is counter - 1. Wait
-  // for the receipt first so the read reflects this tx (sub-second on Arc).
-  await baseRpcClient.waitForTransactionReceipt({ hash: txHash });
-  const count = await baseRpcClient.readContract({
-    address: commerceAddress(),
+  // for the receipt first so the read reflects this tx.
+  await client.waitForTransactionReceipt({ hash: txHash });
+  const count = await client.readContract({
+    address: contract,
     abi: AGENTIC_COMMERCE_ABI,
     functionName: "jobCounter",
   });
@@ -151,8 +160,8 @@ export async function createJobFromAgentWallet(args: {
   return {
     jobId: String(jobId),
     txHash,
-    explorerUrl: explorerTxUrl(txHash),
-    contract: commerceAddress(),
+    explorerUrl: explorerTxUrl(txHash, chainId),
+    contract,
     expiresAt: new Date(Number(expiredAt) * 1000).toISOString(),
     next: "The provider agent must set the job's budget; then fund the escrow with fund_job.",
   };
@@ -170,9 +179,12 @@ export async function fundJobFromAgentWallet(args: {
   privyUserId: string;
   jobId: string;
   amountUsdc: string;
+  chainId?: SupportedTestnetChainId;
 }): Promise<FundJobResult> {
-  const wallet = await requireWallet(args.privyUserId);
-  const usdc = getToken("USDC");
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
+  const contract = commerceAddress(chainId);
+  const wallet = await requireWallet(args.privyUserId, chainId);
+  const usdc = getToken("USDC", chainId);
   const units = parseUnits(args.amountUsdc, usdc.decimals);
   if (units <= 0n) throw new Error("amountUsdc must be positive");
 
@@ -184,7 +196,7 @@ export async function fundJobFromAgentWallet(args: {
     walletId: wallet.circleWalletId,
     to: usdc.address,
     abiFunctionSignature: "approve(address,uint256)",
-    abiParameters: [commerceAddress(), units.toString()],
+    abiParameters: [contract, units.toString()],
   });
   const callData = encodeFunctionData({
     abi: AGENTIC_COMMERCE_ABI,
@@ -193,7 +205,7 @@ export async function fundJobFromAgentWallet(args: {
   });
   const { txHash: fundTxHash } = await executeAgentCalldata({
     walletId: wallet.circleWalletId,
-    to: commerceAddress(),
+    to: contract,
     callData,
   });
   await recordSpending(wallet.address, usdValue);
@@ -209,7 +221,7 @@ export async function fundJobFromAgentWallet(args: {
     amountUsdc: args.amountUsdc,
     approveTxHash,
     fundTxHash,
-    explorerUrl: explorerTxUrl(fundTxHash),
+    explorerUrl: explorerTxUrl(fundTxHash, chainId),
   };
 }
 
@@ -223,8 +235,11 @@ export async function settleJobFromAgentWallet(args: {
   privyUserId: string;
   jobId: string;
   reason?: string | undefined;
+  chainId?: SupportedTestnetChainId;
 }): Promise<SettleJobResult> {
-  const wallet = await requireWallet(args.privyUserId);
+  const chainId = args.chainId ?? ARC_TESTNET_CHAIN_ID;
+  const contract = commerceAddress(chainId);
+  const wallet = await requireWallet(args.privyUserId, chainId);
   const reason = (args.reason ?? ZERO_BYTES32) as `0x${string}`;
   if (!/^0x[a-fA-F0-9]{64}$/.test(reason)) {
     throw new Error("reason must be a 0x 32-byte hash.");
@@ -236,7 +251,7 @@ export async function settleJobFromAgentWallet(args: {
   });
   const { txHash } = await executeAgentCalldata({
     walletId: wallet.circleWalletId,
-    to: commerceAddress(),
+    to: contract,
     callData,
   });
   await logAudit({
@@ -246,7 +261,7 @@ export async function settleJobFromAgentWallet(args: {
     txHash,
     params: { event: "settle_job", jobId: args.jobId },
   });
-  return { jobId: args.jobId, txHash, explorerUrl: explorerTxUrl(txHash) };
+  return { jobId: args.jobId, txHash, explorerUrl: explorerTxUrl(txHash, chainId) };
 }
 
 export interface JobStatusResult {
@@ -257,21 +272,26 @@ export interface JobStatusResult {
 }
 
 /** Read-only: whether the job exists and has its budget set (funding precondition). */
-export async function getJobStatus(jobId: string): Promise<JobStatusResult> {
+export async function getJobStatus(
+  jobId: string,
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<JobStatusResult> {
   const id = BigInt(jobId);
-  const count = await baseRpcClient.readContract({
-    address: commerceAddress(),
+  const contract = commerceAddress(chainId);
+  const client = getRpcClient(chainId);
+  const count = await client.readContract({
+    address: contract,
     abi: AGENTIC_COMMERCE_ABI,
     functionName: "jobCounter",
   });
   const exists = id < count;
   const budgetSet = exists
-    ? await baseRpcClient.readContract({
-        address: commerceAddress(),
+    ? await client.readContract({
+        address: contract,
         abi: AGENTIC_COMMERCE_ABI,
         functionName: "jobHasBudget",
         args: [id],
       })
     : false;
-  return { jobId, exists, budgetSet, contract: commerceAddress() };
+  return { jobId, exists, budgetSet, contract };
 }

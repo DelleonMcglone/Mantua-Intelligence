@@ -1288,6 +1288,7 @@ async function executeTool(
       }
       const expiresIn = input["expiresInSeconds"];
       return await createJobFromAgentWallet({
+        chainId,
         privyUserId,
         provider,
         evaluator,
@@ -1306,7 +1307,12 @@ async function executeTool(
         throw new Error("amountUsdc must be a positive decimal string.");
       }
       await requireAgentBalance(privyUserId, "USDC", amountUsdc);
-      return await fundJobFromAgentWallet({ privyUserId, jobId, amountUsdc });
+      return await fundJobFromAgentWallet({
+        chainId,
+        privyUserId,
+        jobId,
+        amountUsdc,
+      });
     }
     case "settle_job": {
       const { jobId, reason } = input;
@@ -1314,6 +1320,7 @@ async function executeTool(
         throw new Error("jobId must be a numeric string.");
       }
       return await settleJobFromAgentWallet({
+        chainId,
         privyUserId,
         jobId,
         ...(typeof reason === "string" && reason.length > 0 ? { reason } : {}),
@@ -1324,7 +1331,7 @@ async function executeTool(
       if (typeof jobId !== "string" || !/^\d+$/.test(jobId)) {
         throw new Error("jobId must be a numeric string.");
       }
-      return await getJobStatus(jobId);
+      return await getJobStatus(jobId, chainId);
     }
     case "inspect_hook_contract": {
       return await readHookViaScp();

@@ -124,6 +124,14 @@ const schema = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .default("0x0747EEf0706327138c69792bF28Cd525089e4583"),
 
+  /** ERC-8183 AgenticCommerce proxy on Base Sepolia (same verified source
+   *  as the Arc instance, initialized with Base USDC). Optional — without
+   *  it, agent commerce tools run on Arc only. */
+  BASE_AGENTIC_COMMERCE_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+
   /** Owner EOA private key for the Stable Protection hook's peg-reference admin.
    *  The peg-sync keeper signs `setPegReference` (EUR/USD) with it. Absent →
    *  the keeper is disabled (503). Moves no user funds; only sets the FX
