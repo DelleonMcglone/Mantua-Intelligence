@@ -87,11 +87,11 @@ const AGENTIC_COMMERCE_ABI = [
 ] as const;
 
 function commerceAddress(chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID): `0x${string}` {
-  if (chainId === ARC_TESTNET_CHAIN_ID) return env.AGENTIC_COMMERCE_ADDRESS as `0x${string}`;
-  if (!env.BASE_AGENTIC_COMMERCE_ADDRESS) {
-    throw new Error("Agent commerce is not deployed on Base Sepolia yet — switch to Arc.");
-  }
-  return env.BASE_AGENTIC_COMMERCE_ADDRESS as `0x${string}`;
+  return (
+    chainId === ARC_TESTNET_CHAIN_ID
+      ? env.AGENTIC_COMMERCE_ADDRESS
+      : env.BASE_AGENTIC_COMMERCE_ADDRESS
+  ) as `0x${string}`;
 }
 
 async function requireWallet(privyUserId: string, chainId: SupportedTestnetChainId) {

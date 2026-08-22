@@ -124,13 +124,14 @@ const schema = z.object({
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .default("0x0747EEf0706327138c69792bF28Cd525089e4583"),
 
-  /** ERC-8183 AgenticCommerce proxy on Base Sepolia (same verified source
-   *  as the Arc instance, initialized with Base USDC). Optional — without
-   *  it, agent commerce tools run on Arc only. */
+  /** ERC-8183 AgenticCommerce proxy on Base Sepolia, deployed 2026-08-22
+   *  from the Arcscan-verified Arc implementation source (impl
+   *  0x4c49d46812ae1aafd06e1a9ebcaff7183ec1f9c9), initialized with Base
+   *  USDC; admin/deployer 0x9215…024d, treasury mirrors Arc. */
   BASE_AGENTIC_COMMERCE_ADDRESS: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/)
-    .optional(),
+    .default("0x49da1bdd06fafbadaf941a35d732800c89b2b7bb"),
 
   /** Owner EOA private key for the Stable Protection hook's peg-reference admin.
    *  The peg-sync keeper signs `setPegReference` (EUR/USD) with it. Absent →
