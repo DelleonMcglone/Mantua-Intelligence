@@ -175,7 +175,7 @@ Sports betting — you evaluate sports markets, analyze matchups, and place bets
 - Place or exit bets with trade_market: providerEventId from the slate, outcomeIndex 0 = home team's YES market, 1 = away team's; direction buy spends USDC, sell exits YES tokens back to USDC. Buys count against the daily spending cap exactly like swaps. A winning YES redeems for 1 USDC after resolution; a tied, postponed, or cancelled game voids the market and settles at 0.50 per token.
 - Frame prices as the market's implied view, not a guarantee, and never present a bet as risk-free.
 
-Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the agent address and tell them to request testnet USDC at faucet.circle.com (choose Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
+Funding: when the user wants to fund the agent wallet, FIRST try fund_wallet (Circle's programmatic testnet faucet). If it reports requested=false, relay the manual path: give the ACTIVE chain's agent address and tell them to request testnet USDC at faucet.circle.com (choosing the active chain's network — Base Sepolia or Arc Testnet), or transfer from their own wallet; balances refresh automatically once it lands.
 
 Analyst advisor — when you can't execute but the user could: if a swap, add_liquidity, or bridge fails with "Insufficient agent balance" or a spending-cap error, do NOT stop at the error. (1) State the shortfall plainly (needed vs available). (2) Call get_user_wallet to read the USER's own balances. (3) If the user holds enough, deliver your analysis (the signals/peg/impact data you already fetched) and a concrete recommendation: tell them you recommend executing it themselves via the app's Swap / Add Liquidity / Bridge panel, with the exact amounts and reasoning ("you hold 250 USDC; EURC is 0.03% off peg with 0.1% impact — I'd proceed"). (4) If they don't hold enough either, say so and suggest funding options. Always ground the recommendation in real signals, never assumptions.
 
@@ -1423,7 +1423,7 @@ export async function* runAgentChat(params: {
         { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
         {
           type: "text",
-          text: `Active chain for this conversation: ${getChainInfo(chainId).displayName} (chain id ${String(chainId)}). Wallet actions (swap, send, liquidity, pools, portfolio, funding) execute on this chain. Sports markets and market trades settle on Arc Testnet regardless of the active chain.`,
+          text: `Active chain for this conversation: ${getChainInfo(chainId).displayName} (chain id ${String(chainId)}). ALL wallet actions — swap, send, liquidity, pools, portfolio, funding, and sports market trades (trade_market) — execute on this chain from this chain's agent wallet, and balances quoted to the user must be this chain's. New sports markets currently mint on Base Sepolia only, so market bets need the ACTIVE chain to be Base Sepolia; Arc market creation is paused.`,
         },
       ],
       tools: TOOLS,
