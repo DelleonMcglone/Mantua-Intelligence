@@ -113,7 +113,7 @@ function Hero() {
         Agent-driven sports prediction market
       </h2>
       <p className="mt-6 text-[15px] text-text-dim">
-        Hooks for logic. Agents for action. AI for intelligence.
+        Hooks for liquidity. Agents for action. AI for intelligence.
       </p>
     </section>
   );

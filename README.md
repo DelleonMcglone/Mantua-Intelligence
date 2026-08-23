@@ -111,7 +111,7 @@ capital with it.**
 
 Programmable money buying programmable intelligence, then acting on it in one autonomous loop.
 
-**Hooks for logic. Agents for action. AI for intelligence.**
+**Hooks for liquidity. Agents for action. AI for intelligence.**
 
 ---
 
