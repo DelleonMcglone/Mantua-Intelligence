@@ -16,6 +16,8 @@ import {
 import { assertHookPairAllowedBySymbol } from "./hook-pair-gating.ts";
 import { TtlCache } from "./ttl-cache.ts";
 import { readSlot0 } from "./v4-state-view.ts";
+import { computePoolId } from "./pool-id.ts";
+import { parseAbi } from "viem";
 
 /**
  * Walk a viem error tree to find the raw revert data hex string
@@ -260,6 +262,13 @@ const CANDIDATE_FEES: readonly FeeTier[] = [100, 500, 3000, 10000];
  * just-created pool is picked up within seconds. Collapses the up-to-4
  * slot0 probes this does per quote / max-input call.
  */
+/** The Stable Protection hook's swap-halting threshold (PegMonitor
+ *  SEVERE_BPS): past it the zone is CRITICAL and every swap reverts. */
+const SP_CRITICAL_BPS = 500n;
+const SP_DEVIATION_ABI = parseAbi([
+  "function currentDeviationBps(bytes32 poolId) view returns (uint256)",
+]);
+
 const resolvedFeeCache = new TtlCache<FeeTier | null>();
 const RESOLVED_FEE_TTL_MS = 10 * 60_000;
 const RESOLVED_FEE_NULL_TTL_MS = 10_000;
@@ -282,7 +291,28 @@ async function resolveInitializedFee(
       for (const fee of tiers) {
         const { key } = buildPoolKey(tokenIn, tokenOut, fee, hookAddr, hook, chainId);
         const slot0 = await readSlot0(key, chainId);
-        if (slot0) return fee;
+        if (!slot0) continue;
+        // An initialized Stable Protection pool can still be permanently
+        // dead: past its CRITICAL threshold the hook reverts every swap,
+        // and with swaps blocked the price can never come back. Skip such
+        // a pool so a healthy pool at another tier can serve the pair
+        // (Base carries one of these — a USDC/EURC pool crashed by test
+        // swaps against dust liquidity). Fail-open: if the deviation read
+        // itself fails, keep the old behavior and use the pool.
+        if (hook === "stable-protection") {
+          try {
+            const deviationBps = await getRpcClient(chainId).readContract({
+              address: hookAddr,
+              abi: SP_DEVIATION_ABI,
+              functionName: "currentDeviationBps",
+              args: [computePoolId(key)],
+            });
+            if (deviationBps > SP_CRITICAL_BPS) continue;
+          } catch {
+            // older/newer hook build without the getter — use the pool
+          }
+        }
+        return fee;
       }
       return null;
     },
