@@ -35,23 +35,40 @@ import { planMarketPool } from "./market-pool.ts";
 import type { PlannedMarket } from "./ingest.ts";
 import type { ResolutionPlan, ResolutionSubmitter } from "./resolution.ts";
 
-/** Null when the chain's signer key is not configured — callers degrade
- *  to planning. Arc signs with MARKET_SIGNER_PRIVATE_KEY; Base Sepolia
- *  with BASE_MARKET_SIGNER_PRIVATE_KEY (a different operator key). */
+/** Null when no configured key derives to the chain's authorised operator —
+ *  callers degrade to planning.
+ *
+ *  Keys are routed by DERIVED ADDRESS, not by which env var holds them: a
+ *  key signs on a chain only if it is that chain's Resolver-authorised
+ *  operator (`DYNAMIC_MARKET_BY_CHAIN[chainId].operator`). This guard is
+ *  load-bearing: on 2026-08-20 the Base operator key was pasted over
+ *  MARKET_SIGNER_PRIVATE_KEY (the Arc var), and the sweep then spent three
+ *  days signing Arc transactions from an account with zero Arc balance —
+ *  every market creation failed and no game got a market on any chain.
+ *  Address routing makes a mislabeled var self-heal (the key still signs on
+ *  the chain it is authorised for) instead of silently signing on the wrong
+ *  chain, and a key matching no chain is refused loudly. */
 export function marketSignerWallet(chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID) {
-  const key =
-    chainId === ARC_TESTNET_CHAIN_ID
-      ? env.MARKET_SIGNER_PRIVATE_KEY
-      : env.BASE_MARKET_SIGNER_PRIVATE_KEY;
-  if (!key) return null;
-  const account = privateKeyToAccount(key as `0x${string}`);
-  return chainId === ARC_TESTNET_CHAIN_ID
-    ? createWalletClient({ account, chain: arcTestnet, transport: http(env.ARC_RPC_URL) })
-    : createWalletClient({
-        account,
-        chain: baseSepolia,
-        transport: http(env.BASE_SEPOLIA_RPC_URL),
-      });
+  const operator = DYNAMIC_MARKET_BY_CHAIN[chainId]?.operator.toLowerCase();
+  if (!operator) return null;
+  const candidates = [env.MARKET_SIGNER_PRIVATE_KEY, env.BASE_MARKET_SIGNER_PRIVATE_KEY];
+  for (const key of candidates) {
+    if (!key) continue;
+    const account = privateKeyToAccount(key as `0x${string}`);
+    if (account.address.toLowerCase() !== operator) continue;
+    return chainId === ARC_TESTNET_CHAIN_ID
+      ? createWalletClient({ account, chain: arcTestnet, transport: http(env.ARC_RPC_URL) })
+      : createWalletClient({
+          account,
+          chain: baseSepolia,
+          transport: http(env.BASE_SEPOLIA_RPC_URL),
+        });
+  }
+  logger.warn(
+    { chainId, operator },
+    "markets: no configured signer key derives to this chain's operator — degrading to planning",
+  );
+  return null;
 }
 
 /** The chain's markets/periphery/dynamic-market config, or throw. */
