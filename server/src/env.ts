@@ -20,8 +20,12 @@ const schema = z.object({
    *  private endpoint (Alchemy/QuickNode) in production for headroom. */
   ARC_RPC_URL: z.url().default("https://rpc.testnet.arc.network"),
 
-  /** Base Sepolia RPC URL — server-side viem reads/writes on 84532. */
-  BASE_SEPOLIA_RPC_URL: z.url().default("https://sepolia.base.org"),
+  /** Base Sepolia RPC URL — server-side viem reads/writes on 84532.
+   *  Default is publicnode, NOT the official https://sepolia.base.org:
+   *  that host 503s intermittently and its load-balanced backends can lag
+   *  behind head, so a read right after a mined tx silently returns "0x"
+   *  (2026-08-23: this broke every market bootstrap in the sweep). */
+  BASE_SEPOLIA_RPC_URL: z.url().default("https://base-sepolia-rpc.publicnode.com"),
 
   /** Market signer/operator key for Base Sepolia (0x9215…024d). Optional —
    *  without it, market minting/resolution runs on Arc only. */

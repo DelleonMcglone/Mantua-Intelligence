@@ -70,14 +70,16 @@ export const arcTestnet = {
 } satisfies Chain;
 
 /**
- * Base Sepolia — Base's public testnet (84532), ETH gas. The public RPC
- * (`https://sepolia.base.org`) has no per-IP pathology like Arc's hosts,
- * so no proxy/fallback reorder is needed; a `VITE_BASE_SEPOLIA_RPC_URL`
- * override still goes first when set.
+ * Base Sepolia — Base's public testnet (84532), ETH gas. Publicnode leads:
+ * the official `https://sepolia.base.org` 503s intermittently and its
+ * load-balanced backends can lag behind head, so fresh contracts read as
+ * empty ("0x") right after deployment. It stays as the fallback; a
+ * `VITE_BASE_SEPOLIA_RPC_URL` override still goes first when set.
  */
 const baseRpcOverride = cleanEnv(viteEnv["VITE_BASE_SEPOLIA_RPC_URL"]);
 const BASE_SEPOLIA_RPC_URLS = [
   ...(baseRpcOverride ? [baseRpcOverride] : []),
+  "https://base-sepolia-rpc.publicnode.com",
   "https://sepolia.base.org",
 ];
 
@@ -131,7 +133,7 @@ export const CHAIN_INFO: Record<SupportedTestnetChainId, ChainInfo> = {
     shortName: "Base",
     displayName: "Base Sepolia",
     viemChain: baseSepolia,
-    defaultRpcUrl: "https://sepolia.base.org",
+    defaultRpcUrl: "https://base-sepolia-rpc.publicnode.com",
     explorerUrl: "https://sepolia.basescan.org",
     explorerName: "BaseScan",
     dotColor: "#0000ff",
@@ -225,8 +227,8 @@ export function getRpcUrl(chainId: SupportedTestnetChainId): string {
  * caching), with the public hosts as direct fallbacks and a
  * `VITE_ARC_RPC_URL` override first.
  *
- * Base Sepolia: `https://sepolia.base.org` has no such pathology, so it is
- * hit directly (the `/api/rpc` proxy is Arc-only and is NOT in this list).
+ * Base Sepolia: publicnode first, official host as fallback (the `/api/rpc`
+ * proxy is Arc-only and is NOT in this list).
  * Use this instead of `http(getRpcUrl(chainId))`.
  */
 export function getRpcTransport(chainId: SupportedTestnetChainId): FallbackTransport {
