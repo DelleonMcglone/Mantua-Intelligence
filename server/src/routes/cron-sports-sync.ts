@@ -70,8 +70,6 @@ cronSportsSyncRouter.get(
         reclaimed[String(chainId)] = { error: err instanceof Error ? err.message : String(err) };
       }
     }
-    results["reclaimed"] = reclaimed;
-
     for (const league of LEAGUES) {
       try {
         const perChain: Record<string, unknown> = {};
@@ -107,6 +105,7 @@ cronSportsSyncRouter.get(
     res.status(failures === LEAGUES.length ? 502 : 200).json({
       ok: failures < LEAGUES.length,
       breakers: espn.breakerState(),
+      reclaimed,
       leagues: results,
     });
   },
