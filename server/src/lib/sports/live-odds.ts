@@ -8,39 +8,66 @@
 
 import { computeMarketId } from "../market-id.ts";
 import { sqrtPriceX96ToProbability } from "../probability.ts";
-import { baseRpcClient } from "../rpc-client.ts";
+import { getRpcClient } from "../rpc-client.ts";
 import {
-  MARKETS_ARC,
-  MARKETS_PERIPHERY_ARC,
+  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
+  type SupportedTestnetChainId,
+} from "../chains.ts";
+import {
+  MARKETS_BY_CHAIN,
+  MARKETS_PERIPHERY_BY_CHAIN,
   MARKET_ABI,
   MARKET_FACTORY_ABI,
   STATE_VIEW_ABI,
 } from "../markets-contracts.ts";
-import { DYNAMIC_MARKET_ARC } from "../v4-contracts.ts";
+import { DYNAMIC_MARKET_BY_CHAIN } from "../v4-contracts.ts";
 import { planMarketPool } from "./market-pool.ts";
 import type { PublicSlate } from "./public-slate.ts";
 
 const CACHE_TTL_MS = 15_000;
 const cache = new Map<string, { at: number; value: PublicSlate }>();
 
-async function liveHomeProbabilityBps(providerEventId: string): Promise<number | null> {
-  const marketId = computeMarketId({ providerEventId, marketType: "moneyline", outcomeIndex: 0 });
-  const market = await baseRpcClient.readContract({
-    address: MARKETS_ARC.factory,
+/** Chains probed for a live pool price, in order. Base first: it is the
+ *  app's default chain and (since 2026-08-23) the only one minting new
+ *  markets, so the common case resolves in one probe. */
+const LIVE_ODDS_CHAINS: readonly SupportedTestnetChainId[] = [
+  BASE_SEPOLIA_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID,
+];
+
+async function chainHomeProbabilityBps(
+  providerEventId: string,
+  chainId: SupportedTestnetChainId,
+): Promise<number | null> {
+  const markets = MARKETS_BY_CHAIN[chainId];
+  const periphery = MARKETS_PERIPHERY_BY_CHAIN[chainId];
+  const dm = DYNAMIC_MARKET_BY_CHAIN[chainId];
+  if (!markets || !periphery || !dm) return null;
+  const client = getRpcClient(chainId);
+
+  const marketId = computeMarketId({
+    providerEventId,
+    marketType: "moneyline",
+    outcomeIndex: 0,
+    chainId,
+  });
+  const market = await client.readContract({
+    address: markets.factory,
     abi: MARKET_FACTORY_ABI,
     functionName: "marketOf",
     args: [marketId],
   });
   if (market === "0x0000000000000000000000000000000000000000") return null;
 
-  const yesToken = await baseRpcClient.readContract({
+  const yesToken = await client.readContract({
     address: market,
     abi: MARKET_ABI,
     functionName: "yesToken",
   });
-  const plan = planMarketPool(yesToken, MARKETS_ARC.collateral, DYNAMIC_MARKET_ARC.hook, 0.5);
-  const [sqrtPriceX96] = await baseRpcClient.readContract({
-    address: MARKETS_PERIPHERY_ARC.stateView,
+  const plan = planMarketPool(yesToken, markets.collateral, dm.hook, 0.5);
+  const [sqrtPriceX96] = await client.readContract({
+    address: periphery.stateView,
     abi: STATE_VIEW_ABI,
     functionName: "getSlot0",
     args: [plan.poolId],
@@ -48,6 +75,19 @@ async function liveHomeProbabilityBps(providerEventId: string): Promise<number |
   if (sqrtPriceX96 === 0n) return null; // pool not initialized
   const p = sqrtPriceX96ToProbability(sqrtPriceX96, plan.yesIsToken0);
   return Math.round(p * 10_000);
+}
+
+async function liveHomeProbabilityBps(providerEventId: string): Promise<number | null> {
+  for (const chainId of LIVE_ODDS_CHAINS) {
+    try {
+      const p = await chainHomeProbabilityBps(providerEventId, chainId);
+      if (p !== null) return p;
+    } catch {
+      // fail-open per chain — a hiccup on one chain must not hide the
+      // other chain's price (or blank the board).
+    }
+  }
+  return null;
 }
 
 /**
