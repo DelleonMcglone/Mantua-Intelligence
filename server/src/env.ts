@@ -67,8 +67,11 @@ const schema = z.object({
    *  the opening price. 0 disables seeding. At 1 USDC a ~$0.50 bet
    *  already exhausted the book, so 2 USDC is the floor for a usable
    *  testnet market; the sweep tops thin pools up to the current target
-   *  on every tick, so raising this deepens existing pools too. */
-  MARKET_SEED_USDC: z.coerce.number().int().min(0).max(50_000_000).default(2_000_000),
+   *  on every tick, so raising this deepens existing pools too. The
+   *  settled-market sweeper (reclaimSettledMarkets) recycles each day's
+   *  seed capital back to the signer, so this is working FLOAT (~1–2 days
+   *  of slates outstanding), not daily burn. */
+  MARKET_SEED_USDC: z.coerce.number().int().min(0).max(50_000_000).default(10_000_000),
 
   /** B9-007 — strategies-only global kill: every armed hedging strategy
    *  disarms on the next engine tick and nothing new fires. Narrower than

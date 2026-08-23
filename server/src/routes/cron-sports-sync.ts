@@ -3,8 +3,12 @@ import { db } from "../db/client.ts";
 import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { refreshSlate } from "../lib/sports/ingest.ts";
-import { upsertEvents, upsertMarketRows } from "../lib/sports/store.ts";
-import { createMarketsOnChain, marketSignerWallet } from "../lib/sports/markets-onchain.ts";
+import { listReclaimCandidates, upsertEvents, upsertMarketRows } from "../lib/sports/store.ts";
+import {
+  createMarketsOnChain,
+  marketSignerWallet,
+  reclaimSettledMarkets,
+} from "../lib/sports/markets-onchain.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import {
   ARC_TESTNET_CHAIN_ID,
@@ -52,6 +56,22 @@ cronSportsSyncRouter.get(
     let failures = 0;
 
     const chains = marketChains();
+    // Recycle first: withdrawing seed LP + redeeming outcome tokens from
+    // finished markets tops the signer back up, so today's seeding below
+    // runs on yesterday's float instead of fresh faucet drips.
+    const reclaimed: Record<string, unknown> = {};
+    for (const chainId of chains) {
+      try {
+        const candidates = await listReclaimCandidates(db, chainId);
+        const r = await reclaimSettledMarkets(candidates, chainId);
+        reclaimed[String(chainId)] = r ?? "disabled (no signer for this chain)";
+      } catch (err) {
+        logger.warn({ chainId, err }, "sports-sync: reclaim failed");
+        reclaimed[String(chainId)] = { error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    results["reclaimed"] = reclaimed;
+
     for (const league of LEAGUES) {
       try {
         const perChain: Record<string, unknown> = {};

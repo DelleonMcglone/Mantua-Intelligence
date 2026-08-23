@@ -118,6 +118,9 @@ export const RESOLVER_CONTRACT_ABI = parseAbi([
 export const MARKET_ABI = parseAbi([
   "function yesToken() view returns (address)",
   "function noToken() view returns (address)",
+  "function state() view returns (uint8)",
+  "function redeem()",
+  "function redeemInvalid()",
 ]);
 
 export const POOL_MANAGER_INIT_ABI = parseAbi([
@@ -133,6 +136,7 @@ export const REGISTRY_ABI = parseAbi([
 export const STATE_VIEW_ABI = parseAbi([
   "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
   "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+  "function getPositionLiquidity(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity)",
 ]);
 
 export const MARKET_SPLIT_ABI = parseAbi(["function split(uint256 amount)"]);

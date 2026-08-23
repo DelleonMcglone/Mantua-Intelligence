@@ -208,3 +208,29 @@ export async function upsertMarketRows(
   }
   return written;
 }
+
+/**
+ * Markets worth a reclaim scan on one chain: any market whose game started
+ * in the last 14 days (older ones have long been reclaimed — on-chain state
+ * makes a re-scan a no-op anyway, this bound just caps the read fan-out).
+ * The sweeper reads each market's on-chain state to decide what to do, so
+ * the DB's `state` column is deliberately not trusted here.
+ */
+export async function listReclaimCandidates(
+  db: DB,
+  chainId: number,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): Promise<{ marketId: string; yesToken: string | null; noToken: string | null }[]> {
+  const windowStart = new Date((nowSeconds - 14 * 86_400) * 1000);
+  const now = new Date(nowSeconds * 1000);
+  return db
+    .select({ marketId: markets.marketId, yesToken: markets.yesToken, noToken: markets.noToken })
+    .from(markets)
+    .innerJoin(events, eq(markets.eventId, events.id))
+    .where(
+      and(
+        eq(markets.chainId, chainId),
+        sql`${events.startsAt} >= ${windowStart} AND ${events.startsAt} < ${now}`,
+      ),
+    );
+}

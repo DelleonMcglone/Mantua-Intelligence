@@ -10,7 +10,7 @@
  * burning gas, matching `executeResolution`'s isolation contract.
  */
 
-import { createWalletClient, http } from "viem";
+import { createWalletClient, encodePacked, http, keccak256, parseAbi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet, baseSepolia } from "viem/chains";
 import { env } from "../../env.ts";
@@ -445,6 +445,177 @@ export function liveResolutionSubmitter(
  * simulation per market per tick and reports as failures. `marketOf` reads
  * batch through the client's multicall, so this is one call, not N.
  */
+
+// ─── Liquidity recycling (settled-market sweeper) ────────────────────────
+
+/** The tick ranges seeds have ever been placed at, newest first: full-range
+ *  (current sizing) and the legacy ±11520 band. A pool can hold a position
+ *  at each (band seed + full-range top-up), so reclaim checks both. */
+const SEED_RANGES: readonly number[] = [887_220, 11_520];
+const SEED_SALT = `0x${"00".repeat(32)}` as const;
+
+const ERC20_BALANCE_OF_ABI = parseAbi([
+  "function balanceOf(address account) view returns (uint256)",
+]);
+
+/** v4 Position.calculatePositionKey: keccak256(abi.encodePacked(owner,
+ *  tickLower, tickUpper, salt)). Owner is the LP router — the test router
+ *  holds every position opened through it. */
+function positionKey(owner: `0x${string}`, tickLower: number, tickUpper: number): `0x${string}` {
+  return keccak256(
+    encodePacked(
+      ["address", "int24", "int24", "bytes32"],
+      [owner, tickLower, tickUpper, SEED_SALT],
+    ),
+  );
+}
+
+export interface ReclaimCandidate {
+  marketId: string;
+  yesToken: string | null;
+  noToken: string | null;
+}
+
+export interface ReclaimSummary {
+  scanned: number;
+  liquidityWithdrawn: number;
+  redeemed: number;
+  skippedActive: number;
+  failures: { marketId: string; error: string }[];
+}
+
+/**
+ * Recycle the signer's capital out of finished markets: withdraw the seed
+ * LP positions, then redeem the signer's outcome tokens for USDC
+ * (`redeem` on RESOLVED/SETTLED, `redeemInvalid` on INVALID). Runs before
+ * the day's seeding so yesterday's float funds today's books instead of
+ * relying on faucet drips.
+ *
+ * Idempotent by on-chain state: a reclaimed market has zero position
+ * liquidity and zero signer token balances, so re-scanning it costs only
+ * reads. OPEN/FROZEN markets are skipped — their capital is still working.
+ */
+export async function reclaimSettledMarkets(
+  candidates: readonly ReclaimCandidate[],
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<ReclaimSummary | null> {
+  const wallet = marketSignerWallet(chainId);
+  if (!wallet) return null;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
+  const lpRouter = cfg.periphery.poolModifyLiquidityTest;
+  const signer = wallet.account.address;
+
+  const summary: ReclaimSummary = {
+    scanned: 0,
+    liquidityWithdrawn: 0,
+    redeemed: 0,
+    skippedActive: 0,
+    failures: [],
+  };
+
+  for (const m of candidates) {
+    summary.scanned += 1;
+    try {
+      const market = await client.readContract({
+        address: cfg.markets.factory,
+        abi: MARKET_FACTORY_ABI,
+        functionName: "marketOf",
+        args: [m.marketId as `0x${string}`],
+      });
+      if (market === "0x0000000000000000000000000000000000000000") continue;
+      const state = await client.readContract({
+        address: market,
+        abi: MARKET_ABI,
+        functionName: "state",
+      });
+      // Market.State: 0 OPEN, 1 FROZEN, 2 RESOLVED, 3 SETTLED, 4 INVALID.
+      if (state === 0 || state === 1) {
+        summary.skippedActive += 1;
+        continue;
+      }
+      const yesToken = (m.yesToken ??
+        (await client.readContract({
+          address: market,
+          abi: MARKET_ABI,
+          functionName: "yesToken",
+        }))) as `0x${string}`;
+      const plan = planMarketPool(yesToken, cfg.markets.collateral, cfg.dm.hook, 0.5);
+
+      for (const range of SEED_RANGES) {
+        const positionLiquidity = await client.readContract({
+          address: cfg.periphery.stateView,
+          abi: STATE_VIEW_ABI,
+          functionName: "getPositionLiquidity",
+          args: [plan.poolId, positionKey(lpRouter, -range, range)],
+        });
+        if (positionLiquidity === 0n) continue;
+        const { request } = await client.simulateContract({
+          account: wallet.account,
+          address: lpRouter,
+          abi: LP_ROUTER_ABI,
+          functionName: "modifyLiquidity",
+          args: [
+            plan.key,
+            {
+              tickLower: -range,
+              tickUpper: range,
+              liquidityDelta: -positionLiquidity,
+              salt: SEED_SALT,
+            },
+            "0x",
+          ],
+        });
+        await writeAndWait(wallet, request, chainId);
+        summary.liquidityWithdrawn += 1;
+      }
+
+      // Redeem whatever outcome tokens the signer now holds. redeem()
+      // reverts NothingToRedeem on a zero balance, so gate on balances.
+      const noToken = (m.noToken ??
+        (await client.readContract({
+          address: market,
+          abi: MARKET_ABI,
+          functionName: "noToken",
+        }))) as `0x${string}`;
+      const [yesBal, noBal] = await Promise.all(
+        [yesToken, noToken].map((t) =>
+          client.readContract({
+            address: t,
+            abi: ERC20_BALANCE_OF_ABI,
+            functionName: "balanceOf",
+            args: [signer],
+          }),
+        ),
+      );
+      const fn = state === 4 ? "redeemInvalid" : "redeem";
+      if (yesBal > 0n || noBal > 0n) {
+        try {
+          const { request } = await client.simulateContract({
+            account: wallet.account,
+            address: market,
+            abi: MARKET_ABI,
+            functionName: fn,
+          });
+          await writeAndWait(wallet, request, chainId);
+          summary.redeemed += 1;
+        } catch {
+          // Holding only the losing side is normal — nothing to redeem.
+        }
+      }
+    } catch (err) {
+      summary.failures.push({
+        marketId: m.marketId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  if (summary.liquidityWithdrawn > 0 || summary.redeemed > 0) {
+    logger.info({ chainId, ...summary }, "markets: reclaimed settled-market capital");
+  }
+  return summary;
+}
+
 export async function filterPlanToExistingMarkets(
   plan: ResolutionPlan,
   chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
