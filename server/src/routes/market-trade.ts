@@ -3,7 +3,11 @@ import { z } from "zod";
 import { logger } from "../lib/logger.ts";
 import { requireAuth } from "../middleware/auth.ts";
 import { writeRateLimiter } from "../middleware/rate-limit.ts";
-import { NoMarketError, buildMarketTrade } from "../lib/sports/market-trade-build.ts";
+import {
+  MarketClosedError,
+  NoMarketError,
+  buildMarketTrade,
+} from "../lib/sports/market-trade-build.ts";
 import { isSupportedTestnetChainId } from "../lib/chains.ts";
 
 export const marketTradeRouter = Router();
@@ -57,6 +61,10 @@ marketTradeRouter.post(
     } catch (err) {
       if (err instanceof NoMarketError) {
         res.status(404).json({ error: "No market for this game yet", code: "NO_MARKET" });
+        return;
+      }
+      if (err instanceof MarketClosedError) {
+        res.status(409).json({ error: err.message, code: "BETTING_CLOSED" });
         return;
       }
       logger.warn({ err }, "market-trade: quote failed");

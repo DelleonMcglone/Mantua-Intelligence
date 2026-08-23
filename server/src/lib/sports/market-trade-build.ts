@@ -7,6 +7,8 @@
  */
 
 import { parseAbi } from "viem";
+
+const MARKET_STARTS_AT_ABI = parseAbi(["function startsAt() view returns (uint64)"]);
 import { ARC_TESTNET_CHAIN_ID, type SupportedTestnetChainId } from "../chains.ts";
 import { getRpcClient } from "../rpc-client.ts";
 import { computeMarketId } from "../market-id.ts";
@@ -30,6 +32,19 @@ export class NoMarketError extends Error {
   constructor(providerEventId: string) {
     super(`No market for game ${providerEventId}`);
     this.name = "NoMarketError";
+  }
+}
+
+/** Betting window is over: the game has kicked off (or finished). The
+ *  hook enforces this on-chain with its timestamp freeze — this check
+ *  turns that guaranteed revert into a clean, quotable-in-advance error. */
+export class MarketClosedError extends Error {
+  constructor(providerEventId: string) {
+    super(
+      `Betting is closed for game ${providerEventId} — it has already started. ` +
+        `Positions can still be redeemed after the market resolves.`,
+    );
+    this.name = "MarketClosedError";
   }
 }
 
@@ -84,6 +99,14 @@ export async function buildMarketTrade(args: {
     abi: MARKET_ABI,
     functionName: "yesToken",
   });
+  const startsAt = await client.readContract({
+    address: marketAddress,
+    abi: MARKET_STARTS_AT_ABI,
+    functionName: "startsAt",
+  });
+  if (Number(startsAt) <= Math.floor(Date.now() / 1000)) {
+    throw new MarketClosedError(args.providerEventId);
+  }
   const plan = planMarketPool(yesToken, markets.collateral, dm.hook, 0.5);
 
   const inputIsYes = args.direction === "sell";
