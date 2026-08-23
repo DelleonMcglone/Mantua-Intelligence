@@ -621,8 +621,8 @@ function HomeFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
           onOpenLeague={(sport) => {
             setRoute({ kind: "market", sport: sport.id });
           }}
-          onTrade={(sport) => {
-            setRoute({ kind: "market", sport: sport.id });
+          onTrade={(sport, eventId) => {
+            setRoute({ kind: "market", sport: sport.id, selectEventId: eventId });
           }}
         />
       </div>
