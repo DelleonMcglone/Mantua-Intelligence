@@ -60,10 +60,15 @@ const schema = z.object({
     .union([z.literal("0"), z.literal("1")])
     .default("0")
     .transform((v) => v === "1"),
-  /** Per-market liquidity seed, in USDC units (6dp; 1000000 = 1 USDC).
-   *  The signer splits this into a YES/NO set and LPs the YES/USDC pool so
-   *  new markets are tradeable at the opening odds. 0 disables seeding. */
-  MARKET_SEED_USDC: z.coerce.number().int().min(0).max(50_000_000).default(1_000_000),
+  /** Per-market liquidity seed budget, in USDC units (6dp; 1000000 =
+   *  1 USDC). The signer splits into a YES/NO set and LPs the YES/USDC
+   *  pool full-range so new markets are tradeable at the opening odds;
+   *  actual spend per market lands at ~1–1.4× this figure depending on
+   *  the opening price. 0 disables seeding. At 1 USDC a ~$0.50 bet
+   *  already exhausted the book, so 2 USDC is the floor for a usable
+   *  testnet market; the sweep tops thin pools up to the current target
+   *  on every tick, so raising this deepens existing pools too. */
+  MARKET_SEED_USDC: z.coerce.number().int().min(0).max(50_000_000).default(2_000_000),
 
   /** B9-007 — strategies-only global kill: every armed hedging strategy
    *  disarms on the next engine tick and nothing new fires. Narrower than

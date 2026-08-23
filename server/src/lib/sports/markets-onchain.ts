@@ -122,10 +122,20 @@ export interface MarketCreationSummary {
  *  the registry timestamp only drives the hook's near-resolution premium. */
 const RESOLUTION_WINDOW_SECONDS = 4 * 3600;
 
-/** Wide range straddling most opening odds (p ≈ 0.09–0.91); multiple of
- *  the 60 tick spacing. Outside it a seed goes single-sided, which the
- *  conservative L sizing below still affords. */
-const SEED_TICK = 11_520;
+/** Seed liquidity FULL-range (v4 min/max usable ticks at 60 spacing).
+ *  A bounded band (±11520, p ≈ 0.09–0.91) made every quote that would push
+ *  the price past the band revert `NotEnoughLiquidity` — on 1-USDC-deep
+ *  testnet pools that was any bet over ~$0.50. Full range means a quote
+ *  always succeeds; a large bet pays visible slippage instead of erroring,
+ *  which is the right failure mode for a testnet book. */
+const SEED_TICK = 887_220;
+/** Target pool liquidity per seed budget: the split burns half the budget
+ *  into YES+NO, the LP leg pairs YES with the remaining USDC, and 1.8×
+ *  headroom keeps the amounts affordable at any in-range opening price.
+ *  (The previous seed/3 sizing used ~15% of what the budget could buy.) */
+function seedTargetLiquidity(seed: bigint): bigint {
+  return (seed * 9n) / 20n;
+}
 
 async function writeAndWait(
   wallet: NonNullable<ReturnType<typeof marketSignerWallet>>,
@@ -162,7 +172,16 @@ async function seedPoolLiquidity(
     functionName: "getLiquidity",
     args: [plan.poolId],
   });
-  if (liquidity > 0n) return false;
+  // Heal to target, don't just fire once: a pool seeded under an older
+  // (thinner) sizing, or while the signer was short, deepens on the next
+  // sweep instead of being skipped forever.
+  const target = seedTargetLiquidity(seed);
+  if (liquidity >= target) return false;
+  const delta = target - liquidity;
+  // The split burns `splitAmount` USDC into YES+NO; the LP leg then needs
+  // up to ~1.8× `delta` of each side at in-range extremes, which
+  // `splitAmount = 2×delta ≥ 1.8×delta` affords with margin.
+  const splitAmount = delta * 2n;
 
   const approveThenCall = async (token: `0x${string}`, spender: `0x${string}`, amount: bigint) => {
     const { request } = await client.simulateContract({
@@ -175,22 +194,22 @@ async function seedPoolLiquidity(
     await writeAndWait(wallet, request, chainId);
   };
 
-  // 1. Split seed USDC into YES + NO (NO stays with the signer; only the
+  // 1. Split USDC into YES + NO (NO stays with the signer; only the
   //    YES/USDC pool exists — DM-101's complementary market covers NO).
-  await approveThenCall(cfg.markets.collateral, marketAddress, seed);
+  await approveThenCall(cfg.markets.collateral, marketAddress, splitAmount);
   const { request: splitReq } = await client.simulateContract({
     account: wallet.account,
     address: marketAddress,
     abi: MARKET_SPLIT_ABI,
     functionName: "split",
-    args: [seed],
+    args: [splitAmount],
   });
   await writeAndWait(wallet, splitReq, chainId);
 
   // 2. LP: approve both sides to the liquidity router and add.
   const yesToken = plan.yesIsToken0 ? plan.key.currency0 : plan.key.currency1;
-  await approveThenCall(yesToken, cfg.periphery.poolModifyLiquidityTest, seed);
-  await approveThenCall(cfg.markets.collateral, cfg.periphery.poolModifyLiquidityTest, seed);
+  await approveThenCall(yesToken, cfg.periphery.poolModifyLiquidityTest, splitAmount);
+  await approveThenCall(cfg.markets.collateral, cfg.periphery.poolModifyLiquidityTest, splitAmount);
   const { request: lpReq } = await client.simulateContract({
     account: wallet.account,
     address: cfg.periphery.poolModifyLiquidityTest,
@@ -201,7 +220,7 @@ async function seedPoolLiquidity(
       {
         tickLower: -SEED_TICK,
         tickUpper: SEED_TICK,
-        liquidityDelta: seed / 3n,
+        liquidityDelta: delta,
         salt: `0x${"00".repeat(32)}`,
       },
       "0x",
