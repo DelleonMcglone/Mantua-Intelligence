@@ -16,6 +16,7 @@ import {
 import { drizzleResolutionLog } from "../lib/sports/resolution-store.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
 import { requireCronSecret } from "../middleware/cron-auth.ts";
+import { parseDates } from "./sports-slate.ts";
 
 export const cronResolutionRouter = Router();
 
@@ -43,7 +44,15 @@ const LEAGUES: readonly LeagueSlug[] = ["nfl", "wnba"];
 cronResolutionRouter.get(
   "/api/cron/resolution",
   requireCronSecret,
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
+    // Optional ?dates=YYYYMMDD-YYYYMMDD: settle games from a past window
+    // that already rotated off the provider's current scoreboard (e.g. the
+    // sweep was down over their game day). Same validation as the slate.
+    const dates = parseDates(req.query.dates);
+    if (dates !== null && typeof dates === "object") {
+      res.status(400).json({ error: dates.error, code: "BAD_DATES" });
+      return;
+    }
     const plans: Record<string, unknown> = {};
     let failures = 0;
 
@@ -52,7 +61,7 @@ cronResolutionRouter.get(
 
     for (const league of LEAGUES) {
       try {
-        const slate = await espn.getSlate(league);
+        const slate = await espn.getSlate(league, dates ?? undefined);
         const perChain: Record<string, unknown> = {};
         for (const chainId of chains) {
           const submitter = liveResolutionSubmitter(chainId);

@@ -38,7 +38,7 @@ function parseYmd(ymd: string): number | null {
 }
 
 /** Validated `?dates=` range, or null when absent, or an error string. */
-function parseDates(raw: unknown): string | null | { error: string } {
+export function parseDates(raw: unknown): string | null | { error: string } {
   if (raw === undefined) return null;
   if (typeof raw !== "string") return { error: "dates must be YYYYMMDD-YYYYMMDD" };
   const m = DATES_RE.exec(raw);

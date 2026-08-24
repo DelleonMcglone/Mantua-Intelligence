@@ -251,6 +251,12 @@ export async function executeResolution(
 
   for (const s of plan.submissions) {
     try {
+      // The Resolver requires FROZEN before resolve/void, and a market that
+      // missed its freeze window (a game finishing between sweeps, or the
+      // sweep being down over kickoff) would otherwise be stuck NotFrozen
+      // forever. Freeze is idempotent — already-frozen reverts are treated
+      // as done by the submitter — so sweep it in-line before settling.
+      await submitter.freeze(s.marketId).catch(() => null);
       const txHash =
         s.kind === "resolve"
           ? await submitter.resolve(s.marketId, s.outcome ?? OUTCOME_YES)
