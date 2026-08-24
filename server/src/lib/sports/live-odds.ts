@@ -7,7 +7,7 @@
  */
 
 import { computeMarketId } from "../market-id.ts";
-import { sqrtPriceX96ToProbability } from "../probability.ts";
+import { sqrtPriceX96ToRawProbability } from "../probability.ts";
 import { getRpcClient } from "../rpc-client.ts";
 import {
   BASE_SEPOLIA_CHAIN_ID,
@@ -73,8 +73,12 @@ async function chainHomeProbabilityBps(
     args: [plan.poolId],
   });
   if (sqrtPriceX96 === 0n) return null; // pool not initialized
-  const p = sqrtPriceX96ToProbability(sqrtPriceX96, plan.yesIsToken0);
-  return Math.round(p * 10_000);
+  // A thin testnet book can be pushed outside [0,1] (a YES trading above
+  // 1 USDC — economically absurd but nothing forces the split/merge arb
+  // here). sqrtPriceX96ToProbability throws on that, which blanked the
+  // board's odds for the whole game; clamp to the display band instead.
+  const raw = sqrtPriceX96ToRawProbability(sqrtPriceX96, plan.yesIsToken0);
+  return Math.round(Math.min(0.99, Math.max(0.01, raw)) * 10_000);
 }
 
 async function liveHomeProbabilityBps(providerEventId: string): Promise<number | null> {

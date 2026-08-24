@@ -94,6 +94,25 @@ export function probabilityToSqrtPriceX96(
   return BigInt(Math.floor(Math.sqrt(ratio) * Number(Q96)));
 }
 
+/** `sqrtPriceX96` → raw YES price in USDC, UNVALIDATED: a thin pool pushed
+ *  past the [0, 1] redemption band reports its actual (absurd) price, e.g.
+ *  3.1. Callers that render a probability clamp for display; callers that
+ *  need the invariant use `sqrtPriceX96ToProbability`, which throws. */
+export function sqrtPriceX96ToRawProbability(
+  sqrtPriceX96: bigint,
+  yesIsToken0: boolean,
+  yesDecimals = 6,
+  usdcDecimals = 6,
+): number {
+  if (sqrtPriceX96 <= 0n) {
+    throw new InvalidProbabilityError("sqrtPriceX96 must be positive");
+  }
+  const sqrtRatio = Number(sqrtPriceX96) / Number(Q96);
+  const ratio = sqrtRatio * sqrtRatio;
+  const priceYesInUsdc = yesIsToken0 ? ratio : 1 / ratio;
+  return priceYesInUsdc / 10 ** (usdcDecimals - yesDecimals);
+}
+
 /** `sqrtPriceX96` → implied probability. Inverse of the above. */
 export function sqrtPriceX96ToProbability(
   sqrtPriceX96: bigint,
