@@ -8,7 +8,6 @@ import {
   Wallet,
   BarChart3,
   CandlestickChart,
-  Play,
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme.tsx";
 import { Logo } from "@/components/shell/Logo.tsx";
@@ -120,16 +119,9 @@ function Hero() {
 }
 
 /**
- * Placeholder standing in for the demo video while it's being re-cut.
- * To restore playback, swap the inner block for:
- *
- *   <video className="block w-full h-auto" controls playsInline
- *          preload="metadata" aria-label="Mantua demo video">
- *     <source src="/assets/demo.mp4" type="video/mp4" />
- *   </video>
- *
- * The 16:9 box keeps the section the same height either way, so the
- * page below it doesn't shift when the real video lands.
+ * The product demo video (/assets/demo.mp4, H.264). preload="metadata"
+ * keeps the 32 MB file off the critical path — only the first frame and
+ * duration load until the visitor hits play.
  */
 function DemoVideo() {
   return (
@@ -140,12 +132,15 @@ function DemoVideo() {
           background: "radial-gradient(circle at 50% 50%, rgba(139,108,240,0.08), rgba(0,0,0,0))",
         }}
       >
-        <div className="aspect-video w-full flex flex-col items-center justify-center gap-3 bg-panel-solid/40">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-border-soft bg-accent/10">
-            <Play className="h-5 w-5 translate-x-px text-accent" />
-          </span>
-          <p className="text-[13px] font-medium text-text-dim">Demo video coming soon</p>
-        </div>
+        <video
+          className="block w-full h-auto"
+          controls
+          playsInline
+          preload="metadata"
+          aria-label="Mantua demo video"
+        >
+          <source src="/assets/demo.mp4" type="video/mp4" />
+        </video>
       </div>
     </section>
   );
