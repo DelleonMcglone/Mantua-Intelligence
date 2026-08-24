@@ -103,7 +103,7 @@ poolCreateRouter.post(
       // (the RPC's eth_estimateGas falls back to the block cap when the
       // call reverts). Reading slot0 lets us return a clean 409 with
       // the existing PoolKey so the client can route to add-liquidity.
-      const existing = await readSlot0(key);
+      const existing = await readSlot0(key, chainId);
       if (existing) {
         res.status(409).json({
           error: "Pool already exists. You can add liquidity to it.",
