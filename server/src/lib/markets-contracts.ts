@@ -139,7 +139,10 @@ export const STATE_VIEW_ABI = parseAbi([
   "function getPositionLiquidity(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity)",
 ]);
 
-export const MARKET_SPLIT_ABI = parseAbi(["function split(uint256 amount)"]);
+export const MARKET_SPLIT_ABI = parseAbi([
+  "function split(uint256 amount)",
+  "function merge(uint256 amount)",
+]);
 
 export const ERC20_APPROVE_ABI = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",

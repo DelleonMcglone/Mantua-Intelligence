@@ -210,6 +210,26 @@ export async function upsertMarketRows(
 }
 
 /**
+ * Markets worth a re-band scan on one chain: any market whose game has not
+ * kicked off yet — the only window where the book is OPEN and tradeable, so
+ * the only window where an out-of-band price can (and must) be arbed back.
+ * As with reclaim below, the DB is just the candidate list; the sweeper
+ * reads each market's on-chain state and skips anything not actually OPEN.
+ */
+export async function listRebandCandidates(
+  db: DB,
+  chainId: number,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): Promise<{ marketId: string; yesToken: string | null; noToken: string | null }[]> {
+  const now = new Date(nowSeconds * 1000);
+  return db
+    .select({ marketId: markets.marketId, yesToken: markets.yesToken, noToken: markets.noToken })
+    .from(markets)
+    .innerJoin(events, eq(markets.eventId, events.id))
+    .where(and(eq(markets.chainId, chainId), sql`${events.startsAt} >= ${now}`));
+}
+
+/**
  * Markets worth a reclaim scan on one chain: any market whose game started
  * in the last 14 days (older ones have long been reclaimed — on-chain state
  * makes a re-scan a no-op anyway, this bound just caps the read fan-out).

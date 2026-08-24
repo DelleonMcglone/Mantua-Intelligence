@@ -30,8 +30,9 @@ import {
   RESOLVER_CONTRACT_ABI,
   STATE_VIEW_ABI,
 } from "../markets-contracts.ts";
-import { DYNAMIC_MARKET_BY_CHAIN } from "../v4-contracts.ts";
+import { DYNAMIC_MARKET_BY_CHAIN, POOL_SWAP_TEST_ABI } from "../v4-contracts.ts";
 import { planMarketPool } from "./market-pool.ts";
+import { planRebandSwap } from "./reband.ts";
 import type { PlannedMarket } from "./ingest.ts";
 import type { ResolutionPlan, ResolutionSubmitter } from "./resolution.ts";
 
@@ -612,6 +613,214 @@ export async function reclaimSettledMarkets(
   }
   if (summary.liquidityWithdrawn > 0 || summary.redeemed > 0) {
     logger.info({ chainId, ...summary }, "markets: reclaimed settled-market capital");
+  }
+  return summary;
+}
+
+// ─── Re-banding (open-market price-band sweeper) ─────────────────────────
+
+/** Per-market spend ceiling per tick. A pathologically deep book (someone
+ *  LP'd big against the seed) must not drain the whole signer float on one
+ *  market — the price limit makes a partial re-band safe, and the next tick
+ *  continues the walk. */
+const REBAND_MAX_INPUT_PER_MARKET = 50_000_000n; // 50 USDC
+
+export interface RebandSummary {
+  scanned: number;
+  /** Overpriced pools sold back down toward REBAND_HIGH_TARGET. */
+  soldDown: number;
+  /** Underpriced pools bought back up toward REBAND_LOW_TARGET. */
+  boughtUp: number;
+  /** Markets where leftover YES+NO sets were merged back to USDC. */
+  merged: number;
+  skippedInBand: number;
+  skippedNoBudget: number;
+  failures: { marketId: string; error: string }[];
+}
+
+/**
+ * Push OPEN markets whose pool price escaped the [0, 1] YES-price band back
+ * inside it (see reband.ts for why nothing else will). The signer plays the
+ * riskless arb both directions:
+ *
+ *  - above the band: split USDC 1 → 1 YES + 1 NO, sell YES into the pool
+ *    with the swap's price limit pinned at the target — every YES sells at
+ *    ≥ ~0.99 while the retained NO stays fully collateralised, so proceeds
+ *    exceed the split cost. Unsold YES merges back with NO to USDC.
+ *  - below the band: buy YES at ≤ ~0.02, then merge it with whatever NO
+ *    inventory earlier splits left behind.
+ *
+ * Same contract as `createMarketsOnChain`: simulate-first, per-market
+ * failure isolation, idempotent by on-chain state (an in-band pool costs
+ * only reads). Spend is capped by the signer's live USDC balance and a
+ * per-market ceiling.
+ */
+export async function rebandOpenMarkets(
+  candidates: readonly ReclaimCandidate[],
+  chainId: SupportedTestnetChainId = ARC_TESTNET_CHAIN_ID,
+): Promise<RebandSummary | null> {
+  const wallet = marketSignerWallet(chainId);
+  if (!wallet) return null;
+  const cfg = marketsCfg(chainId);
+  const client = getRpcClient(chainId);
+  const signer = wallet.account.address;
+
+  const summary: RebandSummary = {
+    scanned: 0,
+    soldDown: 0,
+    boughtUp: 0,
+    merged: 0,
+    skippedInBand: 0,
+    skippedNoBudget: 0,
+    failures: [],
+  };
+
+  const approveThenWait = async (token: `0x${string}`, spender: `0x${string}`, amount: bigint) => {
+    const { request } = await client.simulateContract({
+      account: wallet.account,
+      address: token,
+      abi: ERC20_APPROVE_ABI,
+      functionName: "approve",
+      args: [spender, amount],
+    });
+    await writeAndWait(wallet, request, chainId);
+  };
+  const balanceOf = (token: `0x${string}`) =>
+    client.readContract({
+      address: token,
+      abi: ERC20_BALANCE_OF_ABI,
+      functionName: "balanceOf",
+      args: [signer],
+    });
+
+  for (const m of candidates) {
+    summary.scanned += 1;
+    try {
+      const market = await client.readContract({
+        address: cfg.markets.factory,
+        abi: MARKET_FACTORY_ABI,
+        functionName: "marketOf",
+        args: [m.marketId as `0x${string}`],
+      });
+      if (market === "0x0000000000000000000000000000000000000000") continue;
+      const state = await client.readContract({
+        address: market,
+        abi: MARKET_ABI,
+        functionName: "state",
+      });
+      if (state !== 0) continue; // only OPEN books trade — nothing to re-band
+
+      const yesToken = (m.yesToken ??
+        (await client.readContract({
+          address: market,
+          abi: MARKET_ABI,
+          functionName: "yesToken",
+        }))) as `0x${string}`;
+      const plan = planMarketPool(yesToken, cfg.markets.collateral, cfg.dm.hook, 0.5);
+      const [sqrtPriceX96] = await client.readContract({
+        address: cfg.periphery.stateView,
+        abi: STATE_VIEW_ABI,
+        functionName: "getSlot0",
+        args: [plan.poolId],
+      });
+      const liquidity = await client.readContract({
+        address: cfg.periphery.stateView,
+        abi: STATE_VIEW_ABI,
+        functionName: "getLiquidity",
+        args: [plan.poolId],
+      });
+      const swap = planRebandSwap({ sqrtPriceX96, liquidity, yesIsToken0: plan.yesIsToken0 });
+      if (!swap) {
+        summary.skippedInBand += 1;
+        continue;
+      }
+
+      const usdcBalance = await balanceOf(cfg.markets.collateral);
+      const cap =
+        swap.maxInput < REBAND_MAX_INPUT_PER_MARKET ? swap.maxInput : REBAND_MAX_INPUT_PER_MARKET;
+      const amountIn = cap < usdcBalance ? cap : usdcBalance;
+      if (amountIn === 0n) {
+        summary.skippedNoBudget += 1;
+        continue;
+      }
+
+      if (swap.inputIsYes) {
+        // Sell leg: split USDC into amountIn YES + NO, then sell the YES.
+        await approveThenWait(cfg.markets.collateral, market, amountIn);
+        const { request: splitReq } = await client.simulateContract({
+          account: wallet.account,
+          address: market,
+          abi: MARKET_SPLIT_ABI,
+          functionName: "split",
+          args: [amountIn],
+        });
+        await writeAndWait(wallet, splitReq, chainId);
+        await approveThenWait(yesToken, cfg.periphery.poolSwapTest, amountIn);
+      } else {
+        // Buy leg: spend USDC directly.
+        await approveThenWait(cfg.markets.collateral, cfg.periphery.poolSwapTest, amountIn);
+      }
+
+      // Exact-input swap with the limit at the target: the pool walks to
+      // the band edge and stops; surplus input simply goes unspent.
+      const { request: swapReq } = await client.simulateContract({
+        account: wallet.account,
+        address: cfg.periphery.poolSwapTest,
+        abi: POOL_SWAP_TEST_ABI,
+        functionName: "swap",
+        args: [
+          plan.key,
+          {
+            zeroForOne: swap.zeroForOne,
+            amountSpecified: -amountIn,
+            sqrtPriceLimitX96: swap.sqrtPriceLimitX96,
+          },
+          { takeClaims: false, settleUsingBurn: false },
+          "0x",
+        ],
+      });
+      await writeAndWait(wallet, swapReq, chainId);
+      if (swap.inputIsYes) summary.soldDown += 1;
+      else summary.boughtUp += 1;
+
+      // Merge whatever full YES+NO sets the signer now holds back to USDC:
+      // unsold split surplus on the sell leg, bought YES against prior NO
+      // inventory on the buy leg. No approval — merge burns directly.
+      const noToken = (m.noToken ??
+        (await client.readContract({
+          address: market,
+          abi: MARKET_ABI,
+          functionName: "noToken",
+        }))) as `0x${string}`;
+      const [yesBal, noBal] = await Promise.all([balanceOf(yesToken), balanceOf(noToken)]);
+      const mergeable = yesBal < noBal ? yesBal : noBal;
+      if (mergeable > 0n) {
+        const { request: mergeReq } = await client.simulateContract({
+          account: wallet.account,
+          address: market,
+          abi: MARKET_SPLIT_ABI,
+          functionName: "merge",
+          args: [mergeable],
+        });
+        await writeAndWait(wallet, mergeReq, chainId);
+        summary.merged += 1;
+      }
+      logger.info(
+        {
+          chainId,
+          marketId: m.marketId,
+          action: swap.action,
+          amountIn: amountIn.toString(),
+          merged: mergeable.toString(),
+        },
+        "markets: re-banded out-of-band pool",
+      );
+    } catch (err) {
+      summary.failures.push({
+        marketId: m.marketId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
   return summary;
 }

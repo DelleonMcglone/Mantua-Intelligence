@@ -3,10 +3,16 @@ import { db } from "../db/client.ts";
 import { logger } from "../lib/logger.ts";
 import { EspnProvider } from "../lib/sports/espn.ts";
 import { refreshSlate } from "../lib/sports/ingest.ts";
-import { listReclaimCandidates, upsertEvents, upsertMarketRows } from "../lib/sports/store.ts";
+import {
+  listRebandCandidates,
+  listReclaimCandidates,
+  upsertEvents,
+  upsertMarketRows,
+} from "../lib/sports/store.ts";
 import {
   createMarketsOnChain,
   marketSignerWallet,
+  rebandOpenMarkets,
   reclaimSettledMarkets,
 } from "../lib/sports/markets-onchain.ts";
 import type { LeagueSlug } from "../lib/sports/provider.ts";
@@ -70,6 +76,21 @@ cronSportsSyncRouter.get(
         reclaimed[String(chainId)] = { error: err instanceof Error ? err.message : String(err) };
       }
     }
+    // Re-band next: thin books with no arbitrageurs can be pushed outside
+    // the [0, 1] YES-price band; the signer arbs OPEN markets back inside
+    // (split-and-sell above the band, buy-and-merge below) so the pool's
+    // price is credible again before today's creation/seeding pass.
+    const rebanded: Record<string, unknown> = {};
+    for (const chainId of chains) {
+      try {
+        const candidates = await listRebandCandidates(db, chainId);
+        const r = await rebandOpenMarkets(candidates, chainId);
+        rebanded[String(chainId)] = r ?? "disabled (no signer for this chain)";
+      } catch (err) {
+        logger.warn({ chainId, err }, "sports-sync: reband failed");
+        rebanded[String(chainId)] = { error: err instanceof Error ? err.message : String(err) };
+      }
+    }
     for (const league of LEAGUES) {
       try {
         const perChain: Record<string, unknown> = {};
@@ -106,6 +127,7 @@ cronSportsSyncRouter.get(
       ok: failures < LEAGUES.length,
       breakers: espn.breakerState(),
       reclaimed,
+      rebanded,
       leagues: results,
     });
   },
