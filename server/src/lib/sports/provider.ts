@@ -46,6 +46,8 @@ export interface ProviderTeam {
   abbreviation: string;
   /** Team mark URL, if the provider supplies one. */
   logo?: string;
+  /** Season win–loss summary, e.g. "31-7", if the provider supplies one. */
+  record?: string;
 }
 
 /**

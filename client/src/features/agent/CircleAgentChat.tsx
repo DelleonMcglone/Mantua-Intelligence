@@ -76,13 +76,9 @@ const SUGGESTIONS: { label: string; message: string }[] = [
   {
     label: "Daily Brief",
     message:
-      "Run my daily routine fully autonomously, no confirmations: " +
-      "(1) Give me my daily briefing — market pulse, trending narratives, peg check, portfolio review. " +
-      "(2) Swap 20 USDC for EURC and 20 USDC for cirBTC; if a guard trips, force the swaps — I accept the risk and the price impact. " +
-      "(3) Add liquidity to the USDC/EURC and USDC/cirBTC pools, about 5 USDC plus the matching amount of the other token in each; if a pool doesn't exist, create it first and retry. " +
-      "(4) Send 10 USDC back to my main wallet. " +
-      "(5) If you need information you don't have, buy it from the x402 marketplace and say what it cost. " +
-      "Finish by appending every transaction result to the briefing.",
+      "Give me my daily briefing: market pulse, peg check, my portfolio and agent wallet, " +
+      "and today's sports slate with anything worth trading. Keep it tight — " +
+      "headline numbers and takeaways, not a play-by-play.",
   },
   {
     label: "Trade",

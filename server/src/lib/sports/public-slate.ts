@@ -21,6 +21,8 @@ export interface PublicTeam {
   name: string;
   abbreviation: string;
   logo?: string;
+  /** Season win–loss record ("31-7") from the provider, when published. */
+  record?: string;
 }
 
 export interface PublicEvent {
@@ -73,6 +75,9 @@ function publicTeam(team: ProviderTeam): PublicTeam {
     abbreviation: sanitizeProviderString(team.abbreviation),
     // Only https URLs pass; anything else (javascript:, data:, http:) drops.
     ...(logo ? { logo: logo.slice(0, 300) } : {}),
+    ...(typeof team.record === "string" && /^\d{1,3}-\d{1,3}$/.test(team.record)
+      ? { record: team.record }
+      : {}),
   };
 }
 

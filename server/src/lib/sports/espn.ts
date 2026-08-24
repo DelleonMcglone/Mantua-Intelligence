@@ -101,12 +101,21 @@ function parseTeam(competitor: Record<string, unknown>, league: LeagueSlug): Pro
   }
 
   const logo = typeof team["logo"] === "string" ? team["logo"] : undefined;
+  // ESPN's first records entry is the overall season summary ("31-7").
+  let record: string | undefined;
+  const records = competitor["records"];
+  if (Array.isArray(records)) {
+    const overall = asRecord(records[0]);
+    const summary = overall?.["summary"];
+    if (typeof summary === "string" && /^\d{1,3}-\d{1,3}$/.test(summary)) record = summary;
+  }
   return {
     providerId,
     key: teamKey(league, abbreviation),
     name: typeof team["displayName"] === "string" ? team["displayName"] : abbreviation,
     abbreviation,
     ...(logo ? { logo } : {}),
+    ...(record ? { record } : {}),
   };
 }
 
