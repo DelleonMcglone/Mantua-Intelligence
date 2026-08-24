@@ -88,9 +88,11 @@ cronResolutionRouter.get(
       }
     }
 
-    if (!marketSignerWallet(ARC_TESTNET_CHAIN_ID)) {
+    // Disabled only when NO chain has an authorised signer — with per-chain
+    // keys, a missing Arc signer must not mask live Base settlement.
+    if (!chains.some((c) => marketSignerWallet(c) !== null)) {
       res.status(503).json({
-        error: "Resolution submission disabled — set MARKET_SIGNER_PRIVATE_KEY",
+        error: "Resolution submission disabled — no chain has an authorised signer key",
         code: "RESOLUTION_DISABLED",
         dryRun: plans,
       });

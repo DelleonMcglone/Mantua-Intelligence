@@ -69,7 +69,7 @@ export interface MarketsPeriphery {
  */
 export const MARKETS_BASE_SEPOLIA: MarketsDeployment = {
   factory: "0x9aB104e89F8de7bc240a134Dc6adBCe7124D3d84",
-  resolver: "0x0FEAf3BA53E9F163c8060F4d437bcC77F86E4270",
+  resolver: "0x0FeaF3ba53E9F163c8060f4D437bcc77f86E4270",
   collateral: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 };
 
