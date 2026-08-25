@@ -262,7 +262,7 @@ interface FAQItem {
 const FAQS: FAQItem[] = [
   {
     q: "What is Mantua?",
-    a: "Mantua is an agent-driven prediction market for sports that allows bettors and market makers to open positions, provide liquidity, and execute automated hedging strategies through natural language. It combines Mantua hooks, autonomous AI agents, and real-time onchain execution to transform user intent into automated market actions. The result is a programmable liquidity layer for sports outcomes, live in-game markets, and USDC-settled event contracts.",
+    a: "Mantua is an agent-driven sports prediction market that allows bettors and market makers to open positions, provide liquidity, and execute automated hedging strategies through natural language. It combines Mantua hooks, autonomous AI agents, and real-time onchain execution to transform user intent into automated market actions. The result is a programmable liquidity layer for sports outcomes, live in-game markets, and USDC-settled event contracts.",
   },
   {
     q: "What problem does Mantua solve?",
