@@ -45,18 +45,20 @@ const REFRESH_MS = 60_000;
 
 /**
  * Games across the covered leagues, refreshed once a minute. Defaults to
- * today's slate; pass `dates` (YYYYMMDD-YYYYMMDD) for a whole week's games.
+ * the provider's default slate; pass `dates` (YYYYMMDD-YYYYMMDD) for an
+ * explicit window, and `league` to fetch a single league instead of all.
  * Public — no login needed to browse (B5-007); the server's provider cache
  * makes the poll cheap.
  */
 interface SlateInner extends SlateState {
-  /** Which `dates` window the state was loaded for. `null` = nothing yet.
-   *  Comparing it against the requested window derives `loading` during a
-   *  week switch without a setState-in-effect. */
-  loadedFor: string | undefined | null;
+  /** Which `dates`+`league` window the state was loaded for. `null` =
+   *  nothing yet. Comparing it against the requested window derives
+   *  `loading` during a week switch without a setState-in-effect. */
+  loadedFor: string | null;
 }
 
-export function useSlate(dates?: string): SlateState {
+export function useSlate(dates?: string, league?: string): SlateState {
+  const requestKey = `${league ?? ""}|${dates ?? ""}`;
   const [state, setState] = useState<SlateInner>({
     slates: {},
     loading: true,
@@ -69,17 +71,20 @@ export function useSlate(dates?: string): SlateState {
 
     const load = async () => {
       try {
-        const query = dates ? `?dates=${encodeURIComponent(dates)}` : "";
+        const params = new URLSearchParams();
+        if (league) params.set("league", league);
+        if (dates) params.set("dates", dates);
+        const query = params.size > 0 ? `?${params.toString()}` : "";
         const res = await api.get<SlateResponse>(`/api/sports/slate${query}`);
         if (cancelled) return;
         const slates: Partial<Record<string, Slate>> = {};
-        for (const [league, value] of Object.entries(res.leagues)) {
-          if (!("error" in value)) slates[league] = value;
+        for (const [slateLeague, value] of Object.entries(res.leagues)) {
+          if (!("error" in value)) slates[slateLeague] = value;
         }
-        setState({ slates, loading: false, error: false, loadedFor: dates });
+        setState({ slates, loading: false, error: false, loadedFor: requestKey });
       } catch {
         if (!cancelled) {
-          setState((prev) => ({ ...prev, loading: false, error: true, loadedFor: dates }));
+          setState((prev) => ({ ...prev, loading: false, error: true, loadedFor: requestKey }));
         }
       }
     };
@@ -92,9 +97,9 @@ export function useSlate(dates?: string): SlateState {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [dates]);
+  }, [dates, league, requestKey]);
 
-  const switching = state.loadedFor !== null && state.loadedFor !== dates;
+  const switching = state.loadedFor !== null && state.loadedFor !== requestKey;
   return {
     slates: state.slates,
     error: state.error,

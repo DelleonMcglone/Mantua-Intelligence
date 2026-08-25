@@ -1,7 +1,7 @@
 import { Card } from "@/components/shell/Card.tsx";
 import { SPORTS, type Sport } from "./sports.ts";
 import { SlateList } from "./SlateList.tsx";
-import { useSlate, type SlateEvent } from "./use-slate.ts";
+import { useSlate, type SlateEvent, type SlateState } from "./use-slate.ts";
 
 interface BoardProps {
   /** Matchup click — open the analyst on the game (B5-004/B5-006: the
@@ -13,14 +13,31 @@ interface BoardProps {
   onTrade: (sport: Sport, eventId: string) => void;
 }
 
+function ymd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${String(d.getFullYear())}${m}${day}`;
+}
+
+/** Today as a single-day slate window. */
+function todayRange(): string {
+  const t = ymd(new Date());
+  return `${t}-${t}`;
+}
+
 /**
  * B5-001 — the home board: today's games across the covered leagues, as
- * matchup cards. Scoped to `coverage: "launch"` leagues only; the rest sit
- * in the nav as Coming Soon. Browsing is open to everyone — the login gate
- * guards transactions, not this view (B5-007).
+ * matchup cards. Each league is fetched with an explicit today-only window
+ * rather than the provider default, because ESPN's default NFL scoreboard
+ * is the current schedule week — midweek that is mostly finished games.
+ * Scoped to `coverage: "launch"` leagues only; the rest sit in the nav as
+ * Coming Soon. Browsing is open to everyone — the login gate guards
+ * transactions, not this view (B5-007).
  */
 export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
-  const { slates, loading, error } = useSlate();
+  const wnba = useSlate(todayRange(), "wnba");
+  const nfl = useSlate(todayRange(), "nfl");
+  const states: Partial<Record<string, SlateState>> = { wnba, nfl };
   const launchSports = SPORTS.filter((s) => s.coverage === "launch");
 
   const handleAnalyze = (event: SlateEvent, sport: Sport) => {
@@ -34,6 +51,8 @@ export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
     <>
       {launchSports.map((sport) => {
         const Icon = sport.icon;
+        const state = states[sport.id];
+        const slate = state?.slates[sport.id];
         return (
           <Card key={sport.id}>
             <button
@@ -53,15 +72,15 @@ export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
                 View markets →
               </span>
             </button>
-            {error && !slates[sport.id] ? (
+            {state?.error && !slate ? (
               <div className="rounded-md border border-border-soft px-4 py-6 text-center text-[12.5px] text-text-dim">
                 Couldn&apos;t reach the scores service. Retrying automatically.
               </div>
             ) : (
               <SlateList
                 sport={sport}
-                slate={slates[sport.id]}
-                loading={loading}
+                slate={slate}
+                loading={state?.loading ?? true}
                 onAnalyze={handleAnalyze}
                 onTrade={(event, s) => {
                   onTrade(s, event.providerEventId);

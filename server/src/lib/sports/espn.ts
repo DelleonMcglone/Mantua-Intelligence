@@ -238,7 +238,10 @@ export class EspnProvider implements SportsDataProvider {
 
   async getSlate(league: LeagueSlug, dates?: string): Promise<ProviderSlate> {
     // `dates` is a pre-validated YYYYMMDD-YYYYMMDD range (see the slate
-    // route); ESPN's scoreboard accepts it on every league. Omitted = today.
+    // route); ESPN's scoreboard accepts it on every league. Omitted = the
+    // provider default, which is today for daily leagues (WNBA) but the
+    // CURRENT SCHEDULE WEEK for the NFL — midweek that is mostly finished
+    // games, so surfaces that want upcoming games must pass a range.
     const suffix = dates ? `?dates=${dates}` : "";
     const path = `/apis/site/v2/sports/${LEAGUE_PATH[league]}/scoreboard${suffix}`;
     const res = await this.http.get<unknown>(

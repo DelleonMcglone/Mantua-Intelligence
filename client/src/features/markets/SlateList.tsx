@@ -42,8 +42,7 @@ export function SlateList({ sport, slate, loading, onAnalyze, onTrade }: SlateLi
       <div className="rounded-md border border-border-soft px-4 py-6 text-center">
         <p className="text-[13px] font-medium">No {sport.label} games today</p>
         <p className="mx-auto mt-1.5 max-w-xs text-[12px] leading-relaxed text-text-dim">
-          Off-season or a quiet slate. Games appear here the moment the schedule does, and markets
-          open alongside them.
+          Games appear here and markets open alongside them.
         </p>
       </div>
     );
