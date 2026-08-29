@@ -98,18 +98,60 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
 
 function Hero() {
   const { theme } = useTheme();
-  const wordmark =
-    theme === "dark" ? "/assets/mantua-wordmark-dark.svg" : "/assets/mantua-wordmark-light.svg";
+  const gradient =
+    theme === "dark"
+      ? "linear-gradient(115deg, #a06bff 0%, #63b0f2 45%, #2fe2a5 90%)"
+      : "linear-gradient(115deg, #8b5cf6 0%, #2f9fe0 45%, #14d69a 90%)";
   return (
     <section className="w-full max-w-3xl pt-12 pb-10 flex flex-col items-center text-center">
-      {/* Outlined gradient MANTUA wordmark with the leaf on the M —
-          same artwork as the logo, per-theme gradient stops. */}
-      <h1 className="w-full">
-        <img src={wordmark} alt="Mantua" className="block w-full max-w-xl mx-auto h-auto" />
+      {/* Outlined gradient MANTUA — real Inter glyphs. The gradient paints
+          the text stroke (background-clip: text includes the stroke) while
+          the fill is repainted in the page background, leaving the outline.
+          The leaf overlays the M's stem, its bg-colored body occluding it. */}
+      <h1 className="relative inline-block text-5xl sm:text-7xl leading-none select-none">
+        {/* The leaf must stay a SIBLING of the clipped text: a positioned
+            element inside a background-clip:text container gets its own
+            paint layer and the stroke gradient never reaches it. */}
+        <span
+          className="block font-bold uppercase tracking-[0.14em]"
+          style={{
+            WebkitTextStroke: "2px transparent",
+            backgroundImage: gradient,
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "var(--bg)",
+          }}
+        >
+          Mantua
+        </span>
+        <svg
+          aria-hidden
+          viewBox="0 0 40 56"
+          className="absolute"
+          style={{ left: "-0.28em", bottom: "0.02em", width: "0.56em", height: "0.78em" }}
+        >
+          <defs>
+            <linearGradient id="hero-leaf-g" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={theme === "dark" ? "#9d6bff" : "#8b5cf6"} />
+              <stop offset="1" stopColor={theme === "dark" ? "#3cc9d6" : "#2aa8c9"} />
+            </linearGradient>
+          </defs>
+          <path
+            d="M28 4 C10 0 -1 22 13 50 C27 41 32 19 28 4 Z"
+            fill="var(--bg)"
+            stroke="url(#hero-leaf-g)"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M15 44 C14 31 16 18 22 9"
+            fill="none"
+            stroke="url(#hero-leaf-g)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
       </h1>
-      <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mt-6 text-text leading-[1.1]">
-        Agent-driven sports prediction market
-      </h2>
       <div
         aria-hidden
         className="mt-8 h-px w-2/3 max-w-md"
