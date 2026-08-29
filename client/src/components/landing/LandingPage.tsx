@@ -111,9 +111,7 @@ function Hero() {
       <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mt-4 text-text leading-[1.1]">
         Agent-driven sports prediction market
       </h2>
-      <p className="mt-6 text-[15px] text-text-dim">
-        Hooks for liquidity. Agents for action. AI for intelligence.
-      </p>
+      <p className="mt-6 text-[15px] text-text-dim">Programmable Sports Agents</p>
     </section>
   );
 }
