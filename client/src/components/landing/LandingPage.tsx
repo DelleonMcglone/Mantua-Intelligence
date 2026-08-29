@@ -96,78 +96,22 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
   );
 }
 
+/**
+ * Hero is the delivered banner artwork itself (/assets/hero-banner.png):
+ * outlined-gradient MANTUA with the leaf-M, divider flare, and the
+ * "Programmable Sports Agents" tagline on its dark grid background.
+ * Using the PNG verbatim keeps it pixel-identical to the art.
+ */
 function Hero() {
-  const { theme } = useTheme();
-  // Every letter runs purple (top) → blue → spring green (bottom), per the art.
-  const gradient =
-    theme === "dark"
-      ? "linear-gradient(180deg, #9a55ff 0%, #58a8e0 48%, #2ae5a5 100%)"
-      : "linear-gradient(180deg, #8b46f0 0%, #3d97d8 48%, #17cf92 100%)";
   return (
-    <section className="w-full max-w-3xl pt-12 pb-10 flex flex-col items-center text-center">
-      {/* Outlined gradient MANTUA — real Inter glyphs. The gradient paints
-          the text stroke (background-clip: text includes the stroke) while
-          the fill is repainted in the page background, leaving the outline.
-          The leaf overlays the M's stem, its bg-colored body occluding it. */}
-      <h1 className="relative inline-block text-5xl sm:text-7xl leading-none select-none">
-        {/* The leaf must stay a SIBLING of the clipped text: a positioned
-            element inside a background-clip:text container gets its own
-            paint layer and the stroke gradient never reaches it. */}
-        <span
-          className="block font-bold uppercase tracking-[0.2em]"
-          style={{
-            WebkitTextStroke: "1.75px transparent",
-            backgroundImage: gradient,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            color: "var(--bg)",
-          }}
-        >
-          Mantua
-        </span>
-        {/* Leaf per the delivered mark: pointed tip at top curling right,
-            broad rounded belly at bottom-left, vein sweeping up to the tip. */}
-        <svg
-          aria-hidden
-          viewBox="0 0 34 56"
-          className="absolute"
-          style={{ left: "-0.15em", bottom: "0.09em", width: "0.33em", height: "0.53em" }}
-        >
-          <defs>
-            <linearGradient id="hero-leaf-g" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor={theme === "dark" ? "#86aef0" : "#6d9ae0"} />
-              <stop offset="1" stopColor={theme === "dark" ? "#2fe0a5" : "#22c795"} />
-            </linearGradient>
-          </defs>
-          <path
-            d="M28 2 C8 8 -2 28 6 44 C10 54 22 56 26 46 C31 34 30 16 28 2 Z"
-            fill="var(--bg)"
-            stroke="url(#hero-leaf-g)"
-            strokeWidth="3"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M12 48 C17 36 22 20 26 6"
-            fill="none"
-            stroke="url(#hero-leaf-g)"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        </svg>
-      </h1>
-      <div
-        aria-hidden
-        className="mt-8 h-[2px] w-2/3 max-w-md"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent 0%, #9d6bff 25%, #eafffa 55%, #2fe2a5 78%, transparent 100%)",
-          boxShadow: "0 0 14px rgba(120,220,200,0.6)",
-        }}
+    <section className="w-full max-w-4xl pt-12 pb-4">
+      <h1 className="sr-only">Mantua — Programmable Sports Agents</h1>
+      <img
+        src="/assets/hero-banner.png"
+        alt="Mantua — Programmable Sports Agents"
+        className="block w-full h-auto rounded-xl"
+        fetchPriority="high"
       />
-      <p className="mt-6 text-xl sm:text-2xl font-medium tracking-tight">
-        <span className="text-[#9d6bff]">Programmable</span>{" "}
-        <span className="text-text">Sports</span> <span className="text-[#2fe0a0]">Agents</span>
-      </p>
     </section>
   );
 }
