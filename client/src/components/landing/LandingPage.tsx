@@ -98,10 +98,11 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
 
 function Hero() {
   const { theme } = useTheme();
+  // Every letter runs purple (top) → blue → spring green (bottom), per the art.
   const gradient =
     theme === "dark"
-      ? "linear-gradient(115deg, #a06bff 0%, #63b0f2 45%, #2fe2a5 90%)"
-      : "linear-gradient(115deg, #8b5cf6 0%, #2f9fe0 45%, #14d69a 90%)";
+      ? "linear-gradient(180deg, #9a55ff 0%, #58a8e0 48%, #2ae5a5 100%)"
+      : "linear-gradient(180deg, #8b46f0 0%, #3d97d8 48%, #17cf92 100%)";
   return (
     <section className="w-full max-w-3xl pt-12 pb-10 flex flex-col items-center text-center">
       {/* Outlined gradient MANTUA — real Inter glyphs. The gradient paints
@@ -113,9 +114,9 @@ function Hero() {
             element inside a background-clip:text container gets its own
             paint layer and the stroke gradient never reaches it. */}
         <span
-          className="block font-bold uppercase tracking-[0.14em]"
+          className="block font-bold uppercase tracking-[0.2em]"
           style={{
-            WebkitTextStroke: "2px transparent",
+            WebkitTextStroke: "1.75px transparent",
             backgroundImage: gradient,
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
@@ -124,46 +125,48 @@ function Hero() {
         >
           Mantua
         </span>
+        {/* Leaf per the delivered mark: pointed tip at top curling right,
+            broad rounded belly at bottom-left, vein sweeping up to the tip. */}
         <svg
           aria-hidden
-          viewBox="0 0 40 56"
+          viewBox="0 0 34 56"
           className="absolute"
-          style={{ left: "-0.28em", bottom: "0.02em", width: "0.56em", height: "0.78em" }}
+          style={{ left: "-0.15em", bottom: "0.09em", width: "0.33em", height: "0.53em" }}
         >
           <defs>
             <linearGradient id="hero-leaf-g" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor={theme === "dark" ? "#9d6bff" : "#8b5cf6"} />
-              <stop offset="1" stopColor={theme === "dark" ? "#3cc9d6" : "#2aa8c9"} />
+              <stop offset="0" stopColor={theme === "dark" ? "#86aef0" : "#6d9ae0"} />
+              <stop offset="1" stopColor={theme === "dark" ? "#2fe0a5" : "#22c795"} />
             </linearGradient>
           </defs>
           <path
-            d="M28 4 C10 0 -1 22 13 50 C27 41 32 19 28 4 Z"
+            d="M28 2 C8 8 -2 28 6 44 C10 54 22 56 26 46 C31 34 30 16 28 2 Z"
             fill="var(--bg)"
             stroke="url(#hero-leaf-g)"
-            strokeWidth="2.5"
+            strokeWidth="3"
             strokeLinejoin="round"
           />
           <path
-            d="M15 44 C14 31 16 18 22 9"
+            d="M12 48 C17 36 22 20 26 6"
             fill="none"
             stroke="url(#hero-leaf-g)"
-            strokeWidth="2.5"
+            strokeWidth="3"
             strokeLinecap="round"
           />
         </svg>
       </h1>
       <div
         aria-hidden
-        className="mt-8 h-px w-2/3 max-w-md"
+        className="mt-8 h-[2px] w-2/3 max-w-md"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #9d6bff 30%, #2fe2a5 70%, transparent 100%)",
-          boxShadow: "0 0 12px rgba(99,176,242,0.55)",
+            "linear-gradient(90deg, transparent 0%, #9d6bff 25%, #eafffa 55%, #2fe2a5 78%, transparent 100%)",
+          boxShadow: "0 0 14px rgba(120,220,200,0.6)",
         }}
       />
-      <p className="mt-5 text-xl sm:text-2xl font-medium tracking-tight">
+      <p className="mt-6 text-xl sm:text-2xl font-medium tracking-tight">
         <span className="text-[#9d6bff]">Programmable</span>{" "}
-        <span className="text-text">Sports</span> <span className="text-[#1ec99a]">Agents</span>
+        <span className="text-text">Sports</span> <span className="text-[#2fe0a0]">Agents</span>
       </p>
     </section>
   );
