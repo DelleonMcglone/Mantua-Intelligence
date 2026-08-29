@@ -367,14 +367,14 @@ const SOCIAL_LINKS: {
   icon: ComponentType<{ className?: string }>;
 }[] = [
   { label: "X", href: "https://x.com/Mantua_AI", icon: XIcon },
+  { label: "Discord", href: "https://discord.gg/kUfEpzvaFf", icon: DiscordIcon },
+  { label: "Substack", href: "https://substack.com/@mantuanews", icon: SubstackIcon },
   { label: "Reddit", href: "https://www.reddit.com/r/MantuaAI/", icon: RedditIcon },
   {
     label: "LinkedIn",
     href: "https://www.linkedin.com/company/mantuaai/?viewAsMember=true",
     icon: LinkedInIcon,
   },
-  { label: "Substack", href: "https://substack.com/@mantuanews", icon: SubstackIcon },
-  { label: "Discord", href: "https://discord.gg/kUfEpzvaFf", icon: DiscordIcon },
 ];
 
 /** Policy links sharing the copyright line — each opens its own page. */
