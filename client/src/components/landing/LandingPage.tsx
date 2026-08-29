@@ -69,7 +69,7 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
       <div className="flex items-center gap-4 lg:gap-6 px-5 sm:px-8 py-4">
         <div className="flex shrink-0 items-center gap-2.5">
           <Logo size={28} />
-          <span className="text-[15px] font-semibold tracking-tight">Mantua.AI</span>
+          <span className="text-[15px] font-semibold tracking-tight">Mantua</span>
         </div>
         <MarketNav onNavigate={onNavigate} className="hidden min-w-0 flex-1 md:block" />
         <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
@@ -97,21 +97,32 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
 }
 
 function Hero() {
+  const { theme } = useTheme();
+  const wordmark =
+    theme === "dark" ? "/assets/mantua-wordmark-dark.svg" : "/assets/mantua-wordmark-light.svg";
   return (
-    <section className="text-center max-w-3xl pt-12 pb-10">
-      <h1
-        className="text-5xl sm:text-6xl font-bold tracking-tight bg-clip-text text-transparent leading-[1.05]"
-        style={{
-          backgroundImage:
-            "linear-gradient(120deg, #b48bff 0%, #a87aff 30%, #6fdb9c 60%, #5fc78a 100%)",
-        }}
-      >
-        Mantua.AI
+    <section className="w-full max-w-3xl pt-12 pb-10 flex flex-col items-center text-center">
+      {/* Outlined gradient MANTUA wordmark with the leaf on the M —
+          same artwork as the logo, per-theme gradient stops. */}
+      <h1 className="w-full">
+        <img src={wordmark} alt="Mantua" className="block w-full max-w-xl mx-auto h-auto" />
       </h1>
-      <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mt-4 text-text leading-[1.1]">
+      <h2 className="text-3xl sm:text-5xl font-bold tracking-tight mt-6 text-text leading-[1.1]">
         Agent-driven sports prediction market
       </h2>
-      <p className="mt-6 text-[15px] text-text-dim">Programmable Sports Agents</p>
+      <div
+        aria-hidden
+        className="mt-8 h-px w-2/3 max-w-md"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, #9d6bff 30%, #2fe2a5 70%, transparent 100%)",
+          boxShadow: "0 0 12px rgba(99,176,242,0.55)",
+        }}
+      />
+      <p className="mt-5 text-xl sm:text-2xl font-medium tracking-tight">
+        <span className="text-[#9d6bff]">Programmable</span>{" "}
+        <span className="text-text">Sports</span> <span className="text-[#1ec99a]">Agents</span>
+      </p>
     </section>
   );
 }

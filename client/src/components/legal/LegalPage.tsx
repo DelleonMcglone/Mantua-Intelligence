@@ -54,7 +54,7 @@ export function LegalPage({ title, intro, children, onBack, onLaunch }: Props) {
           aria-label="Back to home"
         >
           <Logo size={28} />
-          <span className="text-[15px] font-semibold tracking-tight">Mantua.AI</span>
+          <span className="text-[15px] font-semibold tracking-tight">Mantua</span>
         </button>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <button

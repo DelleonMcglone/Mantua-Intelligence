@@ -51,11 +51,11 @@ export function Header({
           type="button"
           onClick={onLogoClick}
           disabled={!onLogoClick}
-          aria-label={onLogoClick ? "Back to landing page" : "Mantua.AI"}
+          aria-label={onLogoClick ? "Back to landing page" : "Mantua"}
           className="flex shrink-0 items-center gap-3 bg-transparent border-none p-0 cursor-pointer disabled:cursor-default"
         >
           <Logo size={30} />
-          <span className="text-[17px] font-semibold tracking-tight">Mantua.AI</span>
+          <span className="text-[17px] font-semibold tracking-tight">Mantua</span>
         </button>
         <MarketNav onNavigate={onNavigate} className="hidden min-w-0 flex-1 md:block" />
         <div className="ml-auto flex shrink-0 items-center gap-2.5 md:ml-0">

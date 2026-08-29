@@ -30,7 +30,7 @@ export function LoginScreen({ onLogin, loading }: LoginScreenProps) {
           <Logo size={56} />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to Mantua.AI</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome to Mantua</h1>
           <p className="text-sm text-text-dim leading-relaxed">
             A liquidity copilot that researches, routes, and executes with you — or on its own — on
             Base.

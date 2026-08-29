@@ -58,7 +58,7 @@ export function DocsPage({ onBack, onLaunch }: Props) {
           aria-label="Back to home"
         >
           <Logo size={28} />
-          <span className="text-[15px] font-semibold tracking-tight">Mantua.AI</span>
+          <span className="text-[15px] font-semibold tracking-tight">Mantua</span>
         </button>
         <span className="hidden shrink-0 items-center gap-2 sm:inline-flex">
           <span className="h-3.5 w-px bg-border-soft" aria-hidden="true" />
