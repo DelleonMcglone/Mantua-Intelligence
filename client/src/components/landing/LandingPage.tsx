@@ -104,16 +104,34 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
  */
 function Hero() {
   const { theme } = useTheme();
-  const banner = theme === "dark" ? "/assets/hero-banner.png" : "/assets/hero-banner-light.png";
   return (
     <section className="w-full max-w-4xl pt-12 pb-4">
       <h1 className="sr-only">Mantua — Programmable Sports Agents</h1>
-      <img
-        src={banner}
-        alt="Mantua — Programmable Sports Agents"
-        className="block w-full h-auto rounded-xl"
-        fetchPriority="high"
-      />
+      {/* Both banners stay mounted in one fixed-aspect box and cross-fade —
+          swapping src would reflow (the PNGs' ratios differ slightly) and
+          flash while the other file decodes. */}
+      <div
+        className="relative w-full overflow-hidden rounded-xl"
+        style={{ aspectRatio: "1882 / 836" }}
+      >
+        <img
+          src="/assets/hero-banner.png"
+          alt=""
+          aria-hidden
+          fetchPriority="high"
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+            theme === "dark" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <img
+          src="/assets/hero-banner-light.png"
+          alt=""
+          aria-hidden
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+            theme === "dark" ? "opacity-0" : "opacity-100"
+          }`}
+        />
+      </div>
     </section>
   );
 }
