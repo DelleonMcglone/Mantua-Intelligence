@@ -97,17 +97,19 @@ function Header({ onLaunch, onNavigate }: Omit<Props, "onOpenLegal" | "onOpenDoc
 }
 
 /**
- * Hero is the delivered banner artwork itself (/assets/hero-banner.png):
- * outlined-gradient MANTUA with the leaf-M, divider flare, and the
- * "Programmable Sports Agents" tagline on its dark grid background.
- * Using the PNG verbatim keeps it pixel-identical to the art.
+ * Hero is the delivered banner artwork itself — outlined-gradient MANTUA
+ * with the leaf-M, divider flare, and the "Programmable Sports Agents"
+ * tagline on the grid background, one PNG per theme. Using the art
+ * verbatim keeps it pixel-identical.
  */
 function Hero() {
+  const { theme } = useTheme();
+  const banner = theme === "dark" ? "/assets/hero-banner.png" : "/assets/hero-banner-light.png";
   return (
     <section className="w-full max-w-4xl pt-12 pb-4">
       <h1 className="sr-only">Mantua — Programmable Sports Agents</h1>
       <img
-        src="/assets/hero-banner.png"
+        src={banner}
         alt="Mantua — Programmable Sports Agents"
         className="block w-full h-auto rounded-xl"
         fetchPriority="high"
