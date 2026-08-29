@@ -1,15 +1,16 @@
+import { useTheme } from "@/hooks/use-theme.tsx";
+
 /**
- * Mantua "M" mark — a single transparent-background gradient logo that
- * reads on both light and dark themes, so no per-theme swap is needed.
- *
- * (The old `mantua-logo-light.png` had a dark purple→black square baked
- * into it, so it showed as a black box in light mode. We always use the
- * transparent `mantua-logo-dark.png` instead.)
+ * Mantua "M" mark — transparent-background gradient SVGs, one tuned per
+ * theme: `mantua-logo-dark.svg` (brighter stops) on dark backgrounds,
+ * `mantua-logo-light.svg` (deeper stops) on light ones.
  */
 export function Logo({ size = 30 }: { size?: number }) {
+  const { theme } = useTheme();
+  const src = theme === "dark" ? "/assets/mantua-logo-dark.svg" : "/assets/mantua-logo-light.svg";
   return (
     <img
-      src="/assets/mantua-logo-dark.png"
+      src={src}
       width={size}
       height={size}
       alt="Mantua"
