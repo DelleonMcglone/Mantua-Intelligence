@@ -9,10 +9,10 @@ interface Props {
 /**
  * Shared "Ask Mantua" header strip — matches `PanelHeader` in
  * `mantua-ai/project/src/panels.jsx` (used at the top of every right-
- * column panel: Home, PoolList, Swap, AddLiquidity, Analyze, Agent).
+ * column panel: Home, Analyze, Agent, Profile).
  *
  * The right-column Card always renders this strip first, then the
- * panel-specific subheader (e.g. "Swap", "Create Pool"), then the
+ * panel-specific subheader (e.g. "Profile", "Analyst"), then the
  * panel body, then the shared `<InputBar />` at the bottom.
  *
  * When `onNewChat` isn't supplied (the default for non-home panels) the

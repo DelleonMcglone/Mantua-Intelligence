@@ -12,7 +12,7 @@ interface Props {
 /**
  * Panel-specific subheader rendered just under the shared
  * `<PanelHeader />`. Matches the design's per-panel title row
- * (e.g. "Swap" + close X, "Create Pool" + subtitle + close X,
+ * (e.g. "Profile" + subtitle + close X,
  * "Research — ETH" + close X).
  */
 export function PanelSubHeader({ title, subtitle, onBack, onClose, right }: Props) {

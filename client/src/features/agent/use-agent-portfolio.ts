@@ -42,7 +42,7 @@ interface AgentPortfolioResponse {
 }
 
 export interface AgentPortfolioState {
-  /** Agent wallet address (Circle on Arc), or null until provisioned. */
+  /** Agent wallet address (Circle), or null until provisioned. */
   agentAddress: string | null;
   balances: AgentBalance[];
   positions: AgentPosition[];

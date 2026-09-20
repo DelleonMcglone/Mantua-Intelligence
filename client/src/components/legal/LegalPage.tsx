@@ -3,7 +3,7 @@ import { Sun, Moon, ArrowLeft } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme.tsx";
 import { Logo } from "@/components/shell/Logo.tsx";
 
-/** The legal documents reachable from the landing footer. */
+/** The legal documents reachable from the home-page footer. */
 export type LegalDoc = "privacy" | "terms" | "integrity";
 
 /** Shown at the top of each policy. Bump when the text changes
@@ -25,23 +25,20 @@ interface Props {
   /** Lead paragraph under the title. */
   intro: ReactNode;
   children: ReactNode;
-  /** Back to the marketing page. */
+  /** Back to the home page. */
   onBack: () => void;
-  /** Opens the app shell, same as the landing header's CTA. */
-  onLaunch: () => void;
 }
 
 /**
  * Shared shell for the public legal pages — privacy, terms, market
- * integrity. Each renders outside the app shell, the same way the
- * landing page does, with its own header, back affordance, and a
- * minimal footer.
+ * integrity. Each renders outside the app shell, with its own header,
+ * back affordance, and a minimal footer.
  *
  * The documents these pages carry are plain-language drafts written for
  * this product. None has been reviewed by counsel — treat the copy as a
  * starting point, not a cleared legal document.
  */
-export function LegalPage({ title, intro, children, onBack, onLaunch }: Props) {
+export function LegalPage({ title, intro, children, onBack }: Props) {
   const { theme, toggle } = useTheme();
   const ThemeIcon = theme === "dark" ? Sun : Moon;
   return (
@@ -64,13 +61,6 @@ export function LegalPage({ title, intro, children, onBack, onLaunch }: Props) {
             className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-border-soft bg-transparent text-text-dim hover:text-text transition-colors"
           >
             <ThemeIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onLaunch}
-            className="px-4 py-2 rounded-md bg-accent text-white text-[13px] font-semibold hover:bg-accent-2 transition-colors cursor-pointer"
-          >
-            Launch App
           </button>
         </div>
       </header>

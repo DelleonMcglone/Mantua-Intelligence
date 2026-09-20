@@ -9,15 +9,15 @@ interface AppShellProps {
   onDisconnect?: (() => void) | undefined;
   onOpenProfile?: (() => void) | undefined;
   onOpenAgent?: (() => void) | undefined;
-  /** Optional click handler for the logo / wordmark — used to send
-   *  the user back to the landing page from inside the app shell. */
+  /** Optional click handler for the logo / wordmark — sends the user
+   *  back to the home page from inside the app shell. */
   onLogoClick?: (() => void) | undefined;
   /** League / section nav handler, forwarded to the header. */
   onNavigate: (destination: NavDestination) => void;
   left: ReactNode;
   right: ReactNode;
   /** When set, replaces the two-column grid with a full-width page
-   *  (league pages, trading, agent — the Polymarket-style surfaces). */
+   *  (home, league pages, agent — the Polymarket-style surfaces). */
   full?: ReactNode | undefined;
   /** Persistent chat dock, rendered at the bottom of every page. */
   dock?: ReactNode | undefined;

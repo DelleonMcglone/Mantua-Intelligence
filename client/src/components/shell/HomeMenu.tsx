@@ -1,16 +1,14 @@
-import { ArrowUpDown, BarChart3, Bot, Droplet } from "lucide-react";
+import { BarChart3, Bot } from "lucide-react";
 
-export type HomePromptId = "pool" | "swap" | "analyze" | "agent";
+export type HomePromptId = "analyze" | "agent";
 
-const PROMPTS: { id: HomePromptId; title: string; icon: typeof Droplet }[] = [
-  { id: "agent", title: "Create / Manage Circle Agent", icon: Bot },
+const PROMPTS: { id: HomePromptId; title: string; icon: typeof Bot }[] = [
+  { id: "agent", title: "Create / Manage your Agent", icon: Bot },
   {
     id: "analyze",
     title: "Analyze today's games, matchups, and markets",
     icon: BarChart3,
   },
-  { id: "swap", title: "Swap stablecoins or bridge USDC to another network", icon: ArrowUpDown },
-  { id: "pool", title: "Create / Add Liquidity with Stable protection", icon: Droplet },
 ];
 
 interface Props {
@@ -18,14 +16,13 @@ interface Props {
 }
 
 /**
- * The home page's prompt cards — a single row across the top (wrapping to
- * two columns on small screens), ordered agent → analyze → swap →
- * liquidity. Replaces the old 2x2 grid that lived inside the right-column
- * "Ask Mantua" panel.
+ * The home page's prompt cards — a single row across the top (stacking on
+ * small screens), ordered agent → analyze. The swap and liquidity cards
+ * went with the trading surfaces (task 001).
  */
 export function HomePromptRow({ onPromptSelect }: Props) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {PROMPTS.map((p) => {
         const Icon = p.icon;
         return (

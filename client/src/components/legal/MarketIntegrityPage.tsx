@@ -2,7 +2,6 @@ import { LegalPage, Section, List, DiscordLink } from "./LegalPage.tsx";
 
 interface Props {
   onBack: () => void;
-  onLaunch: () => void;
 }
 
 /**
@@ -11,12 +10,11 @@ interface Props {
  * breaks the rules, and how to report it. Draft — not reviewed by
  * counsel.
  */
-export function MarketIntegrityPage({ onBack, onLaunch }: Props) {
+export function MarketIntegrityPage({ onBack }: Props) {
   return (
     <LegalPage
       title="Market Integrity"
       onBack={onBack}
-      onLaunch={onLaunch}
       intro={
         <p>
           Prediction markets are only useful if their prices mean something. A price is a forecast,

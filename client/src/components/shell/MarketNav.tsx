@@ -2,10 +2,7 @@ import type { ComponentType } from "react";
 import { SPORTS, type SportId } from "@/features/markets/sports.ts";
 
 /** Where a header nav item sends the user. */
-export type NavDestination =
-  | { kind: "market"; sport: SportId }
-  | { kind: "agent" }
-  | { kind: "trading" };
+export type NavDestination = { kind: "market"; sport: SportId } | { kind: "agent" };
 
 interface NavItem {
   label: string;
@@ -24,13 +21,11 @@ const NAV_ITEMS: NavItem[] = [
     }),
   ),
   { label: "Agent", destination: { kind: "agent" }, divider: true },
-  { label: "Trading", destination: { kind: "trading" }, divider: true },
 ];
 
 /**
- * League + section nav. Shared by the landing header and the in-app
- * shell header so both stay in step — a league added to `SPORTS` shows
- * up in both without a second edit.
+ * League + section nav, rendered by the app shell header. A league added
+ * to `SPORTS` shows up here without a second edit.
  *
  * Scrolls sideways rather than wrapping once the row runs out of width.
  * Where a header renders it twice (inline at wide widths, its own strip

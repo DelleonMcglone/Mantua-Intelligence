@@ -3,9 +3,9 @@ import { usePrivy } from "@privy-io/react-auth";
 import { ArrowLeft, Bot, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { api } from "@/lib/api.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerTxUrl } from "@/lib/chains.ts";
 import type { SlateEvent } from "./use-slate.ts";
-
-const EXPLORER = "https://testnet.arcscan.app/tx/";
 
 // ─── Data shapes (mirror server/src/routes/market-detail.ts) ─────────────────
 
@@ -540,6 +540,7 @@ function PositionsTab({ event }: { event: SlateEvent }) {
 // ─── Activity ────────────────────────────────────────────────────────────────
 
 function ActivityTab({ event, detail }: { event: SlateEvent; detail: DetailResponse | null }) {
+  const chainId = useCurrentChainId();
   if (!detail) return <p className="text-[12.5px] text-text-dim">Loading activity…</p>;
   if (detail.activity.length === 0) {
     return (
@@ -568,7 +569,7 @@ function ActivityTab({ event, detail }: { event: SlateEvent; detail: DetailRespo
             <div className="flex items-center gap-2 text-[11px] text-text-mute">
               {timeAgo(a.t)}
               <a
-                href={`${EXPLORER}${a.txHash}`}
+                href={getExplorerTxUrl(chainId, a.txHash)}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="View transaction"

@@ -1,14 +1,18 @@
 import type { ReactNode } from "react";
-import { P, H, UL, OL, B, Code, A, Note, Table } from "./docs-primitives.tsx";
+import { P, H, UL, OL, B, A, Note } from "./docs-primitives.tsx";
 
 /**
  * Documentation content, one entry per sidebar page. Kept as data so the
  * page shell stays dumb and adding a topic is a single array entry.
  *
- * Everything factual here is drawn from the deployed system: hook
- * addresses from `features/liquidity/hook-recommendations.ts`, fee tiers
- * from `features/liquidity/fee-tiers.ts`, chain and token details from
- * `docs/architecture.md`. Update this file when those change.
+ * Everything factual here is drawn from the deployed system; see
+ * `docs/architecture.md`. Update this file when that changes.
+ *
+ * Two rules this file follows (task 001). It does not describe swapping or
+ * providing liquidity, which are not part of the product. And it does not
+ * name the chain, the deployment, or a block explorer: which network the
+ * contracts sit on is configuration, not documentation, and contract
+ * addresses are read from configuration rather than published here.
  */
 
 export interface DocsPage {
@@ -24,8 +28,6 @@ export interface DocsGroup {
   pages: DocsPage[];
 }
 
-const ARC_EXPLORER = "https://testnet.arcscan.app/address";
-
 export const DOCS_GROUPS: DocsGroup[] = [
   {
     label: "Overview",
@@ -37,17 +39,27 @@ export const DOCS_GROUPS: DocsGroup[] = [
         body: (
           <>
             <P>
-              Mantua is an agent-driven prediction market for sports. Bettors and market makers open
-              positions, provide liquidity, and run automated strategies, expressed in natural
-              language and executed on-chain through Uniswap v4 pools with custom Mantua hooks.
+              Mantua is an agent-driven prediction market for NFL games. Bettors and market makers
+              open positions and run automated strategies, expressed in natural language and
+              executed on-chain through Uniswap v4 pools with a custom Mantua hook.
             </P>
             <P>
-              Three parts do the work. <B>Hooks</B> put logic inside the pool itself: pricing, fees,
-              and risk controls that vanilla AMMs can&apos;t express. <B>Agents</B> turn intent into
-              action, buying the intelligence they need per call in USDC and executing on the
-              result. The <B>interface</B> ties them together with a portfolio, analytics, and a
-              chatbot that routes plain-language instructions to the right surface. Every command,
-              including placing bets, can be run from the chatbot.
+              Three parts do the work. The <B>Dynamic Market Hook</B> puts logic inside the pool
+              itself: pricing, fees, and risk controls that vanilla AMMs can&apos;t express.{" "}
+              <B>Agents</B> turn intent into action, buying the intelligence they need per call in
+              USDC and executing on the result. The <B>interface</B> ties them together with a
+              portfolio, analytics, and a chatbot that routes plain-language instructions to the
+              right surface. Every command, including placing bets, can be run from the chatbot.
+            </P>
+
+            <H>What problem it solves</H>
+            <P>
+              Prediction markets are static. Odds and liquidity sit passively while the world moves,
+              so market makers get picked off the moment news breaks and bettors trade against stale
+              depth. Mantua makes the market itself programmable: fees adapt to order-flow
+              imbalance, access is enforced at execution, and trading halts under conditions the
+              market defines in advance — all of it set from natural-language instructions and
+              executed on-chain through agent-managed Mantua hooks.
             </P>
 
             <H>Non-custodial by design</H>
@@ -60,15 +72,15 @@ export const DOCS_GROUPS: DocsGroup[] = [
             <H>Where to start</H>
             <UL>
               <li>
-                New here? <B>Getting started</B> covers connecting a wallet and funding it on Arc
-                Testnet.
+                New here? <B>Getting started</B> covers connecting a wallet and funding it.
               </li>
               <li>
-                Want the mechanics? <B>Hooks</B> explains what each hook does to a swap.
+                Want the mechanics? <B>The Dynamic Market Hook</B> explains what the hook does to a
+                market.
               </li>
               <li>
-                Building or automating? <B>Agents</B> and <B>Networks &amp; contracts</B> have the
-                addresses and behavior you need.
+                Building or automating? <B>Agents</B> and <B>Markets and settlement</B> have the
+                behavior you need.
               </li>
             </UL>
           </>
@@ -77,13 +89,13 @@ export const DOCS_GROUPS: DocsGroup[] = [
       {
         id: "getting-started",
         title: "Getting started",
-        summary: "Connect a wallet, get testnet funds, place your first action.",
+        summary: "Connect a wallet, fund it, place your first position.",
         body: (
           <>
             <H>1. Open the app</H>
             <P>
-              Select <B>Launch App</B> from anywhere on the site. Browsing markets, pools, and
-              analytics is open to everyone. No wallet required.
+              Mantua opens on the board: today&apos;s NFL games, prices, and the analyst. Browsing
+              is open to everyone. No wallet required.
             </P>
 
             <H>2. Sign in</H>
@@ -96,32 +108,26 @@ export const DOCS_GROUPS: DocsGroup[] = [
 
             <H>3. Fund the wallet</H>
             <P>
-              Mantua currently runs on Arc Testnet. Get test tokens from the Circle faucet, which
-              issues roughly 20 USDC per address per chain every two hours:
+              Markets are denominated in USDC. Get USDC from the{" "}
+              <A href="https://faucet.circle.com/">Circle faucet</A>, which issues roughly 20 USDC
+              per address per chain every two hours.
             </P>
-            <UL>
-              <li>
-                <A href="https://faucet.circle.com/">Circle Faucet</A> for USDC, EURC, and cirBTC on
-                Arc Testnet.
-              </li>
-            </UL>
-            <Note>
-              On Arc, <B>USDC is the native gas token</B>. There is no separate ETH to acquire. The
-              same USDC pays for gas and trades.
-            </Note>
 
-            <H>4. Do something</H>
+            <H>4. Take a position</H>
             <OL>
               <li>
-                Pick a league from the header nav to browse its markets, or open <B>Trading</B> to
-                swap and provide liquidity. Every command works from the chatbot too, including
-                placing bets, so you never have to start from the header.
+                Pick a game from the board, or open <B>NFL</B> from the header nav for the full
+                week.
               </li>
               <li>
-                Type an instruction into the chatbot, like &ldquo;swap 10 USDC for EURC with Stable
-                Protection&rdquo;, and it routes to the right panel, pre-filled.
+                Choose a side. The ticket quotes the price in cents per outcome token and shows what
+                a win pays.
               </li>
               <li>Review the quote, confirm, and sign in your wallet.</li>
+              <li>
+                Or type the instruction into the chatbot — &ldquo;bet on the Chiefs&rdquo; opens the
+                same ticket, pre-filled.
+              </li>
             </OL>
           </>
         ),
@@ -133,58 +139,34 @@ export const DOCS_GROUPS: DocsGroup[] = [
     pages: [
       {
         id: "hooks",
-        title: "Hooks",
-        summary: "The three Mantua hooks and what each one changes about a swap.",
+        title: "The Dynamic Market Hook",
+        summary: "What the hook changes about a prediction market.",
         body: (
           <>
             <P>
               A Uniswap v4 hook is a contract the pool calls at defined points in its lifecycle:
-              before and after a swap, or a liquidity change. Mantua ships three, each attaching
-              behavior a plain pool has no way to express.
+              before and after a trade, or a liquidity change. It attaches behavior a plain pool has
+              no way to express.
             </P>
 
-            <H>Dynamic Market Hook</H>
+            <H>What it does</H>
             <P>
-              Powers the prediction markets. It adapts pricing, fees, liquidity, and risk parameters
-              in real time from market conditions, volatility, and trading activity, so quoted odds
-              track the state of the event rather than sitting still between trades.
+              The Dynamic Market Hook powers every Mantua market. It adapts pricing, fees,
+              liquidity, and risk parameters in real time from market conditions, volatility, and
+              trading activity, so quoted odds track the state of the event rather than sitting
+              still between trades.
             </P>
             <Note>
-              Live on Arc Testnet at{" "}
-              <A href={`${ARC_EXPLORER}/0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0`}>
-                0xbb5D42…E8c0
-              </A>
-              . Each day&apos;s games mint their markets automatically; their pools open at the
+              Each day&apos;s games mint their markets automatically. Their pools open at the
               implied odds and trade under this hook until kickoff freezes them.
             </Note>
 
-            <H>Stable Protection Hook</H>
+            <H>Why it matters</H>
             <P>
-              For stablecoin and dollar-pegged pools. It measures how far the pool has drifted from
-              its reference rate on every swap and sorts that deviation into five zones, raising the
-              LP fee as the depeg gets worse and halting swaps entirely past 5%.
-            </P>
-            <Table
-              head={["Zone", "Deviation", "Base fee"]}
-              rows={[
-                ["Healthy", "at peg", "none"],
-                ["Minor", "small drift", "5 bps"],
-                ["Moderate", "growing", "15 bps"],
-                ["Severe", "up to 5.00%", "50 bps"],
-                ["Critical", "over 5.00%", "swaps blocked (circuit breaker)"],
-              ]}
-            />
-            <P>
-              Fees are also directional: a trade pushing the pool back toward its peg pays half the
-              zone&apos;s base fee, while one pushing it further away pays more. Traders who help
-              restore the peg are subsidised by those who strain it.
-            </P>
-
-            <H>Dynamic Fee Hook</H>
-            <P>
-              For volatile pairs. It reads Chainlink price feeds and applies Nezlobin directional
-              fees across five deviation zones, charging the toxic side of a trade more, so the
-              spread accrues to liquidity providers instead of arbitrageurs.
+              Prediction markets today are passive. Embedding this behavior directly in AMM
+              execution logic makes them state-aware, fee-adaptive, oracle-enforced, and
+              agent-managed — turning prediction-market liquidity from static capital into an
+              automated control system for access, market making, and event settlement.
             </P>
           </>
         ),
@@ -210,9 +192,8 @@ export const DOCS_GROUPS: DocsGroup[] = [
 
             <H>Acting on it</H>
             <P>
-              The agent combines what it bought with live on-chain signals (pool health, peg status,
-              flow) and executes: take a position, swap, provide liquidity, bridge, or exit on a
-              signal-gated schedule.
+              The agent combines what it bought with live sports and on-chain signals and executes:
+              take a position, manage it, or exit on a signal-gated schedule.
             </P>
 
             <Note tone="warn">
@@ -238,10 +219,9 @@ export const DOCS_GROUPS: DocsGroup[] = [
 
             <H>Halts</H>
             <P>
-              Pools can stop accepting swaps under conditions defined in advance. The Stable
-              Protection Hook&apos;s circuit breaker is the clearest case: past 5% deviation, swaps
-              are blocked until the pool recovers. This is deliberate: it protects LPs from
-              absorbing a depeg, and it is enforced by the contract, not by an operator decision.
+              Trading on a game freezes at kickoff. More generally, a pool can stop accepting trades
+              under conditions defined in advance, enforced by the contract rather than by an
+              operator decision.
             </P>
 
             <H>Resolution</H>
@@ -274,161 +254,37 @@ export const DOCS_GROUPS: DocsGroup[] = [
     ],
   },
   {
-    label: "Guides",
-    pages: [
-      {
-        id: "trading",
-        title: "Trading",
-        summary: "Swapping assets through hook-powered pools.",
-        body: (
-          <>
-            <OL>
-              <li>
-                Open <B>Trading</B> from the header, or just ask the chatbot. Any command, including
-                placing bets, can be typed there directly.
-              </li>
-              <li>Choose the pair and the amount you want to sell.</li>
-              <li>
-                Pick a venue: a hook-powered pool, a plain pool with no hook, or the bridge for
-                moving USDC across chains.
-              </li>
-              <li>
-                Review the quote. Hook pools price the fee at execution, so what you see reflects
-                current conditions, not a fixed tier.
-              </li>
-              <li>Confirm and sign. The transaction hash appears when it lands.</li>
-            </OL>
-
-            <H>If a quote fails</H>
-            <UL>
-              <li>
-                <B>Insufficient liquidity</B>: the pool returned almost nothing for that size. Try a
-                smaller amount, a different fee tier, or the no-hook venue.
-              </li>
-              <li>
-                <B>Hook unavailable for this pair</B>: that hook doesn&apos;t serve those tokens.
-                Stable Protection is for stable pairs; Dynamic Fee is for volatile ones.
-              </li>
-              <li>
-                <B>Swaps blocked</B>: Stable Protection&apos;s circuit breaker has tripped on a real
-                depeg. This clears when the pool returns inside the threshold.
-              </li>
-            </UL>
-          </>
-        ),
-      },
-      {
-        id: "liquidity",
-        title: "Providing liquidity",
-        summary: "Creating a pool or adding to one.",
-        body: (
-          <>
-            <OL>
-              <li>Sign in and open the Liquidity surface from the home menu or the command bar.</li>
-              <li>
-                Select an existing pool, or create one by choosing a pair, fee tier, and hook.
-              </li>
-              <li>Enter amounts for both sides and review the position.</li>
-              <li>
-                Approve the tokens if prompted, then confirm. Creating a pool initialises it and
-                adds liquidity in the same flow.
-              </li>
-            </OL>
-
-            <H>Fee tiers</H>
-            <Table
-              head={["Tier", "Fee", "Typical use"]}
-              rows={[
-                [<Code key="a">100</Code>, "0.01%", "Stable pairs"],
-                [<Code key="b">500</Code>, "0.05%", "cirBTC / stable"],
-                [<Code key="c">3000</Code>, "0.30%", "cirBTC pairs"],
-                [<Code key="d">10000</Code>, "1.00%", "Wide range"],
-              ]}
-            />
-            <Note>
-              On a hook-powered pool the tier is a starting point: the hook sets the fee actually
-              charged at execution, which is the point of using one.
-            </Note>
-
-            <H>Risk</H>
-            <P>
-              Providing liquidity exposes you to impermanent loss, to the assets in the pair, and to
-              the contracts involved. Fees earned may not offset price divergence. Manage positions
-              from the Positions view, where you can also remove liquidity.
-            </P>
-          </>
-        ),
-      },
-    ],
-  },
-  {
     label: "Reference",
     pages: [
       {
-        id: "networks",
-        title: "Networks and contracts",
-        summary: "Chain details, deployed hooks, and token addresses.",
+        id: "contracts",
+        title: "Contracts",
+        summary: "Where the addresses live and how to read them.",
         body: (
           <>
-            <H>Arc Testnet</H>
-            <Table
-              head={["Field", "Value"]}
-              rows={[
-                ["Chain ID", <Code key="id">5042002</Code>],
-                ["RPC", <Code key="rpc">https://rpc.testnet.arc.network</Code>],
-                [
-                  "Explorer",
-                  <A key="ex" href="https://testnet.arcscan.app">
-                    testnet.arcscan.app
-                  </A>,
-                ],
-                ["Gas token", "USDC (native)"],
-              ]}
-            />
-            <Note>
-              Arc&apos;s native gas token uses 18 decimals while the USDC ERC-20 interface uses 6.
-              Balances, transfers, and escrow use the 6-decimal interface; only gas math is in
-              18-decimal units. Mixing them is the single most common integration bug on Arc.
-            </Note>
-
-            <H>Deployed hooks</H>
-            <Table
-              head={["Hook", "Address"]}
-              rows={[
-                [
-                  "Stable Protection",
-                  <A key="sp" href={`${ARC_EXPLORER}/0xd1Deea248850BFc239Cb282b793b076357Cb20c0`}>
-                    0xd1Deea…20c0
-                  </A>,
-                ],
-                [
-                  "Dynamic Fee",
-                  <A key="df" href={`${ARC_EXPLORER}/0xA1Be807481F532c074380FCcF05be5e2A3ec80C0`}>
-                    0xA1Be80…80C0
-                  </A>,
-                ],
-                [
-                  "Dynamic Market",
-                  <A key="dm" href={`${ARC_EXPLORER}/0xbb5D42DC40128fa681882cA49f9A74d50D15E8c0`}>
-                    0xbb5D42…E8c0
-                  </A>,
-                ],
-              ]}
-            />
+            <P>
+              Mantua&apos;s markets, hook, and token addresses are deployment configuration, not
+              constants. They differ between environments and they change when a deployment does, so
+              this page deliberately does not publish a list that would go stale.
+            </P>
+            <UL>
+              <li>
+                Every transaction the app performs links to its block explorer record when it lands
+                — that is the authoritative view of the contract you just interacted with.
+              </li>
+              <li>The connected-wallet menu links to your own address on the same explorer.</li>
+              <li>
+                Integrating? Read addresses from configuration rather than hardcoding them, and
+                re-verify before any mainnet use.
+              </li>
+            </UL>
 
             <H>Tokens</H>
-            <Table
-              head={["Token", "Decimals", "Address"]}
-              rows={[
-                ["USDC", "6", <Code key="u">0x3600…0000</Code>],
-                ["EURC", "6", <Code key="e">0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a</Code>],
-                ["cirBTC", "8", <Code key="c">0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF</Code>],
-              ]}
-            />
-            <Note tone="warn">
-              Testnet deployment. Addresses change between environments. Always read them from
-              configuration rather than hardcoding, and re-verify before any mainnet use.
-            </Note>
+            <P>
+              Markets are denominated in <B>USDC</B>, which uses 6 decimals. Outcome tokens (YES/NO)
+              are minted per market and redeem at 1 USDC for the winning side, or 0.50 USDC per side
+              on a void.
+            </P>
           </>
         ),
       },

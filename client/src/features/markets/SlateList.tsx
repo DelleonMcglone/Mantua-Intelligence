@@ -16,7 +16,7 @@ interface SlateListProps {
  * One league's slate as matchup cards (B5-003): team marks, start time,
  * live/final state, and the provider's implied win probability. Cards are
  * buttons — clicking one asks the analyst about the game, which stays open
- * to logged-out users (B5-007). Trading buttons live on the market page,
+ * to logged-out users (B5-007). Trade buttons live on the market page,
  * behind the login gate, once markets open.
  */
 export function SlateList({ sport, slate, loading, onAnalyze, onTrade }: SlateListProps) {

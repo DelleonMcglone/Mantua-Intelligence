@@ -12,13 +12,17 @@ interface WalletMenuProps {
   onOpenAgent?: (() => void) | undefined;
 }
 
-const ARC_FAUCET_URL = "https://faucet.circle.com/";
+/** Circle's USDC faucet — how a user funds the wallet they just made. */
+const USDC_FAUCET_URL = "https://faucet.circle.com/";
 
 /**
  * Connected-wallet pill in the header. Click toggles a dropdown with
- * Copy address / View on ArcScan / Get testnet USDC (Circle) / Refresh
- * balances / Disconnect. Refresh dispatches `mantua:refresh-portfolio`
- * on the window — the portfolio hooks listen and re-poll immediately.
+ * Copy address / View on explorer / Get USDC / Refresh balances /
+ * Disconnect. Refresh dispatches `mantua:refresh-portfolio` on the
+ * window — the portfolio hooks listen and re-poll immediately.
+ *
+ * Nothing here names the chain or the deployment (task 001): the explorer
+ * link is resolved from the active chain rather than labelled with it.
  */
 export function WalletMenu({
   walletAddress,
@@ -27,7 +31,7 @@ export function WalletMenu({
   onOpenAgent,
 }: WalletMenuProps) {
   const chainId = useCurrentChainId();
-  const { explorerUrl, explorerName } = CHAIN_INFO[chainId];
+  const { explorerUrl } = CHAIN_INFO[chainId];
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -97,11 +101,11 @@ export function WalletMenu({
           )}
           <MenuItem onClick={handleCopy}>{copied ? "Copied!" : "Copy address"}</MenuItem>
           <MenuLink href={`${explorerUrl}/address/${walletAddress}`}>
-            View on {explorerName}
+            View on explorer
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
-          <MenuLink href={ARC_FAUCET_URL}>
-            Get testnet USDC (Circle)
+          <MenuLink href={USDC_FAUCET_URL}>
+            Get USDC (Circle)
             <ArrowUpRight className="h-3.5 w-3.5" />
           </MenuLink>
           <MenuItem onClick={handleRefresh}>Refresh balances</MenuItem>

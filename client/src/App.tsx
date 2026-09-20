@@ -1,9 +1,15 @@
+/**
+ * Top-level route table and command router.
+ *
+ * `/` is the home page — today's NFL board plus the prompt cards — for
+ * every visitor, logged in or out (decision D-121). There is no landing
+ * interstitial; the login gate lives at the trade ticket (B5-007), never
+ * in front of browsing.
+ */
 import { useEffect, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { useCurrentChainId } from "./lib/chain-context.tsx";
+import { detectIntent as detectIntentImpl, type Intent } from "./lib/chat-intent.ts";
 import type { TokenSymbol } from "./lib/tokens.ts";
-import { detectIntent as detectIntentImpl, mentionsHook, type Intent } from "./lib/chat-intent.ts";
-import { LandingPage } from "./components/landing/LandingPage.tsx";
 import { LoginModal } from "./components/auth/LoginModal.tsx";
 import { type NavDestination } from "./components/shell/MarketNav.tsx";
 import { PrivacyPage } from "./components/legal/PrivacyPage.tsx";
@@ -15,6 +21,7 @@ import { LeaguePage } from "./features/markets/LeaguePage.tsx";
 import { isSportId, type SportId } from "./features/markets/sports.ts";
 import { AppShell } from "./components/shell/AppShell.tsx";
 import { Card } from "./components/shell/Card.tsx";
+import { Footer } from "./components/shell/Footer.tsx";
 import { HomePromptRow, type HomePromptId } from "./components/shell/HomeMenu.tsx";
 import { InputBar } from "./components/shell/InputBar.tsx";
 import { AgentPanel } from "./features/agent/AgentPanel.tsx";
@@ -24,13 +31,6 @@ import { ProfilePage } from "./features/portfolio/ProfilePage.tsx";
 import { Board } from "./features/markets/Board.tsx";
 import { AssetsCard } from "./features/portfolio/AssetsCard.tsx";
 import { AssetDetailPanel } from "./features/portfolio/AssetDetailPanel.tsx";
-import { SwapPanel } from "./features/swap/SwapPanel.tsx";
-import { AddLiquidityForm } from "./features/liquidity/AddLiquidityForm.tsx";
-import type { PoolKeyContext } from "./features/liquidity/AddLiquidityForm.tsx";
-import type { HookName } from "./features/liquidity/use-create-pool.ts";
-import { LiquidityListPage } from "./features/liquidity/LiquidityListPage.tsx";
-import { PoolDetailPage } from "./features/liquidity/PoolDetailPage.tsx";
-import { PositionsList } from "./features/liquidity/PositionsList.tsx";
 
 type AnalyzeTopic =
   | "eth-price"
@@ -42,32 +42,11 @@ type AnalyzeTopic =
   | "token-price";
 
 type Route =
-  | { kind: "landing" }
   | { kind: "legal"; doc: LegalDoc }
   | { kind: "docs" }
   | { kind: "home" }
-  | {
-      kind: "swap";
-      tokenIn?: TokenSymbol;
-      tokenOut?: TokenSymbol;
-      hook?: HookName | null;
-      amountIn?: string;
-      /** Venue tab to open on: hook pool, no-hook pool, or the bridge. */
-      venue?: "hook" | "none" | "bridge";
-      /** Bridge Kit sdkName of the destination chain (bridge venue). */
-      bridgeDestination?: string;
-      /** Bumped on every chat command so the panel remounts and re-applies
-       *  the parsed tokens/hook/amount even when the route is otherwise
-       *  identical — otherwise a repeated "swap USDC for EURC" does nothing. */
-      nonce?: number;
-    }
   | { kind: "market"; sport: SportId; selectEventId?: string; direction?: "buy" | "sell" }
   | { kind: "profile" }
-  | { kind: "trading" }
-  | { kind: "pools" }
-  | { kind: "pool"; id: string }
-  | { kind: "add-liquidity"; ctx?: PoolKeyContext }
-  | { kind: "positions" }
   | { kind: "asset"; symbol: TokenSymbol }
   | {
       kind: "analyze";
@@ -78,50 +57,38 @@ type Route =
     }
   | { kind: "agent"; message?: string };
 
-// Intents that the manual Uniswap-v4 panels own when a hook is named.
-const HOOK_ACTION_KINDS = new Set<Intent["kind"]>([
-  "swap",
-  "add-liquidity",
-  "remove-liquidity",
-  "create-pool",
-]);
-// Intents the Circle agent (Arc, no-hook) can execute itself when no hook is named.
-const AGENT_ACTION_KINDS = new Set<Intent["kind"]>([
-  "swap",
-  "add-liquidity",
-  "remove-liquidity",
-  "send",
-]);
+// Intents the agent executes itself; everything else is a navigation.
+const AGENT_ACTION_KINDS = new Set<Intent["kind"]>(["send"]);
 
 // ─── Route persistence ────────────────────────────────────────────────────────
-// The route lives only in React state, so a refresh used to bounce back to the
-// landing page. Persist the last in-app route to sessionStorage and restore it
-// on load: refresh keeps your place; a fresh tab/visit still starts at landing.
+// The route lives only in React state, so a refresh would otherwise bounce
+// back to the home page. Persist the last in-app route to sessionStorage and
+// restore it on load: refresh keeps your place.
 const ROUTE_STORAGE_KEY = "mantua:last-route";
 const RESTORABLE_KINDS: readonly Route["kind"][] = [
   "home",
-  "swap",
   "market",
   "profile",
-  "trading",
-  "pools",
-  "pool",
-  "add-liquidity",
-  "positions",
   "asset",
   "analyze",
   "agent",
 ];
 
-/** What we persist. Never store the public pages — landing and legal —
+/** What we persist. Never store the public pages — legal and docs —
  *  (clear instead), and never store an agent `message`: restoring it would
  *  auto-resend the command on refresh (potentially re-executing a trade). */
 function sanitizeRouteForStorage(route: Route): Route | null {
-  if (route.kind === "landing" || route.kind === "legal" || route.kind === "docs") return null;
+  if (route.kind === "legal" || route.kind === "docs") return null;
   if (route.kind === "agent") return { kind: "agent" };
   return route;
 }
 
+/**
+ * Read the persisted route, rejecting anything this build no longer
+ * serves. A tab left open across the trading removal holds a `swap` or
+ * `pools` kind; `RESTORABLE_KINDS` drops it and the visitor lands home
+ * rather than on a blank shell.
+ */
 function loadStoredRoute(): Route | null {
   try {
     const raw = sessionStorage.getItem(ROUTE_STORAGE_KEY);
@@ -136,14 +103,14 @@ function loadStoredRoute(): Route | null {
       return parsed as Route;
     }
   } catch {
-    // Corrupt / unavailable storage → start fresh at landing.
+    // Corrupt / unavailable storage → start fresh at home.
   }
   return null;
 }
 
 export default function App() {
   const { ready, authenticated, logout, user } = usePrivy();
-  const [route, setRoute] = useState<Route>(() => loadStoredRoute() ?? { kind: "landing" });
+  const [route, setRoute] = useState<Route>(() => loadStoredRoute() ?? { kind: "home" });
   const [showLogin, setShowLogin] = useState(false);
 
   // Any surface can request the login modal without prop-drilling —
@@ -185,7 +152,7 @@ export default function App() {
       if (sanitized) sessionStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(sanitized));
       else sessionStorage.removeItem(ROUTE_STORAGE_KEY);
     } catch {
-      // Storage unavailable (private mode etc.) — refresh just returns to landing.
+      // Storage unavailable (private mode etc.) — refresh just returns home.
     }
   }, [route]);
 
@@ -210,56 +177,28 @@ export default function App() {
     );
   }
 
-  // Landing page is the default surface — public marketing copy with
-  // no Privy auth attached. "Launch App" buttons hand off to the
-  // existing in-app shell by flipping the route to `home`.
-  if (route.kind === "landing") {
-    return (
-      <LandingPage
-        onLaunch={() => {
-          setRoute({ kind: "home" });
-        }}
-        onNavigate={(destination) => {
-          setRoute(navDestinationToRoute(destination));
-        }}
-        onOpenLegal={(doc) => {
-          setRoute({ kind: "legal", doc });
-        }}
-        onOpenDocs={() => {
-          setRoute({ kind: "docs" });
-        }}
-      />
-    );
-  }
-
   if (route.kind === "docs") {
     return (
       <DocsPage
         onBack={() => {
-          setRoute({ kind: "landing" });
-        }}
-        onLaunch={() => {
           setRoute({ kind: "home" });
         }}
       />
     );
   }
 
-  // Legal pages are public too — same standalone treatment as landing.
+  // Legal pages are public and standalone — own header, back to home.
   if (route.kind === "legal") {
     const back = () => {
-      setRoute({ kind: "landing" });
-    };
-    const launch = () => {
       setRoute({ kind: "home" });
     };
     switch (route.doc) {
       case "privacy":
-        return <PrivacyPage onBack={back} onLaunch={launch} />;
+        return <PrivacyPage onBack={back} />;
       case "terms":
-        return <TermsPage onBack={back} onLaunch={launch} />;
+        return <TermsPage onBack={back} />;
       case "integrity":
-        return <MarketIntegrityPage onBack={back} onLaunch={launch} />;
+        return <MarketIntegrityPage onBack={back} />;
     }
   }
 
@@ -278,7 +217,7 @@ export default function App() {
   const handleCommand = (text: string) => {
     // Freemium chat (owner decision 2026-08-18): logged-out users may ask
     // the ANALYST — three free questions, enforced server-side — but any
-    // actionable command (trade, agent, liquidity…) demands login here.
+    // actionable command (agent, market position…) demands login here.
     if (!authenticated) {
       const guest = detectIntent(text);
       if (!guest || guest.kind === "analyze") {
@@ -289,11 +228,6 @@ export default function App() {
       return;
     }
     const intent = detectIntent(text);
-    const hookNamed = mentionsHook(text);
-    if (intent && HOOK_ACTION_KINDS.has(intent.kind) && hookNamed) {
-      setRoute(intentToRoute(intent));
-      return;
-    }
     if (route.kind === "agent") {
       window.dispatchEvent(new CustomEvent("mantua:agent-input", { detail: text }));
       return;
@@ -333,7 +267,7 @@ export default function App() {
           setRoute({ kind: "agent" });
         }}
         onLogoClick={() => {
-          setRoute({ kind: "landing" });
+          setRoute({ kind: "home" });
         }}
         onNavigate={(destination) => {
           setRoute(navDestinationToRoute(destination));
@@ -358,21 +292,13 @@ export default function App() {
 
 function LeftColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
   // B6-008 — the portfolio lives inside the profile, not as standalone nav:
-  // opening Profile swaps the left column to balances + assets. Position and
-  // asset drill-downs keep it too, since they read from it.
-  if (
-    route.kind === "profile" ||
-    route.kind === "positions" ||
-    route.kind === "asset" ||
-    route.kind === "pool"
-  ) {
+  // opening Profile swaps the left column to balances + assets. The asset
+  // drill-down keeps it too, since it reads from it.
+  if (route.kind === "profile" || route.kind === "asset") {
     return (
       <>
         <PortfolioCard />
         <AssetsCard
-          onSelectPool={(id) => {
-            setRoute({ kind: "pool", id });
-          }}
           onSelectAsset={(symbol) => {
             setRoute({ kind: "asset", symbol });
           }}
@@ -411,46 +337,16 @@ function RightColumn({ route, setRoute }: { route: Route; setRoute: (r: Route) =
 
 function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) => void }) {
   switch (route.kind) {
-    // home renders as a full-screen page (see fullPage), like market /
-    // trading / agent below.
+    // home / analyze / market / agent render as full-screen pages (see
+    // fullPage); these cases exist only because the element tree is still
+    // constructed in split mode for every route kind.
     case "home":
-      return null;
-    // swap / pools / add-liquidity / analyze / market / trading / agent
-    // render as full-screen pages (see fullPage); these cases exist only
-    // because the element tree is still constructed in split mode for
-    // every route kind.
-    case "swap":
-    case "pools":
-    case "add-liquidity":
     case "analyze":
     case "market":
-    case "trading":
+    case "agent":
       return null;
     case "profile":
       return <ProfileRoute setRoute={setRoute} />;
-    case "pool":
-      return (
-        <PoolDetailPage
-          poolId={route.id}
-          onBack={() => {
-            setRoute({ kind: "pools" });
-          }}
-          onAddLiquidity={(ctx) => {
-            setRoute({ kind: "add-liquidity", ctx: { ...ctx, locked: true } });
-          }}
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
-    case "positions":
-      return (
-        <PositionsList
-          onClose={() => {
-            setRoute({ kind: "home" });
-          }}
-        />
-      );
     case "asset":
       return (
         <AssetDetailPanel
@@ -461,15 +357,12 @@ function RouteContent({ route, setRoute }: { route: Route; setRoute: (r: Route) 
           }}
         />
       );
-    case "agent":
-      return null;
   }
 }
 
 /**
  * Full-screen routes (Polymarket-style surfaces): home, league pages, the
- * trading split, the agent, and the single-panel pages (analyze, swap,
- * pools, add-liquidity). Everything else keeps the two-column board +
+ * agent, and the analyst. Everything else keeps the two-column board +
  * panel shell. Returning undefined selects the split layout.
  */
 function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode | undefined {
@@ -486,17 +379,12 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
           sport={route.sport}
           initialEventId={route.selectEventId}
           initialDirection={route.direction}
-          onSelectSport={(sport) => {
-            setRoute({ kind: "market", sport });
-          }}
           onBack={home}
           onAgent={(message) => {
             setRoute({ kind: "agent", message });
           }}
         />
       );
-    case "trading":
-      return <TradingFullPage setRoute={setRoute} />;
     case "agent":
       return (
         <PanelPage>
@@ -521,41 +409,6 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
           />
         </PanelPage>
       );
-    case "swap":
-      return (
-        <PanelPage>
-          <SwapPanel
-            // Remount per command so a fresh "swap …" re-applies tokens/hook/
-            // amount even when the resulting route looks identical.
-            key={`swap-${String(route.nonce ?? 0)}`}
-            {...(route.tokenIn ? { initialTokenIn: route.tokenIn } : {})}
-            {...(route.tokenOut ? { initialTokenOut: route.tokenOut } : {})}
-            {...(route.hook ? { initialHook: route.hook } : {})}
-            {...(route.amountIn ? { initialAmount: route.amountIn } : {})}
-            {...(route.venue ? { initialVenue: route.venue } : {})}
-            {...(route.bridgeDestination
-              ? { initialBridgeDestination: route.bridgeDestination }
-              : {})}
-            onClose={home}
-          />
-        </PanelPage>
-      );
-    case "pools":
-      return (
-        <PanelPage wide>
-          <LiquidityListPage
-            onSelectPool={(id) => {
-              setRoute({ kind: "pool", id });
-            }}
-            onCreate={() => {
-              setRoute({ kind: "add-liquidity" });
-            }}
-            onClose={home}
-          />
-        </PanelPage>
-      );
-    case "add-liquidity":
-      return <AddLiquidityFullPage route={route} setRoute={setRoute} />;
     default:
       return undefined;
   }
@@ -563,11 +416,9 @@ function fullPage(route: Route, setRoute: (r: Route) => void): React.ReactNode |
 
 /** Full-page wrapper for the panels that used to live in the right column —
  *  a centered card; each panel keeps its own header and X-close home. */
-function PanelPage({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
+function PanelPage({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={`mx-auto flex h-full w-full ${wide ? "max-w-6xl" : "max-w-3xl"} flex-col px-6 py-6`}
-    >
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden" style={{ padding: 0 }}>
         {children}
       </Card>
@@ -575,36 +426,10 @@ function PanelPage({ children, wide }: { children: React.ReactNode; wide?: boole
   );
 }
 
-/** Add-liquidity as a full page — a component so it can key the form on the
- *  chain id: a network switch remounts it and the useState initializers
- *  re-pick chain-aware defaults. */
-function AddLiquidityFullPage({
-  route,
-  setRoute,
-}: {
-  route: Extract<Route, { kind: "add-liquidity" }>;
-  setRoute: (r: Route) => void;
-}) {
-  const chainId = useCurrentChainId();
-  return (
-    <PanelPage>
-      <AddLiquidityForm
-        key={chainId}
-        {...(route.ctx ? { ctx: route.ctx } : {})}
-        onBack={() => {
-          setRoute({ kind: "pools" });
-        }}
-        onClose={() => {
-          setRoute({ kind: "home" });
-        }}
-      />
-    </PanelPage>
-  );
-}
-
-/** Home page — the four prompt cards in a row across the top (agent →
- *  analyze → swap → liquidity), then today's boards split side by side
- *  (NFL | WNBA) instead of stacked. Chat starts from the dock below. */
+/**
+ * Home page — the prompt cards in a row across the top, then today's NFL
+ * board, then the footer (HP-003). Chat starts from the dock below.
+ */
 function HomeFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-6">
@@ -613,7 +438,7 @@ function HomeFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
           setRoute(promptToRoute(id));
         }}
       />
-      <div className="mt-5 grid items-start gap-5 md:grid-cols-2">
+      <div className="mt-5 grid items-start gap-5">
         <Board
           onAnalyze={(question) => {
             setRoute({ kind: "analyze", question });
@@ -626,39 +451,14 @@ function HomeFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
           }}
         />
       </div>
-    </div>
-  );
-}
-
-/** B7-001/002 — full-width trading page: swap and liquidity side by side
- *  at equal height, pool list across the full width beneath. */
-function TradingFullPage({ setRoute }: { setRoute: (r: Route) => void }) {
-  const chainId = useCurrentChainId();
-  return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-6">
-      <div className="grid items-stretch gap-5 lg:grid-cols-2">
-        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
-          <SwapPanel />
-        </Card>
-        <Card className="flex flex-col overflow-hidden" style={{ padding: 0 }}>
-          <AddLiquidityForm
-            key={`trading-${String(chainId)}`}
-            onBack={() => {
-              setRoute({ kind: "pools" });
-            }}
-          />
-        </Card>
-      </div>
-      <Card className="mt-5 flex flex-col overflow-hidden" style={{ padding: 0 }}>
-        <LiquidityListPage
-          onSelectPool={(id) => {
-            setRoute({ kind: "pool", id });
-          }}
-          onCreate={() => {
-            setRoute({ kind: "add-liquidity" });
-          }}
-        />
-      </Card>
+      <Footer
+        onOpenLegal={(doc) => {
+          setRoute({ kind: "legal", doc });
+        }}
+        onOpenDocs={() => {
+          setRoute({ kind: "docs" });
+        }}
+      />
     </div>
   );
 }
@@ -669,9 +469,6 @@ function ProfileRoute({ setRoute }: { setRoute: (r: Route) => void }) {
   return (
     <ProfilePage
       walletAddress={user?.wallet?.address}
-      onViewPositions={() => {
-        setRoute({ kind: "positions" });
-      }}
       onOpenAgent={() => {
         setRoute({ kind: "agent" });
       }}
@@ -686,24 +483,18 @@ function ProfileRoute({ setRoute }: { setRoute: (r: Route) => void }) {
   );
 }
 
-/** Where each landing-header nav item lands in the app shell. */
+/** Where each header nav item lands in the app shell. */
 function navDestinationToRoute(destination: NavDestination): Route {
   switch (destination.kind) {
     case "market":
       return { kind: "market", sport: destination.sport };
     case "agent":
       return { kind: "agent" };
-    case "trading":
-      return { kind: "trading" };
   }
 }
 
 function promptToRoute(id: HomePromptId): Route {
   switch (id) {
-    case "pool":
-      return { kind: "pools" };
-    case "swap":
-      return { kind: "swap" };
     case "analyze":
       return { kind: "analyze" };
     case "agent":
@@ -714,9 +505,7 @@ function promptToRoute(id: HomePromptId): Route {
 /**
  * Re-export of the pure intent matcher from `lib/chat-intent.ts`.
  * The returned `Intent` goes through `intentToRoute()` below to land
- * on a concrete `Route` — the two unions don't line up shape-for-
- * shape (Intent has create-pool / remove-liquidity / send / portfolio
- * kinds that collapse into a smaller Route set).
+ * on a concrete `Route`.
  */
 function detectIntent(text: string): Intent | null {
   return detectIntentImpl(text);
@@ -724,56 +513,18 @@ function detectIntent(text: string): Intent | null {
 
 /**
  * Map a parsed `Intent` (from the chat NLP layer) onto a concrete
- * `Route` (what `RouteContent` knows how to render). Most Intent kinds
- * have a 1:1 Route counterpart; the kinds that don't yet collapse to
- * the closest existing panel:
+ * `Route` (what `RouteContent` / `fullPage` know how to render).
  *
- * - `create-pool` → `add-liquidity` — the AddLiquidityForm already
- *   handles create-or-add via its calldata flow (initialize the pool
- *   if missing, then add liquidity).
- * - `remove-liquidity` → `positions` — per-position deep-linking
- *   needs a pool/position id we don't extract yet; PositionsList lets
- *   the user pick which position to remove.
+ * Two kinds collapse onto a neighbouring surface:
+ *
  * - `send` → `agent` — the conversational agent handles sends.
  * - `portfolio` → `profile` — the profile surfaces PortfolioCard
  *   + AssetsCard.
- *
- * As deep-link surfaces land (send Route, etc.), the corresponding
- * `case` here is the only place that needs to change — the parser
- * is already producing the richer intent.
  */
-// Monotonic id so each chat command yields a distinct swap route, forcing
-// the swap panel to remount and re-apply the parsed tokens/hook/amount.
-let swapNonce = 0;
-function nextSwapNonce(): number {
-  swapNonce += 1;
-  return swapNonce;
-}
-
 function intentToRoute(intent: Intent): Route {
   switch (intent.kind) {
     case "home":
       return { kind: "home" };
-    case "swap":
-      return {
-        kind: "swap",
-        ...(intent.tokenIn ? { tokenIn: intent.tokenIn } : {}),
-        ...(intent.tokenOut ? { tokenOut: intent.tokenOut } : {}),
-        // Only forward an explicitly-named hook; otherwise let the panel
-        // pick its pair recommendation.
-        ...(intent.hook ? { hook: intent.hook } : {}),
-        ...(intent.amountIn ? { amountIn: intent.amountIn } : {}),
-        nonce: nextSwapNonce(),
-      };
-    case "pools":
-      return { kind: "pools" };
-    case "add-liquidity":
-    case "create-pool":
-      return intent.ctx ? { kind: "add-liquidity", ctx: intent.ctx } : { kind: "add-liquidity" };
-    case "remove-liquidity":
-      return { kind: "positions" };
-    case "positions":
-      return { kind: "positions" };
     case "send":
       return { kind: "agent" };
     case "agent":
@@ -784,25 +535,15 @@ function intentToRoute(intent: Intent): Route {
       return { kind: "market", sport: intent.sport };
     case "position":
       // B8-004/B8-005 — position execution is gated until the market
-      // contracts deploy. Land on the league's market page (NFL when no
-      // league was named), which says honestly what's open.
-      return { kind: "market", sport: intent.sport ?? "nfl" };
+      // contracts deploy. Land on the NFL market page, which says
+      // honestly what's open.
+      return { kind: "market", sport: "nfl" };
     case "analyze":
       return {
         kind: "analyze",
         ...(intent.topic ? { topic: intent.topic } : {}),
         ...(intent.question ? { question: intent.question } : {}),
         ...(intent.symbol ? { symbol: intent.symbol } : {}),
-      };
-    case "bridge":
-      // Bridging lives inside the Swap panel as its third venue — a bridge
-      // command opens Swap with the Bridge tab selected and prefilled.
-      return {
-        kind: "swap",
-        venue: "bridge",
-        ...(intent.amount ? { amountIn: intent.amount } : {}),
-        ...(intent.destination ? { bridgeDestination: intent.destination } : {}),
-        nonce: nextSwapNonce(),
       };
   }
 }

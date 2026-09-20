@@ -4,7 +4,10 @@
  * the most actively edited part of the chat path: token extraction,
  * typo aliasing, verb routing, generic analyze openers.
  *
- * Each block name maps to the `detectIntent` branch under test.
+ * Each block name maps to the `detectIntent` branch under test. The
+ * "removed surfaces" block is the guard for task 001: trading verbs must
+ * not resurrect a swap / pool / bridge route, and a non-NFL league must
+ * not route to a market page that no longer exists.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -12,18 +15,19 @@ import {
   detectIntent,
   extractAnalyzeSymbol,
   extractEvmAddress,
+  extractLeague,
   extractWalletTokens,
 } from "./chat-intent.ts";
 
 describe("extractWalletTokens", () => {
   it("returns tokens in left-to-right order", () => {
-    const got = extractWalletTokens("swap USDC for cirBTC").map((m) => m.sym);
+    const got = extractWalletTokens("send USDC then cirBTC").map((m) => m.sym);
     assert.deepEqual(got, ["USDC", "cirBTC"]);
   });
 
   it("forgives common transposition typos", () => {
     // 'cbBCT' is a common transposition of the cirBTC alias 'cbbtc'.
-    const got = extractWalletTokens("swap USDC for cbBCT").map((m) => m.sym);
+    const got = extractWalletTokens("send USDC and cbBCT").map((m) => m.sym);
     assert.deepEqual(got, ["USDC", "cirBTC"]);
   });
 
@@ -57,6 +61,17 @@ describe("extractAnalyzeSymbol", () => {
 
   it("returns null when no analyze symbol is present", () => {
     assert.equal(extractAnalyzeSymbol("how does fed rate decision work"), null);
+  });
+});
+
+describe("extractLeague", () => {
+  it("recognizes the one league Mantua runs markets for", () => {
+    assert.equal(extractLeague("show me nfl games"), "nfl");
+  });
+
+  it("returns null for leagues with no market page", () => {
+    assert.equal(extractLeague("show me wnba games"), null);
+    assert.equal(extractLeague("nba odds"), null);
   });
 });
 
@@ -149,142 +164,48 @@ describe("detectIntent: token-price", () => {
   });
 });
 
-describe("detectIntent: swap", () => {
-  it("'swap USDC for cirBTC' extracts tokenIn=USDC, tokenOut=cirBTC", () => {
-    assert.deepEqual(detectIntent("swap USDC for cirBTC"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "cirBTC",
+describe("detectIntent: removed surfaces (task 001)", () => {
+  const TRADING_KINDS = [
+    "swap",
+    "pools",
+    "add-liquidity",
+    "create-pool",
+    "remove-liquidity",
+    "positions",
+    "bridge",
+  ];
+
+  const tradingPrompts = [
+    "swap USDC for cirBTC",
+    "swap 10 USDC for EURC",
+    "trade USDC to EURC",
+    "add liquidity to a USDC EURC pool",
+    "lp USDC EURC",
+    "Create a USDC/EURC pool with stable protection",
+    "Remove 50% of my liquidity from the USDC/EURC pool",
+    "Bridge 10 USDC to Base",
+    "cross-chain transfer 2.5 USDC to optimism",
+    "pools",
+  ];
+
+  for (const prompt of tradingPrompts) {
+    it(`'${prompt}' no longer opens a trading surface`, () => {
+      const intent = detectIntent(prompt);
+      if (intent) assert.ok(!TRADING_KINDS.includes(intent.kind), `got ${intent.kind}`);
     });
+  }
+
+  it("'swap USDC for cirBTC' falls through to the analyst", () => {
+    assert.equal(detectIntent("swap USDC for cirBTC"), null);
   });
 
-  it("'swap USDC for cbBCT' (typo) still extracts cirBTC", () => {
-    assert.deepEqual(detectIntent("swap USDC for cbBCT"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "cirBTC",
-    });
-  });
-
-  it("'trade USDC to EURC'", () => {
-    assert.deepEqual(detectIntent("trade USDC to EURC"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "EURC",
-    });
-  });
-
-  it("single-token swap → tokenIn pre-filled", () => {
-    assert.deepEqual(detectIntent("swap usdc"), {
-      kind: "swap",
-      tokenIn: "USDC",
-    });
-  });
-
-  it("verb only → swap with no token presets", () => {
-    assert.deepEqual(detectIntent("swap stablecoins"), { kind: "swap" });
-  });
-
-  it("'swap 10 USDC for EURC' → carries amount", () => {
-    assert.deepEqual(detectIntent("swap 10 USDC for EURC"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "EURC",
-      amountIn: "10",
-    });
-  });
-
-  it("'swap USDC for EURC with stable protection' → carries hook", () => {
-    assert.deepEqual(detectIntent("swap USDC for EURC with stable protection"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "EURC",
-      hook: "stable-protection",
-    });
-  });
-
-  it("'swap $25 USDC for cirBTC with dynamic fee' → carries amount + hook", () => {
-    assert.deepEqual(detectIntent("swap $25 USDC for cirBTC with dynamic fee"), {
-      kind: "swap",
-      tokenIn: "USDC",
-      tokenOut: "cirBTC",
-      hook: "dynamic-fee",
-      amountIn: "25",
-    });
-  });
-});
-
-describe("detectIntent: add-liquidity", () => {
-  it("'add liquidity to USDC/EURC pool' → add-liquidity ctx", () => {
-    assert.deepEqual(detectIntent("add liquidity to a USDC EURC pool"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
-    });
-  });
-
-  it("'add liquidity to USDC cbBCT' (typo) extracts both tokens", () => {
-    assert.deepEqual(detectIntent("add liquidity to a USDC cbBCT pool"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: null },
-    });
-  });
-
-  it("'lp USDC EURC' (LP shorthand)", () => {
-    assert.deepEqual(detectIntent("lp USDC EURC"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: null },
-    });
-  });
-
-  it("'add liquidity' with no token pair → pools fallback", () => {
-    assert.deepEqual(detectIntent("add liquidity"), { kind: "pools" });
-  });
-
-  it("'add liquidity to a USDC cirBTC pool with a dynamic fee' → carries hook", () => {
-    assert.deepEqual(detectIntent("add liquidity to a USDC cirBTC pool with a dynamic fee"), {
-      kind: "add-liquidity",
-      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: "dynamic-fee" },
-    });
-  });
-
-  it("'Add liquidity $10 USDC / $10 cirBTC dynamic fee pool' → carries amounts + hook", () => {
-    assert.deepEqual(detectIntent("Add liquidity $10 USDC / $10 cirBTC dynamic fee pool"), {
-      kind: "add-liquidity",
-      ctx: {
-        tokenA: "USDC",
-        tokenB: "cirBTC",
-        fee: 500,
-        hook: "dynamic-fee",
-        amountA: "10",
-        amountB: "10",
-      },
-    });
-  });
-
-  it("'add 100 USDC and 85 EURC to the pool' → parses both amounts", () => {
-    assert.deepEqual(detectIntent("add 100 USDC and 85 EURC to the pool"), {
-      kind: "add-liquidity",
-      ctx: {
-        tokenA: "USDC",
-        tokenB: "EURC",
-        fee: 100,
-        hook: null,
-        amountA: "100",
-        amountB: "85",
-      },
-    });
+  it("'show me wnba games' does not open a league page", () => {
+    const intent = detectIntent("show me wnba games");
+    assert.notEqual(intent?.kind, "market");
   });
 });
 
 describe("detectIntent: nav fallbacks", () => {
-  it("'show my positions' → positions", () => {
-    assert.deepEqual(detectIntent("show my positions"), { kind: "positions" });
-  });
-
-  it("'pools' bare → pools", () => {
-    assert.deepEqual(detectIntent("pools"), { kind: "pools" });
-  });
-
   it("unmatched text → null", () => {
     assert.equal(detectIntent("hello there"), null);
   });
@@ -304,43 +225,6 @@ describe("extractEvmAddress", () => {
 
   it("rejects shorter hex strings (not valid EVM addresses)", () => {
     assert.equal(extractEvmAddress("the value 0xdead is too short"), null);
-  });
-});
-
-describe("detectIntent: create-pool", () => {
-  it("'Create a USDC/EURC pool with stable protection' → create-pool ctx", () => {
-    assert.deepEqual(detectIntent("Create a USDC/EURC pool with stable protection"), {
-      kind: "create-pool",
-      ctx: { tokenA: "USDC", tokenB: "EURC", fee: 100, hook: "stable-protection" },
-    });
-  });
-
-  it("'Make a new USDC cirBTC pool with volatility-based fees' → create-pool ctx", () => {
-    assert.deepEqual(detectIntent("Make a new USDC cirBTC pool with volatility-based fees"), {
-      kind: "create-pool",
-      ctx: { tokenA: "USDC", tokenB: "cirBTC", fee: 500, hook: null },
-    });
-  });
-
-  it("'Create a pool with all four hooks' (no token pair) → no create-pool (falls through)", () => {
-    // Adversarial / nonsensical prompt — no token pair, so the
-    // create-pool pre-flight skips and the rest of the rules see only
-    // the `pool` bare keyword.
-    assert.deepEqual(detectIntent("Create a pool with all four hooks"), { kind: "pools" });
-  });
-});
-
-describe("detectIntent: remove-liquidity", () => {
-  it("'Remove 50% of my liquidity from the USDC/EURC pool' → remove-liquidity", () => {
-    assert.deepEqual(detectIntent("Remove 50% of my liquidity from the USDC/EURC pool"), {
-      kind: "remove-liquidity",
-    });
-  });
-
-  it("'Withdraw from my USDC/cirBTC position' → remove-liquidity", () => {
-    assert.deepEqual(detectIntent("Withdraw from my USDC/cirBTC position"), {
-      kind: "remove-liquidity",
-    });
   });
 });
 
@@ -373,54 +257,13 @@ describe("detectIntent: portfolio", () => {
   });
 });
 
-describe("detectIntent: bridge (Swap panel's Bridge venue)", () => {
-  it("'Bridge 10 USDC to Base' → bridge with amount + destination", () => {
-    assert.deepEqual(detectIntent("Bridge 10 USDC to Base"), {
-      kind: "bridge",
-      amount: "10",
-      destination: "Base_Sepolia",
-    });
-  });
-
-  it("'Bridge 10USDC to Base' (no space before token) → bridge with amount + destination", () => {
-    assert.deepEqual(detectIntent("Bridge 10USDC to Base"), {
-      kind: "bridge",
-      amount: "10",
-      destination: "Base_Sepolia",
-    });
-  });
-
-  it("'Bridge USDC to arbitrum' (no amount) → bridge with destination only", () => {
-    assert.deepEqual(detectIntent("Bridge USDC to arbitrum"), {
-      kind: "bridge",
-      destination: "Arbitrum_Sepolia",
-    });
-  });
-
-  it("'bridge' alone → bridge with no prefill", () => {
-    assert.deepEqual(detectIntent("bridge"), { kind: "bridge" });
-  });
-
-  it("'cross-chain transfer 2.5 USDC to optimism' → bridge", () => {
-    assert.deepEqual(detectIntent("cross-chain transfer 2.5 USDC to optimism"), {
-      kind: "bridge",
-      amount: "2.5",
-      destination: "Optimism_Sepolia",
-    });
-  });
-});
-
 describe("sports intents (B8-003)", () => {
   it("'nfl' bare → the NFL market page", () => {
     assert.deepEqual(detectIntent("nfl"), { kind: "market", sport: "nfl" });
   });
 
-  it("'show me wnba games' → the WNBA market page (wnba beats the nba substring)", () => {
-    assert.deepEqual(detectIntent("show me wnba games"), { kind: "market", sport: "wnba" });
-  });
-
-  it("'nba odds' → NBA, not WNBA", () => {
-    assert.deepEqual(detectIntent("nba odds"), { kind: "market", sport: "nba" });
+  it("'show me nfl games' → the NFL market page", () => {
+    assert.deepEqual(detectIntent("show me nfl games"), { kind: "market", sport: "nfl" });
   });
 
   it("'analyze the nfl matchup tonight' → falls through to research, not league nav", () => {
@@ -432,19 +275,17 @@ describe("sports intents (B8-003)", () => {
     assert.deepEqual(detectIntent("bet on the chiefs"), { kind: "position", action: "open" });
   });
 
-  it("'open a position on the nfl game' → open position with the league", () => {
+  it("'open a position on the nfl game' → open position", () => {
     assert.deepEqual(detectIntent("open a position on the nfl game"), {
       kind: "position",
       action: "open",
-      sport: "nfl",
     });
   });
 
-  it("'close my wnba position' → close, not league browsing", () => {
-    assert.deepEqual(detectIntent("close my wnba position"), {
+  it("'close my nfl position' → close, not league browsing", () => {
+    assert.deepEqual(detectIntent("close my nfl position"), {
       kind: "position",
       action: "close",
-      sport: "wnba",
     });
   });
 
