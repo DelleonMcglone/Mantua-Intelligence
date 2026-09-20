@@ -125,9 +125,13 @@ What the repository does have, and what was run:
 - `npm test -w @mantua/client` — 47 tests, 47 pass. (`error-mapping.test.ts` went
   with `features/liquidity/`.)
 - `npm test -w @mantua/agent` — 19 tests, 19 pass.
-- `npm test -w @mantua/server` — 116 tests, 104 pass, **12 fail**. Those twelve
-  fail identically on `main` (verified by building a worktree at `main` and
-  running the same command); they are pre-existing and untouched by this change.
+- `npm test -w @mantua/server` — 233 tests, 233 pass, run the way CI runs it.
+  `server/src/env.ts` parses its required vars at module load, so the suite must
+  be given the same stubs `.github/workflows/ci.yml` sets
+  (`DATABASE_URL`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`); without them twelve test
+  files abort at import and the runner reports 116 tests / 12 failures on this
+  branch and on `main` alike. That is an environment artifact, not a test
+  failure.
 - `npm run typecheck` and `npm run lint` across all three workspaces: clean.
 - `npm run build -w @mantua/client`: clean.
 - A grep sweep for the removed vocabulary as the stand-in for PF-018 / T-005. The
