@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
-import { ChainSelector } from "./ChainSelector.tsx";
 
 interface Props {
   onSubmit: (text: string) => void;
@@ -9,11 +8,10 @@ interface Props {
 }
 
 /**
- * Persistent chat input bar — sits at the bottom of the right-column
- * card and matches prototype `InputBar` in app.jsx. Submits route
- * commands ("swap", "liquidity", "positions") to the parent so the
- * panel can switch routes; free-form text starts a chat conversation
- * (chat surface is a follow-on slice).
+ * Persistent chat input bar — sits at the bottom of every page. Submits
+ * route commands ("nfl markets", "my agent", "my portfolio") to the
+ * parent so the page can switch routes; free-form text goes to the
+ * analyst.
  */
 export function InputBar({ onSubmit, placeholder }: Props) {
   const [value, setValue] = useState("");
@@ -36,7 +34,7 @@ export function InputBar({ onSubmit, placeholder }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
-          placeholder={placeholder ?? "Ask Mantua anything or type a trade command..."}
+          placeholder={placeholder ?? "Ask Mantua anything about today's games and markets..."}
           className="flex-1 bg-transparent border-none outline-none text-[13px] text-text"
         />
         <button
@@ -47,9 +45,6 @@ export function InputBar({ onSubmit, placeholder }: Props) {
         >
           <Send className="h-4 w-4" />
         </button>
-      </div>
-      <div className="mt-2 flex gap-2 items-center">
-        <ChainSelector />
       </div>
     </div>
   );

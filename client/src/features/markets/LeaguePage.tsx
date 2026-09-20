@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { publicClient } from "@/lib/privy/wallet-client.ts";
+import { publicClientFor } from "@/lib/privy/wallet-client.ts";
+import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { getExplorerTxUrl } from "@/lib/chains.ts";
 import { parseAbi } from "viem";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
-import { getSport, SPORTS, type SportId } from "./sports.ts";
+import { getSport, type SportId } from "./sports.ts";
 import { useSlate, type SlateEvent } from "./use-slate.ts";
 import { useMarketTrade } from "./use-market-trade.ts";
 import { MarketDetail } from "./MarketDetail.tsx";
 
-const EXPLORER = "https://testnet.arcscan.app/tx/";
-
 interface Props {
   sport: SportId;
-  onSelectSport: (id: SportId) => void;
   /** Back to the home page. */
   onBack: () => void;
   /** Hand a matchup to the autonomous agent (detail view's Agent tab). */
@@ -132,17 +131,9 @@ function WeekSelector({
  * Full-screen league page (Polymarket-style): date-grouped game rows with
  * moneyline prices in cents, and a persistent trade sidebar on the right.
  * Clicking a price selects that team into the sidebar; the sidebar quotes
- * live and executes with the user's wallet. Covered leagues only — the
- * "soon" leagues render the full-screen coming-soon state instead.
+ * live and executes with the user's wallet.
  */
-export function LeaguePage({
-  sport,
-  onSelectSport,
-  onBack,
-  onAgent,
-  initialEventId,
-  initialDirection,
-}: Props) {
+export function LeaguePage({ sport, onBack, onAgent, initialEventId, initialDirection }: Props) {
   const active = getSport(sport);
   const weekOptions = useMemo(() => buildWeekOptions(), []);
   // Index 1 = "This week" — the page shows the week's games, not just today's.
@@ -175,9 +166,6 @@ export function LeaguePage({
   const detailEvent = detailId
     ? (events.find((e) => e.providerEventId === detailId) ?? null)
     : null;
-
-  if (active.coverage === "soon")
-    return <ComingSoon sport={sport} onSelectSport={onSelectSport} onBack={onBack} />;
 
   // Group by local date.
   const groups = new Map<string, SlateEvent[]>();
@@ -431,6 +419,7 @@ function TradeSidebar({
   initialDirection?: "buy" | "sell" | undefined;
 }) {
   const { authenticated, user } = usePrivy();
+  const chainId = useCurrentChainId();
   const { event, outcomeIndex } = selection;
   const [direction, setDirection] = useState<"buy" | "sell">(initialDirection ?? "buy");
   const [amount, setAmount] = useState("0");
@@ -453,7 +442,7 @@ function TradeSidebar({
   const yesToken = calldata?.yesToken;
   useEffect(() => {
     if (!yesToken || !walletAddress) return;
-    publicClient
+    publicClientFor(chainId)
       .readContract({
         address: yesToken,
         abi: BALANCE_ABI,
@@ -464,7 +453,7 @@ function TradeSidebar({
       .catch(() => {
         setYesBalance(null);
       });
-  }, [yesToken, walletAddress, phase.kind]);
+  }, [yesToken, walletAddress, phase.kind, chainId]);
 
   const quote = calldata?.quote ?? null;
   const out = quote ? Number(quote.amountOut) / 1e6 : null;
@@ -596,7 +585,7 @@ function TradeSidebar({
           <span className="text-green">
             Done.{" "}
             <a
-              href={`${EXPLORER}${phase.txHash}`}
+              href={getExplorerTxUrl(chainId, phase.txHash)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
@@ -636,58 +625,6 @@ function TradeSidebar({
         Trading halts at kickoff. Winning YES redeems for 1 USDC; postponed or tied games settle
         both sides at 0.50. By trading you agree to the Terms of Use.
       </p>
-    </div>
-  );
-}
-
-// ─── Coming soon ─────────────────────────────────────────────────────────────
-
-function ComingSoon({
-  sport,
-  onSelectSport,
-  onBack,
-}: {
-  sport: SportId;
-  onSelectSport: (id: SportId) => void;
-  onBack: () => void;
-}) {
-  const active = getSport(sport);
-  const Icon = active.icon;
-  const launch = SPORTS.filter((s) => s.coverage === "launch");
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-6 py-24 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/15 text-accent">
-        <Icon className="h-8 w-8" />
-      </div>
-      <h1 className="mt-5 text-[26px] font-bold tracking-tight">{active.label} — coming soon</h1>
-      <p className="mt-2 max-w-md text-[14px] leading-relaxed text-text-dim">
-        {launch.map((s) => s.label).join(" and ")} are covered first. {active.label} markets join
-        once those are running.
-      </p>
-      <div className="mt-6 flex gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border-soft bg-transparent px-4 py-2 text-[13px] font-medium text-text-dim transition-colors hover:text-text cursor-pointer"
-        >
-          <ArrowLeft className="h-4 w-4" /> Home
-        </button>
-        {launch.map((s) => {
-          const SIcon = s.icon;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => {
-                onSelectSport(s.id);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-[13px] font-medium text-accent transition-colors hover:bg-accent/20 cursor-pointer"
-            >
-              <SIcon className="h-4 w-4" /> Go to {s.label}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

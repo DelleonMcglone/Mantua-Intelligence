@@ -9,8 +9,8 @@ interface AgentPanelProps {
 /**
  * Agent panel entry point — "Your Circle Agent", a free-form autonomous
  * conversational surface. The user types in the global bar; each turn streams
- * from `/api/agent/chat`, with the agent executing tools (swap / send / data /
- * portfolio) on its Circle wallet on Arc. No forms, no confirmation.
+ * from `/api/agent/chat`, with the agent executing its tools (send / data /
+ * portfolio / market) on its own Circle wallet. No forms, no confirmation.
  */
 export function AgentPanel({ onClose, initialMessage }: AgentPanelProps) {
   return <CircleAgentChat onClose={onClose} {...(initialMessage ? { initialMessage } : {})} />;

@@ -2,21 +2,19 @@ import { LegalPage, Section, List, DiscordLink, GOVERNING_LAW } from "./LegalPag
 
 interface Props {
   onBack: () => void;
-  onLaunch: () => void;
 }
 
 /**
  * Terms of Use. Written for this product: a non-custodial interface to
- * on-chain prediction markets and Uniswap v4 pools, where the user signs
- * every transaction themselves. Draft — not reviewed by counsel, and the
+ * on-chain prediction markets, where the user signs every transaction
+ * themselves. Draft — not reviewed by counsel, and the
  * governing-law and dispute sections still need a jurisdiction.
  */
-export function TermsPage({ onBack, onLaunch }: Props) {
+export function TermsPage({ onBack }: Props) {
   return (
     <LegalPage
       title="Terms of Use"
       onBack={onBack}
-      onLaunch={onLaunch}
       intro={
         <p>
           These terms are an agreement between you and Mantua Intelligence (&ldquo;Mantua&rdquo;,
@@ -39,7 +37,8 @@ export function TermsPage({ onBack, onLaunch }: Props) {
       <Section title="What the service is">
         <p>
           Mantua provides an interface to smart contracts deployed on public blockchains. Through
-          it, you can take positions in prediction markets, swap assets, and provide liquidity.
+          it, you can take positions in prediction markets on sporting events, and instruct an
+          autonomous agent to act on your behalf within limits you set.
         </p>
         <p>
           <strong className="text-text">We are non-custodial.</strong> We never take possession or
@@ -122,7 +121,7 @@ export function TermsPage({ onBack, onLaunch }: Props) {
       <Section title="Fees and costs">
         <p>
           Trading incurs protocol and pool fees, which vary with market conditions and the hook
-          governing the pool, and network transaction fees paid to the underlying blockchain. Fees
+          governing the market, and network transaction fees paid to the underlying blockchain. Fees
           are disclosed in the interface before you confirm. Network fees are never paid to us.
         </p>
       </Section>
@@ -138,11 +137,11 @@ export function TermsPage({ onBack, onLaunch }: Props) {
 
       <Section title="Risk">
         <p>
-          Trading event contracts and providing liquidity involve substantial risk, including total
-          loss of the assets you commit. Beyond market risk, you accept the risks inherent to this
-          technology: smart contract bugs and exploits, oracle failure or manipulation, network
-          congestion and reorganization, stablecoin depegs, impermanent loss, and failures at
-          third-party providers. Do not commit more than you can afford to lose.
+          Trading event contracts involves substantial risk, including total loss of the assets you
+          commit. Beyond market risk, you accept the risks inherent to this technology: smart
+          contract bugs and exploits, oracle failure or manipulation, network congestion and
+          reorganization, stablecoin depegs, and failures at third-party providers. Do not commit
+          more than you can afford to lose.
         </p>
       </Section>
 

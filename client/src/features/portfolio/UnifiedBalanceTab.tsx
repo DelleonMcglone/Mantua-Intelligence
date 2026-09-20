@@ -10,15 +10,19 @@ function fmtUsdc(s: string | undefined): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
-/** "Arc_Testnet" → "Arc Testnet". */
+/**
+ * Gateway names its chains with the deployment suffix ("Arc_Testnet",
+ * "Base_Sepolia"). Render the network alone — which deployment we are on
+ * is not something the product says out loud (task 001).
+ */
 function chainLabel(name: string): string {
-  return name.replace(/_/g, " ");
+  return name.replace(/_/g, " ").replace(/\s*(testnet|sepolia|mainnet)$/i, "");
 }
 
 /**
  * Unified Balance (Treasury) tab in the Portfolio card — the agent wallet's
  * consolidated USDC across chains via Circle Gateway. View + deposit (the
- * deposit SOURCE is the agent wallet on Arc). Spending out of the unified
+ * deposit SOURCE is the agent wallet). Spending out of the unified
  * balance is an Agent command, not part of this tab. This is the app's
  * server-side agent wallet (distinct from the user's connected wallet).
  *
@@ -42,8 +46,8 @@ export function UnifiedBalanceTab({ ub }: { ub: ReturnType<typeof useUnifiedBala
     <div className="p-4 space-y-3">
       <div className="text-[11px] text-text-mute">
         Consolidate USDC across chains into one balance, accessible anywhere — reduces the working
-        capital you tie up per chain. Deposits move USDC from the agent wallet on Arc. (Agent
-        treasury · Circle Gateway)
+        capital you tie up per chain. Deposits move USDC from the agent wallet. (Agent treasury ·
+        Circle Gateway)
       </div>
 
       {ub.loading && !ub.data && <div className="text-[12px] text-text-dim">Loading balance…</div>}
@@ -122,7 +126,7 @@ export function UnifiedBalanceTab({ ub }: { ub: ReturnType<typeof useUnifiedBala
 
           <div className="text-[11px] text-text-mute pt-1 border-t border-border-soft">
             To spend from the unified balance, ask your Agent — e.g. “spend 1 USDC from my unified
-            balance to Base Sepolia”.
+            balance”.
           </div>
         </>
       )}

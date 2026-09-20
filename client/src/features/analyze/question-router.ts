@@ -13,7 +13,7 @@ export interface AnalyzeQuery {
  *  - returns `null` otherwise (→ AI-backed free-form research stream)
  *
  * We reuse the app's `detectIntent` but honor ONLY analyze intents — trade/nav
- * verbs ("swap", "add liquidity", …) must not hijack the research thread, so
+ * verbs must not hijack the research thread, so
  * those fall through to `null` and get answered conversationally too.
  */
 export function resolveAnalyzeQuestion(text: string): AnalyzeQuery | null {

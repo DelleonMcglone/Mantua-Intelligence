@@ -1,8 +1,13 @@
 /**
- * Supported chains: **Base Sepolia (84532, default)** and **Arc Testnet
- * (5042002)**. Per-chain config (v4 contracts, hook addresses, token
- * registry, RPC URL) is keyed by chainId in the modules that own each
- * concern.
+ * Chain definitions.
+ *
+ * The product runs on one chain — `DEFAULT_CHAIN_ID` — and never names it
+ * in the UI (task 001). Arc stays defined because the Circle agent's own
+ * wallet, portfolio and Gateway treasury live there; it is not selectable
+ * and nothing user-facing refers to it.
+ *
+ * Per-chain config (v4 contracts, hook addresses, token registry, RPC URL)
+ * is keyed by chainId in the modules that own each concern.
  */
 
 import { fallback, http, type FallbackTransport } from "viem";
@@ -14,7 +19,7 @@ import {
 import { cleanEnv } from "./env.ts";
 
 // `import.meta.env` only exists under Vite — node-based test runners load
-// this module too (via hook-recommendations et al.), so read defensively.
+// this module too, so read defensively.
 const viteEnv: Record<string, string | undefined> =
   (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
@@ -115,86 +120,27 @@ export function isSupportedTestnetChainId(id: number): id is SupportedTestnetCha
 
 export interface ChainInfo {
   id: SupportedTestnetChainId;
-  shortName: string;
-  displayName: string;
   viemChain: Chain;
   /** Public RPC URL. Override per env via `VITE_ARC_RPC_URL`. */
   defaultRpcUrl: string;
   /** `<base>/tx/<hash>` for transaction links; `<base>/address/<addr>` for addresses. */
   explorerUrl: string;
-  explorerName: string;
-  /** Brand-color dot for the chain chip. */
-  dotColor: string;
 }
 
 export const CHAIN_INFO: Record<SupportedTestnetChainId, ChainInfo> = {
   [BASE_SEPOLIA_CHAIN_ID]: {
     id: BASE_SEPOLIA_CHAIN_ID,
-    shortName: "Base",
-    displayName: "Base Sepolia",
     viemChain: baseSepolia,
     defaultRpcUrl: "https://base-sepolia-rpc.publicnode.com",
     explorerUrl: "https://sepolia.basescan.org",
-    explorerName: "BaseScan",
-    dotColor: "#0000ff",
   },
   [ARC_TESTNET_CHAIN_ID]: {
     id: ARC_TESTNET_CHAIN_ID,
-    shortName: "Arc",
-    displayName: "Arc Testnet",
     viemChain: arcTestnet,
     defaultRpcUrl: "https://rpc.testnet.arc.network",
     explorerUrl: "https://testnet.arcscan.app",
-    explorerName: "ArcScan",
-    dotColor: "#4a6fa5",
   },
 };
-
-export function getChainInfo(chainId: SupportedTestnetChainId): ChainInfo {
-  return CHAIN_INFO[chainId];
-}
-
-/**
- * Network options for the chain selector chips. Base first (default).
- */
-export type NetworkKey = "base" | "arc";
-
-export interface NetworkOption {
-  key: NetworkKey;
-  shortName: string;
-  displayName: string;
-  /** Brand-color dot for the chip. */
-  dotColor: string;
-  dataChainId: SupportedTestnetChainId;
-}
-
-export const NETWORK_OPTIONS: NetworkOption[] = [
-  {
-    key: "base",
-    shortName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].shortName,
-    displayName: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].displayName,
-    dotColor: CHAIN_INFO[BASE_SEPOLIA_CHAIN_ID].dotColor,
-    dataChainId: BASE_SEPOLIA_CHAIN_ID,
-  },
-  {
-    key: "arc",
-    shortName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].shortName,
-    displayName: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].displayName,
-    dotColor: CHAIN_INFO[ARC_TESTNET_CHAIN_ID].dotColor,
-    dataChainId: ARC_TESTNET_CHAIN_ID,
-  },
-];
-
-export const DEFAULT_NETWORK_KEY: NetworkKey = "base";
-
-export function isNetworkKey(s: string): s is NetworkKey {
-  return s === "base" || s === "arc";
-}
-
-/** NetworkKey for a chain id — the logo/chip lookup. */
-export function networkKeyForChain(chainId: SupportedTestnetChainId): NetworkKey {
-  return chainId === BASE_SEPOLIA_CHAIN_ID ? "base" : "arc";
-}
 
 export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: string): string {
   return `${CHAIN_INFO[chainId].explorerUrl}/tx/${txHash}`;
@@ -202,18 +148,6 @@ export function getExplorerTxUrl(chainId: SupportedTestnetChainId, txHash: strin
 
 export function getExplorerAddressUrl(chainId: SupportedTestnetChainId, address: string): string {
   return `${CHAIN_INFO[chainId].explorerUrl}/address/${address}`;
-}
-
-/**
- * Resolve the RPC URL for a chain. Overridable per chain via
- * `VITE_ARC_RPC_URL` / `VITE_BASE_SEPOLIA_RPC_URL` in `client/.env.local`.
- */
-export function getRpcUrl(chainId: SupportedTestnetChainId): string {
-  const override =
-    chainId === BASE_SEPOLIA_CHAIN_ID
-      ? cleanEnv(viteEnv["VITE_BASE_SEPOLIA_RPC_URL"])
-      : cleanEnv(viteEnv["VITE_ARC_RPC_URL"]);
-  return override || CHAIN_INFO[chainId].defaultRpcUrl;
 }
 
 /**
@@ -229,7 +163,6 @@ export function getRpcUrl(chainId: SupportedTestnetChainId): string {
  *
  * Base Sepolia: publicnode first, official host as fallback (the `/api/rpc`
  * proxy is Arc-only and is NOT in this list).
- * Use this instead of `http(getRpcUrl(chainId))`.
  */
 export function getRpcTransport(chainId: SupportedTestnetChainId): FallbackTransport {
   const urls =

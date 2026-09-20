@@ -41,7 +41,7 @@ interface Args {
 
 /**
  * Quote + execute one outcome-token trade. The server builds calldata (it
- * holds no keys); the user's wallet signs the approval and the swap. Used
+ * holds no keys); the user's wallet signs the approval and the trade. Used
  * by the league page's trade sidebar.
  */
 export function useMarketTrade({ eventId, outcomeIndex, direction, amount, enabled }: Args) {

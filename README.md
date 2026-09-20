@@ -1,47 +1,51 @@
 # Mantua.AI
 
-**Mantua is an agent-driven prediction market for sports.** Bettors and market makers open
-positions, provide liquidity, and execute automated hedging strategies through natural language.
-It combines a custom suite of **Mantua hooks**, autonomous **AI agents** running **Circle
-Developer-Controlled Wallets**, and real-time on-chain execution to turn user intent into
-automated market actions a programmable liquidity layer for sports outcomes, live in-game
-markets, and USDC-settled event contracts.
+**Mantua is an agent-driven prediction market for NFL games.** Bettors open positions and run
+automated hedging strategies through natural language. It combines a custom suite of **Mantua
+hooks**, autonomous **AI agents** running **Circle Developer-Controlled Wallets**, and
+real-time on-chain execution to turn user intent into automated market actions — a
+programmable liquidity layer for sports outcomes, live in-game markets, and USDC-settled event
+contracts.
 
 From a single natural-language prompt you can:
 
 - **Take a position** on a scheduled game, priced continuously by the pool rather than by a
   bookmaker.
-- **Provide liquidity** to market pools and to the base pairs, and manage those positions.
-- **Analyze & research** matchups, pool health, peg status, and token prices (free data, with
-  optional pay-per-call x402 premium sources).
-- **Swap** USDC, EURC, and cirBTC across the hook pools.
-- **Run an autonomous agent** a Circle-managed wallet that researches, takes positions, manages
-  liquidity, and hedges under a spending cap.
-- **Bridge & manage treasury** move USDC cross-chain (Circle CCTP) and hold a unified,
-  multi-chain USDC balance (Circle Gateway).
+- **Analyze & research** matchups, market health, and token prices (free data, with optional
+  pay-per-call x402 premium sources).
+- **Run an autonomous agent** a Circle-managed wallet that researches, takes positions, and
+  hedges under a spending cap.
 
-> **Status: live at [mantua.ai](https://mantua.ai) on Base Sepolia and Arc Testnet.** The
-> full pipeline runs in production on both chains — each day's games are ingested, their
-> markets minted on-chain, their pools opened at the provider's implied odds and seeded with
-> liquidity, all automatically. Positions trade from the league pages; markets freeze at
-> kickoff and settle from live game data through the on-chain Resolver.
-> [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md) tracks the build plan
-> (phases B0–B10 complete; a handful of P2/P3 refinements remain).
+> **Status: live at [mantua.ai](https://mantua.ai).** The full pipeline runs in production —
+> each day's games are ingested, their markets minted on-chain, their pools opened at the
+> provider's implied odds and seeded with liquidity, all automatically. Positions trade from
+> the league pages; markets freeze at kickoff and settle from live game data through the
+> on-chain Resolver. [`docs/tasks/sports-pivot.md`](docs/tasks/sports-pivot.md) tracks the
+> build plan (phases B0–B10 complete; a handful of P2/P3 refinements remain).
+
+## The public surface, and what sits behind it
+
+Task [`001-public-surface-reduction`](docs/tasks/001-public-surface-reduction.md) cut what the
+app shows to one product: browse today's NFL games, ask the analyst, trade the market, run
+your agent. **The public app has no swap or liquidity surfaces, no network selector, and names
+no chain.**
+
+Everything below the client — `server/`, `agent/`, `contracts/` — is unchanged and still
+carries the swap, pool and multi-chain machinery this document describes. Read the sections
+after "App capabilities" as a map of the codebase, not of the product surface.
 
 ## Networks
 
-Mantua runs on two testnets, switchable from the **chain selector** in the header and under
-the chat input (**Base Sepolia is the default**):
+The app runs on one chain and does not name it in the UI. Both chain definitions remain in
+`client/src/lib/chains.ts` because the Circle agent's own wallet lives on Arc.
 
-| Network          | Chain id  | Gas token     | What runs there                                                                                                                    |
-| ---------------- | --------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Base Sepolia** | `84532`   | ETH           | Full stack: sports markets (Dynamic Market hook + factory/resolver), Stable Protection (USDC/EURC), swaps, liquidity, agent wallet |
-| **Arc Testnet**  | `5042002` | USDC (native) | Full stack: sports markets, Stable Protection + Dynamic Fee hooks, swaps, liquidity, agent wallet                                  |
+| Network          | Chain id  | Gas token     | What runs there                                                                                                                                     |
+| ---------------- | --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Base Sepolia** | `84532`   | ETH           | The app's chain. Full stack: sports markets (Dynamic Market hook + factory/resolver), Stable Protection (USDC/EURC), swaps, liquidity, agent wallet |
+| **Arc Testnet**  | `5042002` | USDC (native) | The Circle agent's wallet, portfolio and Gateway treasury. Full stack: sports markets, Stable Protection + Dynamic Fee hooks, swaps, liquidity      |
 
-Every surface follows the selected chain: the wallet switches with the selector, swaps and
-liquidity route to that chain's Uniswap v4 stack, and the Circle agent holds **one wallet per
-chain** (shared daily spending cap). Sports markets mint and settle independently on each
-chain. Per-chain contract addresses live in
+Sports markets mint and settle independently on each chain. Per-chain contract addresses live
+in
 [`server/src/lib/v4-contracts.ts`](server/src/lib/v4-contracts.ts) and
 [`server/src/lib/markets-contracts.ts`](server/src/lib/markets-contracts.ts); the Base hook
 deployments are attested in
@@ -91,9 +95,10 @@ Full specification: [`docs/specs/market-lifecycle.md`](docs/specs/market-lifecyc
 
 ## Coverage
 
-**NFL** and **WNBA** are the covered leagues. NBA, MLB, NHL, and Soccer appear in the nav and
-report as coming soon; promoting one is a single field in
-[`client/src/features/markets/sports.ts`](client/src/features/markets/sports.ts).
+**NFL** is the covered league, and the only one in the catalog. Adding another is a single
+entry in
+[`client/src/features/markets/sports.ts`](client/src/features/markets/sports.ts); the server
+still ingests the other leagues, so the change is client-side.
 
 ## The autonomous loop
 
@@ -105,7 +110,7 @@ capital with it.**
 3. **Combines paid intelligence with live sports and on-chain signals** game state, pool
    health, peg status, whale flows.
 4. **Executes through Mantua hooks + a Circle Developer-Controlled Wallet** take a position,
-   swap, provide liquidity, bridge via CCTP.
+   send, bridge via CCTP.
 5. **Manages the position** hedging strategies fire on price and game-state ticks under a
    policy cap, and auto-disarm when a market freezes.
 
@@ -118,9 +123,9 @@ Programmable money buying programmable intelligence, then acting on it in one au
 ## App capabilities
 
 - **Universal command bar.** One input routes every command by intent a card only _starts_ a
-  mode, it never locks it. Hookless actions and agent commands go to the Circle Agent; naming a
-  hook (Stable Protection / Dynamic Fee) opens the manual Uniswap-v4 panel; research questions
-  open Analyze.
+  mode, it never locks it. Agent commands go to the Circle Agent, league and position commands
+  to the market pages, and research questions to Analyze. Trading verbs no longer match an
+  intent; they fall through to the analyst.
 - **Sports markets.** Full-screen per-league pages (Polymarket-style): date-grouped games with
   moneyline prices in cents fed by the **live pool price**, and a trade sidebar — pick a side,
   set an amount, get a live quote, sign with your wallet. Browsing and matchup details are open
@@ -134,27 +139,19 @@ Programmable money buying programmable intelligence, then acting on it in one au
   directly into pool execution. Stable Protection is **FX-aware**: its circuit breaker anchors
   to the live EUR/USD rate (Pyth) instead of assuming 1:1, so USDC/EURC trades at the true
   ~1.14 rate (see [Hooks](#hooks)).
-- **Swap · Liquidity Pools.** Manual v4 swaps with live quotes and hook selection; create
-  pools and add/remove liquidity (market-priced initialization); pool detail pages with real
-  pair exchange-rate charts.
-- **Cross-chain USDC bridging.** Outbound from Arc to all 12 CCTP-V2 testnets Base, Ethereum,
-  Arbitrum, Unichain, Avalanche Fuji, OP, Polygon Amoy, Linea, Sonic, World Chain, Sei,
-  HyperEVM via Circle CCTP (Bridge Kit).
-- **Unified balance / treasury.** A single multi-chain USDC balance via Circle Gateway
-  (Unified Balance Kit) view, deposit, and **spend**: settle USDC out of the unified balance
-  to any Gateway testnet (burn on Arc, mint on the destination), with Arc as the settlement
-  hub.
+- **Unified balance / treasury.** The agent's single multi-chain USDC balance via Circle
+  Gateway (Unified Balance Kit) view, deposit, and **spend**: settling USDC out of the unified
+  balance is an agent command.
 - **Analyze & research.** Inline conversational research: deterministic cited data cards for
   known topics + AI-streamed answers for free-form questions.
-- **Portfolio & earnings.** User + agent portfolios, LP positions, and fee earnings with an
-  estimated LP/hook split grouped by hook.
+- **Portfolio.** User + agent portfolios and market positions.
 
 ## Agent capabilities (your Circle Agent)
 
-An autonomous financial analyst trader and liquidity provider running a tool-using Claude
-loop over server-custodied Circle wallets — one per chain, acting on whichever network is
-selected (sponsored gas on Arc, ETH gas on Base Sepolia; one daily USD spending cap shared
-across both):
+An autonomous financial analyst and trader running a tool-using Claude loop over
+server-custodied Circle wallets — one per chain, under one daily USD spending cap shared
+across both. The agent kept its full tool set through task 001; only Mantua's own trading UI
+was removed, not the agent's capabilities:
 
 - **Wallet** auto-provisioned; view/manage, set the daily cap, and fund it (Circle's
   programmatic testnet faucet, with manual faucet fallback).

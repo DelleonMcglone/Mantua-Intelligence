@@ -5,10 +5,8 @@ import { Logo } from "@/components/shell/Logo.tsx";
 import { DOCS_GROUPS, DOCS_PAGES } from "./docs-content.tsx";
 
 interface Props {
-  /** Back to the marketing page. */
+  /** Back to the home page. */
   onBack: () => void;
-  /** Opens the app shell, same as the landing header's CTA. */
-  onLaunch: () => void;
 }
 
 /**
@@ -20,7 +18,7 @@ interface Props {
  * adding a page never means touching the layout. The sidebar collapses
  * behind a toggle under `lg`, where there isn't room for a fixed column.
  */
-export function DocsPage({ onBack, onLaunch }: Props) {
+export function DocsPage({ onBack }: Props) {
   const { theme, toggle } = useTheme();
   const ThemeIcon = theme === "dark" ? Sun : Moon;
   const [activeId, setActiveId] = useState(DOCS_PAGES[0].id);
@@ -72,13 +70,6 @@ export function DocsPage({ onBack, onLaunch }: Props) {
             className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-border-soft bg-transparent text-text-dim hover:text-text transition-colors"
           >
             <ThemeIcon className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onLaunch}
-            className="px-4 py-2 rounded-md bg-accent text-white text-[13px] font-semibold hover:bg-accent-2 transition-colors cursor-pointer"
-          >
-            Launch App
           </button>
         </div>
       </header>

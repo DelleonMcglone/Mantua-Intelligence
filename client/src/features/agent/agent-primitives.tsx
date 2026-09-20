@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- shared agent UI primitives co-located by design. */
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { TokenIcon } from "@/features/swap/TokenIcon.tsx";
+import { TokenIcon } from "@/components/shell/TokenIcon.tsx";
 import type { TokenSymbol } from "@/lib/tokens.ts";
 
 /**
@@ -104,7 +104,7 @@ export const EMBED_BODY: CSSProperties = {
 /**
  * Token mark for the agent flows. Delegates to the app's canonical
  * `TokenIcon` (the same USDC / EURC / cirBTC `AssetIcon` marks used in the
- * portfolio + swap UIs) so the agent panel matches the rest of the app,
+ * portfolio UI) so the agent panel matches the rest of the app,
  * with a neutral coin-initial fallback for any unknown symbol.
  */
 export function TokenChip({ sym, size = 22 }: { sym: string; size?: number }) {
@@ -302,7 +302,7 @@ export function TxRow({
             textDecoration: "none",
           }}
         >
-          ↗ ArcScan
+          ↗ Explorer
         </a>
       )}
     </div>

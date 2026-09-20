@@ -2,7 +2,6 @@ import { LegalPage, Section, List, DiscordLink } from "./LegalPage.tsx";
 
 interface Props {
   onBack: () => void;
-  onLaunch: () => void;
 }
 
 /**
@@ -15,12 +14,11 @@ interface Props {
  *
  * Draft — not reviewed by counsel.
  */
-export function PrivacyPage({ onBack, onLaunch }: Props) {
+export function PrivacyPage({ onBack }: Props) {
   return (
     <LegalPage
       title="Privacy Policy"
       onBack={onBack}
-      onLaunch={onLaunch}
       intro={
         <p>
           This policy explains what information Mantua Intelligence (&ldquo;Mantua&rdquo;,
@@ -42,9 +40,9 @@ export function PrivacyPage({ onBack, onLaunch }: Props) {
         <p>
           <strong className="text-text">Blockchain and activity information.</strong> We record the
           public wallet addresses you connect and the on-chain activity associated with them in our
-          interface: positions taken, swaps, liquidity provided, transaction hashes, and agent
-          instructions you issue. Much of this originates on public networks and is not private
-          information — see the section on public blockchains below.
+          interface: positions taken, transaction hashes, and agent instructions you issue. Much of
+          this originates on public networks and is not private information — see the section on
+          public blockchains below.
         </p>
         <p>
           <strong className="text-text">Technical information.</strong> Like most web services, our

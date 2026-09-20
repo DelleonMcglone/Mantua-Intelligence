@@ -10,6 +10,7 @@ import { ArrowLeft, Bot, X } from "lucide-react";
 import { PanelHeader } from "@/components/shell/PanelHeader.tsx";
 import { useAgentPortfolio } from "./use-agent-portfolio.ts";
 import { useCurrentChainId } from "@/lib/chain-context.tsx";
+import { ARC_TESTNET_CHAIN_ID, getExplorerTxUrl } from "@/lib/chains.ts";
 import { AgentWalletStrip, shortAddr } from "./agent-gate.tsx";
 import {
   Banner,
@@ -85,7 +86,6 @@ const SUGGESTIONS: { label: string; message: string }[] = [
     message:
       "Show me today's sports markets with live prices, evaluate the matchups, and recommend a bet.",
   },
-  { label: "Swap Tokens", message: "Swap Tokens" },
   { label: "Send Tokens", message: "Send Tokens" },
 ];
 
@@ -99,6 +99,14 @@ const TOOL_VERB: Record<string, string> = {
   get_sports_slate: "Reading today's games",
   trade_market: "Trading sports market",
 };
+
+/**
+ * The agent's Circle wallet lives on its own chain, independent of the one
+ * the app trades on, so its Gateway burn receipts resolve against that
+ * chain's explorer. Used for link resolution only — nothing renders the
+ * chain's name (task 001).
+ */
+const AGENT_CHAIN_ID = ARC_TESTNET_CHAIN_ID;
 
 let seq = 0;
 const uid = () => {
@@ -508,7 +516,7 @@ function renderResult(step: ToolStep): ReactNode {
         note?: string;
       };
       return d.requested ? (
-        <Banner tone="success" icon="✓" title="Testnet USDC requested">
+        <Banner tone="success" icon="✓" title="USDC requested">
           Circle&apos;s faucet is sending USDC to {shortAddr(d.agentAddress)} — balances refresh
           once it lands.
         </Banner>
@@ -542,7 +550,7 @@ function renderResult(step: ToolStep): ReactNode {
           {d.burnTxHash && (
             <TxRow
               hash={d.burnTxHash}
-              explorerUrl={`https://testnet.arcscan.app/tx/${d.burnTxHash}`}
+              explorerUrl={getExplorerTxUrl(AGENT_CHAIN_ID, d.burnTxHash)}
             />
           )}
         </div>
@@ -661,7 +669,9 @@ function renderResult(step: ToolStep): ReactNode {
         signals?: { notes: string[] };
       };
       if (!d.found) {
-        return <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No data on Arcscan.</span>;
+        return (
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>No on-chain data found.</span>
+        );
       }
       const activity = (d.tokenTransfers ?? []).slice(0, 5);
       return (
@@ -798,7 +808,7 @@ function Success({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <Banner tone="success" icon="✓" title={title}>
-        {detail ?? "Executed through your agent wallet on Arc."}
+        {detail ?? "Executed through your agent wallet."}
       </Banner>
       <TxRow hash={txHash} explorerUrl={explorerUrl} />
     </div>
@@ -865,10 +875,9 @@ function EmptyState({ onPick, disabled }: { onPick: (s: string) => void; disable
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6 }}>
-        Hi — I'm your Circle agent. I act on the network you've selected (Base Sepolia or Arc). Tell
-        me what to do in plain language and I'll handle it: check balances, swap or send tokens,
-        evaluate sports markets and place bets, or look up market &amp; on-chain data. I act
-        autonomously within your daily spending cap.
+        Hi — I'm your Circle agent. Tell me what to do in plain language and I'll handle it: check
+        balances, send tokens, evaluate sports markets and place bets, or look up market &amp;
+        on-chain data. I act autonomously within your daily spending cap.
       </div>
       <div
         style={{ display: "flex", flexWrap: "nowrap", gap: 8, overflowX: "auto", paddingBottom: 2 }}

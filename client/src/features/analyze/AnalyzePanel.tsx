@@ -54,7 +54,7 @@ const SUGGESTIONS: { topic?: Topic; question: string }[] = [
   { topic: "eurc-peg", question: "Is EURC holding its peg right now?" },
   { topic: "top-stablecoins", question: "Show me top performing stablecoins" },
   { question: "Analyze today's NFL games and matchups" },
-  { question: "Analyze today's WNBA games and matchups" },
+  { question: "Analyze today's NFL games and matchups" },
   { question: "Which game looks closest today, and where is the value?" },
   { question: "What should a prediction-market bettor watch this week?" },
 ];

@@ -167,8 +167,8 @@ export function hardenProvider(
  * invoking.
  *
  * Chain assertion: if the active wallet is on a different chain, an
- * automatic `switchChain` to the selected chain is attempted first;
- * failure throws naming the selected chain.
+ * automatic `switchChain` to the app's chain is attempted first; failure
+ * throws an error the user can act on without being told which chain.
  */
 export function useChainWalletClient() {
   const { wallets } = useWallets();
@@ -184,7 +184,7 @@ export function useChainWalletClient() {
         await active.switchChain(chainId);
       } catch {
         throw new Error(
-          `Wallet is on ${active.chainId}; switch it to ${info.displayName} (eip155:${String(chainId)}) to continue.`,
+          "Your wallet is on the wrong network. Approve the network switch in your wallet to continue.",
         );
       }
     }

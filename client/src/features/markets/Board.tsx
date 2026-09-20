@@ -26,19 +26,15 @@ function todayRange(): string {
 }
 
 /**
- * B5-001 — the home board: today's games across the covered leagues, as
- * matchup cards. Each league is fetched with an explicit today-only window
- * rather than the provider default, because ESPN's default NFL scoreboard
- * is the current schedule week — midweek that is mostly finished games.
- * Scoped to `coverage: "launch"` leagues only; the rest sit in the nav as
- * Coming Soon. Browsing is open to everyone — the login gate guards
- * transactions, not this view (B5-007).
+ * B5-001 — the home board: today's games, as matchup cards. The slate is
+ * fetched with an explicit today-only window rather than the provider
+ * default, because ESPN's default NFL scoreboard is the current schedule
+ * week — midweek that is mostly finished games. Browsing is open to
+ * everyone — the login gate guards transactions, not this view (B5-007).
  */
 export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
-  const wnba = useSlate(todayRange(), "wnba");
   const nfl = useSlate(todayRange(), "nfl");
-  const states: Partial<Record<string, SlateState>> = { wnba, nfl };
-  const launchSports = SPORTS.filter((s) => s.coverage === "launch");
+  const states: Partial<Record<string, SlateState>> = { nfl };
 
   const handleAnalyze = (event: SlateEvent, sport: Sport) => {
     onAnalyze(
@@ -49,7 +45,7 @@ export function Board({ onAnalyze, onOpenLeague, onTrade }: BoardProps) {
 
   return (
     <>
-      {launchSports.map((sport) => {
+      {SPORTS.map((sport) => {
         const Icon = sport.icon;
         const state = states[sport.id];
         const slate = state?.slates[sport.id];
